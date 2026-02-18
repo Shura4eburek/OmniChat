@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "omnichat",
+  "version": "${version}",
+  "name": "OmniChat",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/omnichat/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "org.mamoru.omnichat.client.OmnichatDataGenerator"
+    ],
+    "client": [
+      "org.mamoru.omnichat.client.OmnichatClient"
+    ],
+    "main": [
+      "org.mamoru.omnichat.Omnichat"
+    ]
+  },
+  "mixins": [
+    "omnichat.mixins.json",
+    {
+      "config": "omnichat.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
