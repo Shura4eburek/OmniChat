@@ -27,12 +27,12 @@ fabricApi {
     }
 }
 
+configurations {
+    shade
+}
+
 repositories {
-    // Add repositories to retrieve artifacts from in here.
-    // You should only use this when depending on other mods because
-    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-    // for more information about repositories.
+    mavenCentral()
 }
 
 dependencies {
@@ -42,6 +42,16 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // sherpa-onnx TTS (Java API)
+    implementation files('libs/sherpa-onnx-v1.12.4-java21.jar')
+
+    // Gson for config serialization
+    implementation 'com.google.code.gson:gson:2.11.0'
+
+    // ONNX Runtime for direct model inference (GLaDOS TTS)
+    implementation 'com.microsoft.onnxruntime:onnxruntime:1.19.2'
+    shade 'com.microsoft.onnxruntime:onnxruntime:1.19.2'
 }
 
 processResources {
@@ -83,6 +93,14 @@ java {
 jar {
     from("LICENSE") {
         rename { "${it}_${project.archives_base_name}" }
+    }
+
+    // Shade sherpa-onnx Java API classes into mod JAR
+    from(zipTree('libs/sherpa-onnx-v1.12.4-java21.jar'))
+
+    // Shade onnxruntime Java API classes into mod JAR
+    from(configurations.shade.collect { zipTree(it) }) {
+        exclude 'META-INF/**'
     }
 }
 
