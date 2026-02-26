@@ -15,3 +15,19 @@ remappedSrc/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code
+.claude/
+
+# Temp/planning files
+continue.txt
+plan.md
+
+# Native lib archives (keep extracted DLLs, ignore archives)
+libs/*.tar.bz2
+
+# Java
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+!libs/*.jar
