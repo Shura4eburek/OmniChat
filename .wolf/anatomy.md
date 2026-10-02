@@ -1,7 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T19:08:19.429Z
-> Files: 513 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T20:45:12.980Z
+> Files: 514 tracked | Anatomy hits: 0 | Misses: 0
+
+## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
+
+- `R.java` — R: main (~257 tok)
 
 ## ./
 
@@ -873,7 +877,5 @@
 ## scripts/
 
 - `mcproc.ps1` — Helpers for scripts/smoke.sh: tell dev Minecraft processes apart by command line (~646 tok)
-- `smoke.sh` — 2-client smoke test: dedicated server + Speaker (runClient) + Listener (runSmokeListener); tp Listener in front of Speaker, Speaker chats, screenshot from Listener via `um win shot --hwnd`, log check of all 3 logs. Output in build/smoke/. (~2k tok)
 - `mcproc.ps1` — find/focus/kill dev Minecraft java.exe by command-line regex; window handle by PID. (~400 tok)
-- `smoke.sh` — 2-client smoke test: dedicated server + Speaker (runClient) + Listener (runSmokeListener); tp Listener in front of Speaker, Speaker chats, screenshot from Listener via `um win shot --hwnd`, log check of all 3 logs. Output in build/smoke/. (~2k tok)
 - `mcproc.ps1` — find/focus/kill dev Minecraft java.exe by command-line regex; window handle by PID. (~400 tok)
