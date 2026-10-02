@@ -5,28 +5,12 @@ import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.sun.jna.Library;
-import com.sun.jna.Native;
-
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.Locale;
 
 public class TtsEngine implements ITtsEngine {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
-    private static final String[] NATIVE_LIBS = {
-            "onnxruntime.dll",
-            "onnxruntime_providers_shared.dll",
-            "cargs.dll",
-            "sherpa-onnx-c-api.dll",
-            "sherpa-onnx-cxx-api.dll",
-            "sherpa-onnx-jni.dll"
-    };
-
-    private static boolean nativesLoaded;
 
     private final OfflineTts tts;
     private final int sampleRate;
@@ -41,8 +25,6 @@ public class TtsEngine implements ITtsEngine {
     }
 
     public static TtsEngine create(Path modelDir) {
-        loadNativeLibraries();
-
         if (!Files.isDirectory(modelDir)) {
             throw new RuntimeException("Model directory not found: " + modelDir);
         }
@@ -65,6 +47,9 @@ public class TtsEngine implements ITtsEngine {
             }
             dataDir = espeakDir.toString();
         }
+
+        // Natives only after the model passed the pure-Java checks; loaded once per JVM.
+        SherpaNatives.ensureLoaded();
 
         OfflineTtsVitsModelConfig vitsConfig = OfflineTtsVitsModelConfig.builder()
                 .setModel(modelFile)
@@ -110,74 +95,6 @@ public class TtsEngine implements ITtsEngine {
         } catch (RuntimeException e) {
             LOGGER.error("Failed to release sherpa TTS engine", e);
         }
-    }
-
-    private static synchronized void loadNativeLibraries() {
-        if (nativesLoaded) {
-            return;
-        }
-
-        // Only win-x64 natives are bundled. Check before touching anything native,
-        // so NativeKernel32 (Native.load("kernel32")) is never initialized on other platforms.
-        String osName = System.getProperty("os.name", "unknown");
-        String osArch = System.getProperty("os.arch", "unknown");
-        if (!isWindowsX64(osName, osArch)) {
-            throw new IllegalStateException("sherpa-onnx TTS is only bundled for Windows x64 (this is "
-                    + osName + "/" + osArch + ")");
-        }
-
-        // Disable sherpa-onnx's own auto-loading; we handle it ourselves
-        LibraryLoader.setAutoLoadEnabled(false);
-
-        Path tempDir;
-        try {
-            tempDir = Files.createTempDirectory("omnichat-natives");
-            tempDir.toFile().deleteOnExit();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create temp dir for native libs", e);
-        }
-
-        // First, extract all DLLs to temp directory
-        for (String libName : NATIVE_LIBS) {
-            String resourcePath = "/natives/win-x64/" + libName;
-            try (InputStream is = TtsEngine.class.getResourceAsStream(resourcePath)) {
-                if (is == null) {
-                    throw new RuntimeException("Native library not found in resources: " + resourcePath);
-                }
-                Path target = tempDir.resolve(libName);
-                Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
-                target.toFile().deleteOnExit();
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to extract native library: " + libName, e);
-            }
-        }
-
-        try {
-            // Set DLL search directory so Windows can resolve dependent DLLs
-            NativeKernel32.INSTANCE.SetDllDirectoryA(tempDir.toAbsolutePath().toString());
-
-            // Now load all DLLs in dependency order
-            for (String libName : NATIVE_LIBS) {
-                Path target = tempDir.resolve(libName);
-                System.load(target.toAbsolutePath().toString());
-                LOGGER.debug("Loaded native library: {}", libName);
-            }
-        } catch (LinkageError e) {
-            throw new RuntimeException("Failed to load sherpa-onnx native libraries", e);
-        }
-
-        nativesLoaded = true;
-    }
-
-    private static boolean isWindowsX64(String osName, String osArch) {
-        String os = osName.toLowerCase(Locale.ROOT);
-        String arch = osArch.toLowerCase(Locale.ROOT);
-        return os.startsWith("windows") && (arch.equals("amd64") || arch.equals("x86_64"));
-    }
-
-    private interface NativeKernel32 extends Library {
-        NativeKernel32 INSTANCE = Native.load("kernel32", NativeKernel32.class);
-        boolean SetDllDirectoryA(String lpPathName);
     }
 
     /**
