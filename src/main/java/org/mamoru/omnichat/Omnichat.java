@@ -36,13 +36,25 @@ public class Omnichat implements ModInitializer {
 
         ModelFileServer.register();
 
+        // Receivers and events are registered once: Fabric can't unregister events, and the
+        // integrated server starts a new MinecraftServer per world. They delegate to the
+        // current per-server handler, which only exists between SERVER_STARTED and SERVER_STOPPED.
+        ServerNetworkHandler.registerReceivers(() -> networkHandler);
+
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             Path configDir = server.getRunDirectory().resolve("config").resolve("omnichat");
             voiceRegistry = new VoiceRegistry(configDir);
             ModelFileServer fileServer = new ModelFileServer(voiceRegistry.getModelsDir());
             networkHandler = new ServerNetworkHandler(voiceRegistry, fileServer, server);
-            networkHandler.registerHandlers();
             LOGGER.info("OmniChat server initialized with {} models", voiceRegistry.getAvailableModels().size());
+        });
+
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            networkHandler = null;
+            if (voiceRegistry != null) {
+                voiceRegistry.close();
+                voiceRegistry = null;
+            }
         });
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

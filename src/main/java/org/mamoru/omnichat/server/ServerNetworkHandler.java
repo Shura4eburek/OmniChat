@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.function.Supplier;
 
 public class ServerNetworkHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
@@ -16,6 +17,10 @@ public class ServerNetworkHandler {
     private final VoiceRegistry registry;
     private final ModelFileServer fileServer;
     private final MinecraftServer server;
+    private final Map<UUID, Long> lastVoiceSelection = new HashMap<>();
+
+    /** Minimum interval between accepted voice selections from one player. */
+    private static final long VOICE_SELECTION_COOLDOWN_MS = 1000;
 
     public ServerNetworkHandler(VoiceRegistry registry, ModelFileServer fileServer, MinecraftServer server) {
         this.registry = registry;
@@ -23,10 +28,24 @@ public class ServerNetworkHandler {
         this.server = server;
     }
 
-    public void registerHandlers() {
-        ServerPlayNetworking.registerGlobalReceiver(VoiceSelectionC2SPayload.ID, this::onVoiceSelection);
-        ServerPlayNetworking.registerGlobalReceiver(ModelDownloadRequestC2SPayload.ID, this::onModelDownloadRequest);
-        ServerPlayNetworking.registerGlobalReceiver(TypingIndicatorC2SPayload.ID, this::onTypingIndicator);
+    /**
+     * Registers the C2S receivers. Call ONCE from onInitialize: Fabric's global receiver
+     * registry is static and outlives a server, so per-server handlers would go stale.
+     * The receivers delegate to whatever handler {@code current} returns (null when no server runs).
+     */
+    public static void registerReceivers(Supplier<ServerNetworkHandler> current) {
+        ServerPlayNetworking.registerGlobalReceiver(VoiceSelectionC2SPayload.ID, (payload, context) -> {
+            ServerNetworkHandler handler = current.get();
+            if (handler != null) handler.onVoiceSelection(payload, context);
+        });
+        ServerPlayNetworking.registerGlobalReceiver(ModelDownloadRequestC2SPayload.ID, (payload, context) -> {
+            ServerNetworkHandler handler = current.get();
+            if (handler != null) handler.onModelDownloadRequest(payload, context);
+        });
+        ServerPlayNetworking.registerGlobalReceiver(TypingIndicatorC2SPayload.ID, (payload, context) -> {
+            ServerNetworkHandler handler = current.get();
+            if (handler != null) handler.onTypingIndicator(payload, context);
+        });
     }
 
     private void onVoiceSelection(VoiceSelectionC2SPayload payload, ServerPlayNetworking.Context context) {
@@ -34,12 +53,25 @@ public class ServerNetworkHandler {
         String modelName = payload.modelName();
         int speakerId = payload.speakerId();
 
+        long now = System.currentTimeMillis();
+        Long last = lastVoiceSelection.get(player.getUuid());
+        if (last != null && now - last < VOICE_SELECTION_COOLDOWN_MS) {
+            return;
+        }
+        lastVoiceSelection.put(player.getUuid(), now);
+
+        if (speakerId < 0) {
+            LOGGER.warn("Player {} selected invalid speaker {}", player.getName().getString(), speakerId);
+            return;
+        }
         if (!registry.isValidModel(modelName)) {
             LOGGER.warn("Player {} selected invalid model '{}'", player.getName().getString(), modelName);
             return;
         }
 
-        registry.setVoice(player.getUuid(), modelName, speakerId);
+        if (!registry.setVoice(player.getUuid(), modelName, speakerId)) {
+            return; // unchanged: no save, no broadcast
+        }
         LOGGER.info("Player {} selected voice: {} (speaker {})", player.getName().getString(), modelName, speakerId);
 
         // Broadcast to all players
@@ -91,6 +123,7 @@ public class ServerNetworkHandler {
     }
 
     public void onPlayerLeave(ServerPlayerEntity player) {
+        lastVoiceSelection.remove(player.getUuid());
         // Let remaining players drop the cached voice
         broadcast(new VoiceRemoveS2CPayload(player.getUuid()), player);
     }
