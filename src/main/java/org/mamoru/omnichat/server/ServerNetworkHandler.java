@@ -1,6 +1,7 @@
 package org.mamoru.omnichat.server;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.mamoru.omnichat.network.*;
@@ -42,10 +43,7 @@ public class ServerNetworkHandler {
         LOGGER.info("Player {} selected voice: {} (speaker {})", player.getName().getString(), modelName, speakerId);
 
         // Broadcast to all players
-        VoiceInfoS2CPayload broadcast = new VoiceInfoS2CPayload(player.getUuid(), modelName, speakerId);
-        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            ServerPlayNetworking.send(p, broadcast);
-        }
+        broadcast(new VoiceInfoS2CPayload(player.getUuid(), modelName, speakerId), null);
     }
 
     private void onModelDownloadRequest(ModelDownloadRequestC2SPayload payload, ServerPlayNetworking.Context context) {
@@ -83,6 +81,25 @@ public class ServerNetworkHandler {
         Map<UUID, VoiceChoice> voices = registry.getOnlineVoices(onlineUuids);
         if (!voices.isEmpty()) {
             ServerPlayNetworking.send(player, new VoiceMapS2CPayload(voices));
+        }
+
+        // Tell players already online about the joiner's stored voice
+        VoiceChoice choice = registry.getVoice(player.getUuid());
+        if (choice != null) {
+            broadcast(new VoiceInfoS2CPayload(player.getUuid(), choice.modelName(), choice.speakerId()), player);
+        }
+    }
+
+    public void onPlayerLeave(ServerPlayerEntity player) {
+        // Let remaining players drop the cached voice
+        broadcast(new VoiceRemoveS2CPayload(player.getUuid()), player);
+    }
+
+    private void broadcast(CustomPayload payload, ServerPlayerEntity exclude) {
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            if (p != exclude && ServerPlayNetworking.canSend(p, payload.getId())) {
+                ServerPlayNetworking.send(p, payload);
+            }
         }
     }
 }

@@ -28,6 +28,7 @@ public class Omnichat implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(VoiceMapS2CPayload.ID, VoiceMapS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ModelFileChunkS2CPayload.ID, ModelFileChunkS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(TypingIndicatorS2CPayload.ID, TypingIndicatorS2CPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(VoiceRemoveS2CPayload.ID, VoiceRemoveS2CPayload.CODEC);
         // C2S
         PayloadTypeRegistry.playC2S().register(VoiceSelectionC2SPayload.ID, VoiceSelectionC2SPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ModelDownloadRequestC2SPayload.ID, ModelDownloadRequestC2SPayload.CODEC);
@@ -45,6 +46,12 @@ public class Omnichat implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             if (networkHandler != null) {
                 networkHandler.onPlayerJoin(handler.getPlayer());
+            }
+        });
+
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            if (networkHandler != null) {
+                networkHandler.onPlayerLeave(handler.getPlayer());
             }
         });
 

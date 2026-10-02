@@ -35,6 +35,10 @@ public class VoiceCache {
         voiceMap.put(playerUuid, choice);
     }
 
+    public void removeVoice(UUID playerUuid) {
+        voiceMap.remove(playerUuid);
+    }
+
     public VoiceChoice getVoice(UUID playerUuid) {
         return voiceMap.get(playerUuid);
     }

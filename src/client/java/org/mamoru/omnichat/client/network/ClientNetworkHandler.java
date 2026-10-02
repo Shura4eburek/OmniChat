@@ -15,6 +15,7 @@ public class ClientNetworkHandler {
         ClientPlayNetworking.registerGlobalReceiver(VoiceMapS2CPayload.ID, ClientNetworkHandler::onVoiceMap);
         ClientPlayNetworking.registerGlobalReceiver(ModelFileChunkS2CPayload.ID, ClientNetworkHandler::onModelFileChunk);
         ClientPlayNetworking.registerGlobalReceiver(TypingIndicatorS2CPayload.ID, ClientNetworkHandler::onTypingIndicator);
+        ClientPlayNetworking.registerGlobalReceiver(VoiceRemoveS2CPayload.ID, ClientNetworkHandler::onVoiceRemove);
         LOGGER.info("Client network handlers registered");
     }
 
@@ -41,5 +42,10 @@ public class ClientNetworkHandler {
 
     private static void onTypingIndicator(TypingIndicatorS2CPayload payload, ClientPlayNetworking.Context context) {
         ChatBubbleManager.getInstance().setTyping(payload.playerUuid(), payload.typing());
+    }
+
+    private static void onVoiceRemove(VoiceRemoveS2CPayload payload, ClientPlayNetworking.Context context) {
+        VoiceCache.getInstance().removeVoice(payload.playerUuid());
+        LOGGER.debug("Voice removed: {}", payload.playerUuid());
     }
 }
