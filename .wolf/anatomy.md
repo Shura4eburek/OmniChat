@@ -1,15 +1,17 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:20:12.949Z
-> Files: 564 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:30:39.150Z
+> Files: 567 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
+- `c26.py` — Handshake state with the current server; OmniChat payloads flow only when COMPATIBLE. (~2273 tok)
 - `edit_client.py` — Returns the engine for the given model name, loading and caching it if needed. (~1278 tok)
 - `icon.py` (~244 tok)
 - `javap.sh` (~250 tok)
 - `jp.sh` (~288 tok)
 - `msg.txt` (~195 tok)
+- `p26.py` — Players whose client completed the handshake with a matching protocol version. (~2065 tok)
 - `R.java` — R: main (~257 tok)
 - `srv.py` — Tells the client its request for {@code modelName} was refused or aborted. (~2426 tok)
 
@@ -38,6 +40,10 @@
 ## .claude/rules/
 
 - `openwolf.md` (~313 tok)
+
+## .claude/worktrees/agent-a2cebc5765ab50973/src/main/java/org/mamoru/omnichat/network/
+
+- `ProtocolVersionPayload.java` — Handshake, registered in both directions. The client sends its version on join; the server (~326 tok)
 
 ## .claude/worktrees/agent-a38147cab403ccc2a/
 

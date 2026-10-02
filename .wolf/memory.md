@@ -116,3 +116,7 @@
 | 00:19 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | inline fix | ~13 |
 | 00:20 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/msg.txt | — | ~208 |
 | 00:23 | low issues wave 1 (5 agents): fixed #22-#25 #27 #28 #30-#34 #36 #40 #42 #43; #41 partial, #35 blocked (build.gradle edit denied to subagent); sherpa now on shared ORT 1.19.2; smoke pass | src/** | ok | ~550k |
+| 00:28 | Created .claude/worktrees/agent-a2cebc5765ab50973/src/main/java/org/mamoru/omnichat/network/ProtocolVersionPayload.java | — | ~326 |
+| 00:29 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/p26.py | — | ~2065 |
+| 00:30 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/c26.py | — | ~2273 |
+| 00:41 | low wave 2: #26 protocol handshake + canSend, #37 dead code, #35 jar-in-jar, #41 LICENSE; fixed handshake-in-config-phase disconnect found by smoke; prodClient verified | build.gradle, src/** | smoke pass | ~200k |

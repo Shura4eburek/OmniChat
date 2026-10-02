@@ -3,6 +3,7 @@ package org.mamoru.omnichat.client.network;
 import net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.text.Text;
@@ -23,6 +24,7 @@ public class ClientNetworkHandler {
     private enum ServerProtocol { NONE, PENDING, COMPATIBLE, INCOMPATIBLE }
 
     private static volatile ServerProtocol serverProtocol = ServerProtocol.NONE;
+    private static volatile boolean joined;
 
     public static void registerHandlers() {
         ClientPlayNetworking.registerGlobalReceiver(ProtocolVersionPayload.ID, ClientNetworkHandler::onProtocolVersion);
@@ -35,14 +37,23 @@ public class ClientNetworkHandler {
         receive(TypingIndicatorS2CPayload.ID, ClientNetworkHandler::onTypingIndicator);
         receive(VoiceRemoveS2CPayload.ID, ClientNetworkHandler::onVoiceRemove);
 
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> onJoin());
-        // Fallback in case the server announces its channels after JOIN
+        // INIT runs before the server's channels are known, so every connection starts clean
+        ClientPlayConnectionEvents.INIT.register((handler, client) -> {
+            serverProtocol = ServerProtocol.NONE;
+            joined = false;
+        });
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> onJoin(sender));
+        // Fallback in case the server announces its channels after JOIN. It also fires during the
+        // configuration phase, where a play payload can't be encoded (disconnects) — JOIN covers that case
         C2SPlayChannelEvents.REGISTER.register((handler, sender, client, channels) -> {
-            if (serverProtocol == ServerProtocol.NONE && channels.contains(ProtocolVersionPayload.ID.id())) {
-                sendHandshake();
+            if (joined && serverProtocol == ServerProtocol.NONE && channels.contains(ProtocolVersionPayload.ID.id())) {
+                sendHandshake(sender);
             }
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> serverProtocol = ServerProtocol.NONE);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            serverProtocol = ServerProtocol.NONE;
+            joined = false;
+        });
         LOGGER.info("Client network handlers registered");
     }
 
@@ -59,10 +70,10 @@ public class ClientNetworkHandler {
         });
     }
 
-    private static void onJoin() {
-        serverProtocol = ServerProtocol.NONE;
+    private static void onJoin(PacketSender sender) {
+        joined = true;
         if (ClientPlayNetworking.canSend(ProtocolVersionPayload.ID)) {
-            sendHandshake();
+            sendHandshake(sender);
         } else if (ClientPlayNetworking.canSend(VoiceSelectionC2SPayload.ID)) {
             // OmniChat channels without the handshake: a server from before protocol versioning
             markIncompatible("server runs an older OmniChat without protocol versioning");
@@ -70,9 +81,9 @@ public class ClientNetworkHandler {
         // Neither: the server has no OmniChat; local TTS of chat keeps working
     }
 
-    private static void sendHandshake() {
+    private static void sendHandshake(PacketSender sender) {
         serverProtocol = ServerProtocol.PENDING;
-        ClientPlayNetworking.send(new ProtocolVersionPayload(ProtocolVersionPayload.PROTOCOL_VERSION));
+        sender.sendPacket(new ProtocolVersionPayload(ProtocolVersionPayload.PROTOCOL_VERSION));
     }
 
     private static void onProtocolVersion(ProtocolVersionPayload payload, ClientPlayNetworking.Context context) {

@@ -306,6 +306,23 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-02T21:19:18.012Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-10-03T00:40:00",
+      "error_message": "Cannot send packets when not in game! / EncoderException omnichat:protocol_version → client disconnected",
+      "file": "src/client/java/org/mamoru/omnichat/client/network/ClientNetworkHandler.java",
+      "root_cause": "C2SPlayChannelEvents.REGISTER fires during the configuration phase, before JOIN; sending a play payload there throws or fails to encode",
+      "fix": "only use the REGISTER fallback after JOIN (joined flag reset on INIT/DISCONNECT); send via the event's PacketSender",
+      "tags": [
+        "fabric",
+        "networking",
+        "handshake",
+        "configuration-phase"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T00:40:00"
     }
   ]
 }

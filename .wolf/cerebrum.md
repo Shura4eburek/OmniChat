@@ -36,3 +36,4 @@
 - [2026-10-03] Model downloads: ModelDownloadStatusS2CPayload (QUEUED/FAILED), client writes to config/omnichat/downloads/<name>.part and installs atomically; sherpa natives cached in config/omnichat/natives/win-x64-<hash>.
 - [2026-10-03] After editing jar excludes in build.gradle, Gradle may keep :jar UP-TO-DATE — run `./gradlew clean build`.
 - [2026-10-03] sherpa natives no longer ship onnxruntime.dll: SherpaNatives loads ORT 1.19.2 (OrtEnvironment) first, sherpa binds to it. Don't re-add the bundled 1.17.1 DLL.
+- [2026-10-03] Fabric C2SPlayChannelEvents.REGISTER can fire in the configuration phase (before JOIN): never send play payloads from it unless JOIN already happened. Built jar can be tested with ./gradlew prodClient (run/prod).
