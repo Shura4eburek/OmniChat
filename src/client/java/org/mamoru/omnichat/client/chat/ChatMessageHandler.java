@@ -54,7 +54,7 @@ public class ChatMessageHandler {
             }
         }
 
-        LOGGER.debug("Enqueuing TTS for message: {}", text);
+        LOGGER.debug("Enqueuing TTS for {} chars", text.length());
         worker.enqueue(new TtsRequest(text, senderUuid, modelName, speakerId));
     }
 }

@@ -1,5 +1,6 @@
 package org.mamoru.omnichat.server;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.MinecraftServer;
@@ -18,6 +19,8 @@ public class ServerNetworkHandler {
     private final ModelFileServer fileServer;
     private final MinecraftServer server;
     private final Map<UUID, Long> lastVoiceSelection = new HashMap<>();
+    // Selections that arrived inside the cooldown: the latest one wins and is applied when it ends
+    private final Map<UUID, VoiceSelectionC2SPayload> pendingVoiceSelection = new HashMap<>();
 
     /** Minimum interval between accepted voice selections from one player. */
     private static final long VOICE_SELECTION_COOLDOWN_MS = 1000;
@@ -46,18 +49,42 @@ public class ServerNetworkHandler {
             ServerNetworkHandler handler = current.get();
             if (handler != null) handler.onTypingIndicator(payload, context);
         });
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            ServerNetworkHandler handler = current.get();
+            if (handler != null) handler.flushPendingVoiceSelections();
+        });
     }
 
     private void onVoiceSelection(VoiceSelectionC2SPayload payload, ServerPlayNetworking.Context context) {
         ServerPlayerEntity player = context.player();
-        String modelName = payload.modelName();
-        int speakerId = payload.speakerId();
-
         long now = System.currentTimeMillis();
         Long last = lastVoiceSelection.get(player.getUuid());
         if (last != null && now - last < VOICE_SELECTION_COOLDOWN_MS) {
+            pendingVoiceSelection.put(player.getUuid(), payload);
             return;
         }
+        applyVoiceSelection(player, payload, now);
+    }
+
+    private void flushPendingVoiceSelections() {
+        if (pendingVoiceSelection.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        Iterator<Map.Entry<UUID, VoiceSelectionC2SPayload>> it = pendingVoiceSelection.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, VoiceSelectionC2SPayload> entry = it.next();
+            Long last = lastVoiceSelection.get(entry.getKey());
+            if (last != null && now - last < VOICE_SELECTION_COOLDOWN_MS) continue;
+            it.remove();
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(entry.getKey());
+            if (player != null) {
+                applyVoiceSelection(player, entry.getValue(), now);
+            }
+        }
+    }
+
+    private void applyVoiceSelection(ServerPlayerEntity player, VoiceSelectionC2SPayload payload, long now) {
+        String modelName = payload.modelName();
+        int speakerId = payload.speakerId();
         lastVoiceSelection.put(player.getUuid(), now);
 
         if (speakerId < 0) {
@@ -124,6 +151,7 @@ public class ServerNetworkHandler {
 
     public void onPlayerLeave(ServerPlayerEntity player) {
         lastVoiceSelection.remove(player.getUuid());
+        pendingVoiceSelection.remove(player.getUuid());
         // Let remaining players drop the cached voice
         broadcast(new VoiceRemoveS2CPayload(player.getUuid()), player);
     }
