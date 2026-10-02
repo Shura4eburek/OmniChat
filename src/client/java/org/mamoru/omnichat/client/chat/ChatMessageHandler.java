@@ -31,7 +31,8 @@ public class ChatMessageHandler {
     }
 
     /**
-     * @param senderUuid the in-range sender for spatial playback, or null for non-positional playback
+     * @param senderUuid the in-range sender for spatial playback; the pipeline never passes null
+     *                   (profileless messages are skipped), null would mean non-positional playback
      */
     void speak(String text, UUID senderUuid) {
         if (!config.isEnabled()) {

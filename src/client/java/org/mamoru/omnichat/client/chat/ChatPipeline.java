@@ -9,6 +9,7 @@ import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.client.HearingRange;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
@@ -57,40 +58,52 @@ public final class ChatPipeline {
             return;
         }
 
-        String text = signedMessage != null ? signedMessage.getContent().getString() : message.getString();
+        // Profileless messages (/say, /msg, /me from the console or a command block) have neither
+        // a sender nor a signed message: they cannot be positioned or voiced per player, and a
+        // repeating command block would otherwise be read out endlessly with its "[Server]" prefix.
+        if (sender == null || signedMessage == null) {
+            LOGGER.debug("Skipping profileless {} message", category);
+            return;
+        }
+
+        String text = extractText(signedMessage);
         if (text.isEmpty()) {
             return;
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
-        boolean own = sender != null && client.player != null && sender.id().equals(client.player.getUuid());
-
-        // Sender position decides both spatial playback and the bubble; null means "not positional"
-        UUID senderUuid = null;
-        if (sender != null) {
-            ClientWorld world = client.world;
-            if (world != null && client.player != null) {
-                PlayerEntity senderEntity = world.getPlayerByUuid(sender.id());
-                if (senderEntity == null) {
-                    LOGGER.debug("Dropping {} message from {}: sender not loaded", category, sender.id());
-                    return;
-                }
-                double distance = client.player.getEntityPos().distanceTo(senderEntity.getEntityPos());
-                if (distance > HearingRange.BLOCKS) {
-                    LOGGER.debug("Dropping {} message from {}: {} blocks away (range {})",
-                            category, sender.id(), (int) distance, (int) HearingRange.BLOCKS);
-                    return;
-                }
-                senderUuid = sender.id();
-            }
+        ClientWorld world = client.world;
+        if (world == null || client.player == null) {
+            return;
         }
+        boolean own = sender.id().equals(client.player.getUuid());
+
+        // Sender position decides both spatial playback and the bubble
+        PlayerEntity senderEntity = world.getPlayerByUuid(sender.id());
+        if (senderEntity == null) {
+            LOGGER.debug("Dropping {} message from {}: sender not loaded", category, sender.id());
+            return;
+        }
+        double distance = client.player.getEntityPos().distanceTo(senderEntity.getEntityPos());
+        if (distance > HearingRange.BLOCKS) {
+            LOGGER.debug("Dropping {} message from {}: {} blocks away (range {})",
+                    category, sender.id(), (int) distance, (int) HearingRange.BLOCKS);
+            return;
+        }
+        UUID senderUuid = sender.id();
 
         if (speak && (!own || config.isReadOwnMessages())) {
             tts.speak(text, senderUuid);
         }
-        if (bubble && senderUuid != null && !own) {
+        if (bubble && !own) {
             ChatBubbleManager.getInstance().addBubble(senderUuid, text);
         }
+    }
+
+    /** The undecorated message body (no "<name>" prefix), with legacy formatting codes removed. */
+    static String extractText(SignedMessage signedMessage) {
+        String text = Formatting.strip(signedMessage.getContent().getString());
+        return text == null ? "" : text.strip();
     }
 
     static Category classify(MessageType.Parameters params) {

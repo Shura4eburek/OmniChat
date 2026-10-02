@@ -9,6 +9,8 @@ import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.scoreboard.AbstractTeam;
+import net.minecraft.text.StringVisitable;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import org.mamoru.omnichat.client.HearingRange;
@@ -50,10 +52,10 @@ public class ChatBubbleRenderer {
             for (Map.Entry<UUID, ChatBubbleManager.ChatBubble> entry : manager.getActiveBubbles().entrySet()) {
                 UUID uuid = entry.getKey();
                 ChatBubbleManager.ChatBubble bubble = entry.getValue();
-                String visibleText = bubble.getVisibleText();
-                if (visibleText.isEmpty()) continue;
+                List<String> lines = bubble.getWrappedLines(text -> wrapText(text, client.textRenderer));
+                if (lines.isEmpty()) continue;
 
-                renderBubble(client, matrices, commandQueue, cameraState, uuid, visibleText);
+                renderBubble(client, matrices, commandQueue, cameraState, uuid, lines);
             }
 
             // Render typing indicators
@@ -66,55 +68,37 @@ public class ChatBubbleRenderer {
                 String typingText = ".".repeat(dots);
                 if (typingText.isEmpty()) typingText = " ";
 
-                renderBubble(client, matrices, commandQueue, cameraState, uuid, typingText);
+                renderBubble(client, matrices, commandQueue, cameraState, uuid, List.of(typingText));
             }
         });
     }
 
+    /**
+     * Wraps at {@link #MAX_LINE_WIDTH} pixels like vanilla chat: on spaces where possible, and
+     * mid-token for words that do not fit on a line by themselves (URLs, CJK text).
+     */
     private static List<String> wrapText(String text, TextRenderer textRenderer) {
+        if (text.isEmpty()) return List.of();
         List<String> lines = new ArrayList<>();
-        if (textRenderer.getWidth(text) <= MAX_LINE_WIDTH) {
-            lines.add(text);
-            return lines;
+        for (StringVisitable line : textRenderer.getTextHandler().wrapLines(text, MAX_LINE_WIDTH, Style.EMPTY)) {
+            lines.add(line.getString());
         }
-
-        String[] words = text.split(" ");
-        StringBuilder currentLine = new StringBuilder();
-
-        for (String word : words) {
-            if (currentLine.isEmpty()) {
-                currentLine.append(word);
-            } else {
-                String test = currentLine + " " + word;
-                if (textRenderer.getWidth(test) > MAX_LINE_WIDTH) {
-                    lines.add(currentLine.toString());
-                    currentLine = new StringBuilder(word);
-                } else {
-                    currentLine.append(" ").append(word);
-                }
-            }
-        }
-        if (!currentLine.isEmpty()) {
-            lines.add(currentLine.toString());
-        }
-
         return lines;
     }
 
     private static void renderBubble(MinecraftClient client, MatrixStack matrices,
                                       OrderedRenderCommandQueue commandQueue,
                                       CameraRenderState cameraState, UUID playerUuid,
-                                      String text) {
+                                      List<String> lines) {
         PlayerEntity player = client.world.getPlayerByUuid(playerUuid);
         if (player == null) return;
         if (player == client.player) return;
 
-        Vec3d playerPos = player.getEntityPos();
-        double squaredDist = client.player.getEntityPos().squaredDistanceTo(playerPos);
+        // Interpolated like the player model, so the bubble does not jitter at more than 20 FPS
+        Vec3d playerPos = player.getLerpedPos(client.getRenderTickCounter().getTickProgress(true));
+        double squaredDist = cameraState.pos.squaredDistanceTo(playerPos);
         if (squaredDist > HearingRange.BLOCKS * HearingRange.BLOCKS) return;
         if (!isLabelVisible(client, player, squaredDist)) return;
-
-        List<String> lines = wrapText(text, client.textRenderer);
 
         matrices.push();
         matrices.translate(
