@@ -2,6 +2,7 @@ package org.mamoru.omnichat.client.screen;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CyclingButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
@@ -16,7 +17,9 @@ import org.mamoru.omnichat.network.VoiceSelectionC2SPayload;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class OmnichatSettingsScreen extends Screen {
     private final Screen parent;
@@ -31,6 +34,7 @@ public class OmnichatSettingsScreen extends Screen {
     private float bubbleTextSpeed;
 
     private List<String> availableModels;
+    private ButtonWidget applyButton;
     private final boolean connectedToServer;
 
     public OmnichatSettingsScreen(Screen parent) {
@@ -50,16 +54,16 @@ public class OmnichatSettingsScreen extends Screen {
         VoiceCache cache = VoiceCache.getInstance();
         this.connectedToServer = cache.isConnectedToOmnichatServer();
 
-        // Merge server models with local models
+        // Union of server and local models; the configured model is kept even if it's missing
+        Set<String> models = new LinkedHashSet<>();
         if (connectedToServer) {
-            this.availableModels = new ArrayList<>(cache.getServerModels());
-        } else {
-            this.availableModels = new ArrayList<>(OmnichatConfig.listAvailableModels());
+            models.addAll(cache.getServerModels());
         }
-
-        if (!availableModels.contains(selectedModel) && !availableModels.isEmpty()) {
-            selectedModel = availableModels.get(0);
+        models.addAll(OmnichatConfig.listAvailableModels());
+        if (selectedModel != null && !selectedModel.isEmpty()) {
+            models.add(selectedModel);
         }
+        this.availableModels = new ArrayList<>(models);
     }
 
     private boolean isModelLocal(String modelName) {
@@ -68,7 +72,7 @@ public class OmnichatSettingsScreen extends Screen {
     }
 
     private String modelDisplayName(String modelName) {
-        if (connectedToServer && !isModelLocal(modelName)) {
+        if (!isModelLocal(modelName)) {
             return modelName + " [↓]";
         }
         return modelName;
@@ -103,7 +107,10 @@ public class OmnichatSettingsScreen extends Screen {
                     .values(availableModels)
                     .build(centerX - widgetWidth / 2, startY + 52, widgetWidth, 20,
                             Text.literal("Voice Model"),
-                            (button, value) -> selectedModel = value));
+                            (button, value) -> {
+                                selectedModel = value;
+                                updateApplyButton();
+                            }));
         }
 
         // Robot Effect toggle
@@ -197,34 +204,46 @@ public class OmnichatSettingsScreen extends Screen {
         }
 
         // Apply button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), button -> {
+        this.applyButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Apply"), button -> {
             OmnichatConfig config = OmnichatClient.getConfig();
             config.setEnabled(enabled);
             config.setReadOwnMessages(readOwnMessages);
-            config.setModelPath(selectedModel);
+            // Only touch the model when the user actually picked another one
+            if (isModelChanged()) {
+                config.setModelPath(selectedModel);
+            }
             config.setRobotEffect(robotEffect);
             config.setSpeed(speed);
             config.setVolume(volume);
             config.setShowChatBubbles(showChatBubbles);
             config.setBubbleTextSpeed(bubbleTextSpeed);
             config.save();
-            OmnichatClient.reinitializeTts();
+            // Rebuilds the engine (off-thread) only if the model or enabled state changed
+            OmnichatClient.getTts().applySettings();
 
-            // Send voice selection to server if connected
-            if (connectedToServer) {
-                try {
-                    ClientPlayNetworking.send(new VoiceSelectionC2SPayload(selectedModel, config.getSpeakerId()));
-                } catch (Exception e) {
-                    // Server might not support it, ignore
-                }
+            if (connectedToServer && ClientPlayNetworking.canSend(VoiceSelectionC2SPayload.ID)) {
+                ClientPlayNetworking.send(new VoiceSelectionC2SPayload(config.getModelPath(), config.getSpeakerId()));
             }
 
             close();
         }).dimensions(centerX - widgetWidth / 2, buttonY, 96, 20).build());
+        updateApplyButton();
 
         // Cancel button
         this.addDrawableChild(ButtonWidget.builder(ScreenTexts.CANCEL, button -> close())
                 .dimensions(centerX - widgetWidth / 2 + 104, buttonY, 96, 20).build());
+    }
+
+    private boolean isModelChanged() {
+        return selectedModel != null && !selectedModel.equals(OmnichatClient.getConfig().getModelPath());
+    }
+
+    /** A model that isn't downloaded can't become the local engine; download it first. */
+    private void updateApplyButton() {
+        if (applyButton == null) return;
+        boolean blocked = isModelChanged() && !isModelLocal(selectedModel);
+        applyButton.active = !blocked;
+        applyButton.setTooltip(blocked ? Tooltip.of(Text.literal("Download this model before applying it")) : null);
     }
 
     @Override

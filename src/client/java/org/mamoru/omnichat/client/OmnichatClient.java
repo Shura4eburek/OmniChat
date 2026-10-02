@@ -2,6 +2,7 @@ package org.mamoru.omnichat.client;
 
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -17,25 +18,19 @@ import org.mamoru.omnichat.client.network.ClientNetworkHandler;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
 import org.mamoru.omnichat.client.network.VoiceCache;
 import org.mamoru.omnichat.client.screen.DownloadProgressHud;
-import org.mamoru.omnichat.client.tts.GladosTtsEngine;
-import org.mamoru.omnichat.client.tts.ITtsEngine;
-import org.mamoru.omnichat.client.tts.TtsEngine;
 import org.mamoru.omnichat.client.tts.SpatialAudioPlayer;
 import org.mamoru.omnichat.client.tts.TtsPlaybackWorker;
+import org.mamoru.omnichat.client.tts.TtsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
 
 public class OmnichatClient implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
 
     private static OmnichatConfig config;
-    // Engines are owned (cached and released) by the worker of each generation
-    private static volatile TtsPlaybackWorker worker;
+    private static TtsService tts;
     private static ChatMessageHandler chatHandler;
 
     @Override
@@ -43,6 +38,8 @@ public class OmnichatClient implements ClientModInitializer {
         LOGGER.info("OmniChat initializing...");
 
         config = OmnichatConfig.load();
+        // Engine loading runs on a background thread; TTS becomes available once it is ready
+        tts = new TtsService(config);
 
         OmnichatKeybinds.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -58,119 +55,28 @@ public class OmnichatClient implements ClientModInitializer {
         ClientNetworkHandler.registerHandlers();
         DownloadProgressHud.register();
         // Runs on whatever thread saved the model; the worker evicts on its own thread
-        ModelDownloadManager.getInstance().setOnDownloadComplete(modelName -> {
-            TtsPlaybackWorker current = worker;
-            if (current != null) {
-                current.evictModel(modelName);
-            }
-        });
+        ModelDownloadManager.getInstance().setOnDownloadComplete(modelName -> tts.onModelDownloaded(modelName));
 
         // Clean up on disconnect
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             VoiceCache.getInstance().clear();
             ModelDownloadManager.getInstance().clear();
             ChatBubbleManager.getInstance().clear();
+            tts.onDisconnect();
         });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> tts.shutdown());
 
-        if (!config.isEnabled()) {
+        // The handler checks config.isEnabled() itself, so it can be registered once up front
+        chatHandler = new ChatMessageHandler(config);
+        chatHandler.register();
+
+        if (config.isEnabled()) {
+            tts.start();
+        } else {
             LOGGER.info("OmniChat is disabled in config");
-            return;
         }
-
-        initializeTts();
 
         LOGGER.info("OmniChat initialized successfully");
-    }
-
-    private static void initializeTts() {
-        ITtsEngine engine;
-        try {
-            engine = createEngine(config);
-        } catch (Exception | LinkageError e) {
-            LOGGER.error("Failed to initialize TTS engine with model '{}': {}", config.getModelPath(), e.getMessage());
-            engine = tryFallbackModel();
-            if (engine == null) {
-                LOGGER.error("No working TTS model found. TTS will be disabled.");
-                return;
-            }
-        }
-
-        worker = new TtsPlaybackWorker(engine, config);
-        worker.start();
-
-        if (chatHandler == null) {
-            chatHandler = new ChatMessageHandler(config);
-            chatHandler.register();
-        }
-    }
-
-    private static ITtsEngine createEngine(OmnichatConfig cfg) {
-        return createEngineForModel(cfg.getResolvedModelDir());
-    }
-
-    static ITtsEngine createEngineForModel(Path modelDir) {
-        if (Files.exists(modelDir.resolve("dictionary.txt"))) {
-            LOGGER.info("Detected GLaDOS-type model in '{}'", modelDir.getFileName());
-            return GladosTtsEngine.create(modelDir);
-        }
-        return TtsEngine.create(modelDir);
-    }
-
-    /**
-     * Loads a fresh engine for the given model name, or returns null if the model is
-     * unavailable or fails to load (the caller then uses its default engine, uncached).
-     */
-    public static ITtsEngine loadEngineForModel(String name) {
-        Path modelDir = OmnichatConfig.resolveModelDir(name);
-        if (modelDir == null || !Files.isDirectory(modelDir)) {
-            LOGGER.debug("Model '{}' not available locally, using default engine", name);
-            return null;
-        }
-        try {
-            LOGGER.info("Loading engine for model '{}'", name);
-            return createEngineForModel(modelDir);
-        } catch (Exception | LinkageError e) {
-            LOGGER.warn("Failed to load engine for model '{}', using default: {}", name, e.toString());
-            return null;
-        }
-    }
-
-    private static ITtsEngine tryFallbackModel() {
-        String failedModel = config.getModelPath();
-        List<String> models = OmnichatConfig.listAvailableModels();
-        for (String model : models) {
-            if (model.equals(failedModel)) continue;
-            LOGGER.info("Trying fallback model: {}", model);
-            config.setModelPath(model);
-            config.save();
-            try {
-                return createEngine(config);
-            } catch (Exception | LinkageError e) {
-                LOGGER.warn("Fallback model '{}' also failed: {}", model, e.getMessage());
-            }
-        }
-        config.setModelPath(failedModel);
-        config.save();
-        return null;
-    }
-
-    public static void reinitializeTts() {
-        LOGGER.info("Reinitializing TTS engine...");
-
-        // The old worker releases its own engines once its thread leaves the loop
-        TtsPlaybackWorker old = worker;
-        worker = null;
-        if (old != null) {
-            old.shutdown();
-        }
-
-        if (!config.isEnabled()) {
-            LOGGER.info("OmniChat TTS disabled");
-            return;
-        }
-
-        initializeTts();
-        LOGGER.info("TTS engine reinitialized");
     }
 
     private static void onChatMessageForBubble(Text message, SignedMessage signedMessage,
@@ -202,7 +108,11 @@ public class OmnichatClient implements ClientModInitializer {
         return config;
     }
 
+    public static TtsService getTts() {
+        return tts;
+    }
+
     public static TtsPlaybackWorker getWorker() {
-        return worker;
+        return tts != null ? tts.getWorker() : null;
     }
 }

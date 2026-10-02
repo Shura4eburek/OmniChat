@@ -1,10 +1,14 @@
 package org.mamoru.omnichat.client.network;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.chat.ChatBubbleManager;
+import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.network.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 public class ClientNetworkHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
@@ -22,6 +26,18 @@ public class ClientNetworkHandler {
     private static void onModelList(ModelListS2CPayload payload, ClientPlayNetworking.Context context) {
         VoiceCache.getInstance().setServerModels(payload.models());
         LOGGER.info("Received server model list: {}", payload.models());
+        syncVoiceSelection(payload.models());
+    }
+
+    /** Tells the server which voice this client has configured, so others hear the right one. */
+    private static void syncVoiceSelection(List<String> serverModels) {
+        OmnichatConfig config = OmnichatClient.getConfig();
+        String model = config.getModelPath();
+        if (!serverModels.contains(model) || !ClientPlayNetworking.canSend(VoiceSelectionC2SPayload.ID)) {
+            return;
+        }
+        ClientPlayNetworking.send(new VoiceSelectionC2SPayload(model, config.getSpeakerId()));
+        LOGGER.info("Sent configured voice to server: {} (speaker {})", model, config.getSpeakerId());
     }
 
     private static void onVoiceInfo(VoiceInfoS2CPayload payload, ClientPlayNetworking.Context context) {
