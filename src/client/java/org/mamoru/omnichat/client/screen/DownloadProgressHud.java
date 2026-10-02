@@ -36,10 +36,12 @@ public class DownloadProgressHud implements HudRenderCallback {
 
         for (Map.Entry<String, Float> entry : downloads.entrySet()) {
             String modelName = entry.getKey();
-            float progress = entry.getValue();
+            // -1 = request still waiting in the local or server queue
+            boolean waiting = entry.getValue() < 0;
+            float progress = waiting ? 0f : entry.getValue();
             int percent = (int) (progress * 100);
 
-            String label = modelName + " - " + percent + "%";
+            String label = modelName + (waiting ? " - waiting" : " - " + percent + "%");
             int totalHeight = textRenderer.fontHeight + 2 + BAR_HEIGHT + PADDING * 2;
 
             // Background

@@ -18,6 +18,8 @@ public class ClientNetworkHandler {
         ClientPlayNetworking.registerGlobalReceiver(VoiceInfoS2CPayload.ID, ClientNetworkHandler::onVoiceInfo);
         ClientPlayNetworking.registerGlobalReceiver(VoiceMapS2CPayload.ID, ClientNetworkHandler::onVoiceMap);
         ClientPlayNetworking.registerGlobalReceiver(ModelFileChunkS2CPayload.ID, ClientNetworkHandler::onModelFileChunk);
+        ClientPlayNetworking.registerGlobalReceiver(ModelDownloadStatusS2CPayload.ID,
+                (payload, context) -> ModelDownloadManager.getInstance().onStatusReceived(payload));
         ClientPlayNetworking.registerGlobalReceiver(TypingIndicatorS2CPayload.ID, ClientNetworkHandler::onTypingIndicator);
         ClientPlayNetworking.registerGlobalReceiver(VoiceRemoveS2CPayload.ID, ClientNetworkHandler::onVoiceRemove);
         LOGGER.info("Client network handlers registered");

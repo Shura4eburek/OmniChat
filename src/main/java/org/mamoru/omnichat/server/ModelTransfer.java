@@ -32,6 +32,13 @@ final class ModelTransfer implements Closeable {
     private long fileSize;
     private int offset;
 
+    /** The model can't be sent as is (empty folder, oversized file); the message goes to the client. */
+    static final class RefusedException extends IOException {
+        RefusedException(String message) {
+            super(message);
+        }
+    }
+
     ModelTransfer(UUID playerId, String playerName, String modelName, Path modelDir) throws IOException {
         this.playerId = playerId;
         this.playerName = playerName;
@@ -40,9 +47,17 @@ final class ModelTransfer implements Closeable {
         try (Stream<Path> stream = Files.walk(modelDir)) {
             this.files = stream.filter(Files::isRegularFile).toList();
         }
+        if (files.isEmpty()) {
+            throw new RefusedException("model folder is empty");
+        }
         long total = 0;
         for (Path file : files) {
-            total += Files.size(file);
+            long size = Files.size(file);
+            // the chunk offset is an int (VarInt) and the client checks it per file
+            if (size > Integer.MAX_VALUE) {
+                throw new RefusedException("file too large: " + modelDir.relativize(file));
+            }
+            total += size;
         }
         this.totalBytes = total;
     }

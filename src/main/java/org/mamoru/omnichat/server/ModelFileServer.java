@@ -3,8 +3,10 @@ package org.mamoru.omnichat.server;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import org.mamoru.omnichat.network.ModelDownloadStatusS2CPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,38 +60,61 @@ public class ModelFileServer {
 
     public void sendModel(ServerPlayerEntity player, String modelName) {
         Path modelDir = modelsDir.resolve(modelName);
-        if (!Files.isDirectory(modelDir)) {
-            LOGGER.warn("Model '{}' not found for download request from {}", modelName, player.getName().getString());
-            return;
-        }
-
         if (!modelDir.normalize().startsWith(modelsDir.normalize())) {
             LOGGER.warn("Path traversal attempt from {} for model '{}'", player.getName().getString(), modelName);
+            reject(player, modelName, "invalid model name");
             return;
         }
 
-        enqueue(player.getUuid(), new Request(modelName, modelDir, player.getName().getString()));
+        // the registry is scanned once, so the folder may have been removed since
+        if (!Files.isDirectory(modelDir)) {
+            LOGGER.warn("Model '{}' not found for download request from {}", modelName, player.getName().getString());
+            reject(player, modelName, "model not found on server");
+            return;
+        }
+
+        enqueue(player, new Request(modelName, modelDir, player.getName().getString()));
     }
 
-    private static synchronized void enqueue(UUID playerId, Request request) {
+    /** Tells the client its request for {@code modelName} was refused or aborted. */
+    public static void reject(ServerPlayerEntity player, String modelName, String reason) {
+        if (player.isDisconnected()) return;
+        ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.failed(modelName, reason));
+    }
+
+    private static synchronized void enqueue(ServerPlayerEntity player, Request request) {
+        UUID playerId = player.getUuid();
         long now = System.currentTimeMillis();
         Long last = lastRequest.put(playerId, now);
         if (last != null && now - last < REQUEST_COOLDOWN_MS) {
             LOGGER.debug("Dropped model request '{}' from {}: too frequent", request.modelName(), request.playerName());
+            reject(player, request.modelName(), "too many requests, try again");
             return;
         }
 
-        ModelTransfer current = active.get(playerId);
         ArrayDeque<Request> queue = queues.computeIfAbsent(playerId, k -> new ArrayDeque<>());
-        if ((current != null && current.modelName.equals(request.modelName()))
-                || queue.stream().anyMatch(r -> r.modelName().equals(request.modelName()))) {
+        ModelTransfer current = active.get(playerId);
+        if (current != null && current.modelName.equals(request.modelName())) {
+            // The client only re-asks for a model it gave up on (timeout/error), so it has
+            // dropped the partial data: restart from the first byte instead of resuming mid-file.
+            current.close();
+            active.remove(playerId);
+            queue.addFirst(request);
+            ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
+            LOGGER.info("Restarting model '{}' transfer to {}", request.modelName(), request.playerName());
+            return;
+        }
+        if (queue.stream().anyMatch(r -> r.modelName().equals(request.modelName()))) {
+            ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
             return;
         }
         if (queue.size() >= MAX_QUEUED_PER_PLAYER) {
             LOGGER.warn("Rejected model request '{}' from {}: queue full", request.modelName(), request.playerName());
+            reject(player, request.modelName(), "download queue full");
             return;
         }
         queue.add(request);
+        ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
         LOGGER.info("Player {} requested download of model '{}'", request.playerName(), request.modelName());
     }
 
@@ -112,10 +137,12 @@ public class ModelFileServer {
                     transfer.close();
                     it.remove();
                 }
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
+                // runs on the server thread: never let a bad file escape the tick
                 LOGGER.error("Failed to send model '{}' to {}", transfer.modelName, transfer.playerName, e);
                 transfer.close();
                 it.remove();
+                reject(player, transfer.modelName, "server read error");
             }
         }
     }
@@ -139,8 +166,12 @@ public class ModelFileServer {
             if (request != null) {
                 try {
                     active.put(playerId, new ModelTransfer(playerId, request.playerName(), request.modelName(), request.modelDir()));
-                } catch (IOException e) {
+                } catch (ModelTransfer.RefusedException e) {
+                    LOGGER.warn("Refused model '{}' for {}: {}", request.modelName(), request.playerName(), e.getMessage());
+                    reject(player, request.modelName(), e.getMessage());
+                } catch (IOException | RuntimeException e) {
                     LOGGER.error("Failed to send model '{}' to {}", request.modelName(), request.playerName(), e);
+                    reject(player, request.modelName(), "server read error");
                 }
             }
             // Move served players to the back so others get the next free slot
