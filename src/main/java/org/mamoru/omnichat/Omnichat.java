@@ -74,8 +74,4 @@ public class Omnichat implements ModInitializer {
 
         LOGGER.info("OmniChat mod loaded");
     }
-
-    public static VoiceRegistry getVoiceRegistry() {
-        return voiceRegistry;
-    }
 }

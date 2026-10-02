@@ -1,7 +1,6 @@
 package org.mamoru.omnichat.client.tts;
 
 import com.k2fsa.sherpa.onnx.*;
-import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +18,6 @@ public class TtsEngine implements ITtsEngine {
     private TtsEngine(OfflineTts tts) {
         this.tts = tts;
         this.sampleRate = tts.getSampleRate();
-    }
-
-    public static TtsEngine create(OmnichatConfig config) {
-        return create(config.getResolvedModelDir());
     }
 
     public static TtsEngine create(Path modelDir) {

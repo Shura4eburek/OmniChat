@@ -121,19 +121,6 @@ public class ModelDownloadManager {
         sendNextRequest();
     }
 
-    public synchronized boolean isDownloading(String modelName) {
-        return downloads.containsKey(modelName);
-    }
-
-    /**
-     * Returns download progress as 0.0-1.0, or -1 if not downloading.
-     */
-    public synchronized float getProgress(String modelName) {
-        Download d = downloads.get(modelName);
-        if (d == null) return -1f;
-        return d.totalBytes > 0 ? (float) d.receivedBytes / d.totalBytes : 0f;
-    }
-
     /**
      * Returns a snapshot of all downloads in request order: progress 0.0-1.0 once data
      * flows, or -1 while the request is still waiting (locally or in the server queue).

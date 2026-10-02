@@ -149,9 +149,5 @@ public class VoiceStorage {
         return choices.get(playerUuid);
     }
 
-    public Map<UUID, VoiceChoice> getAllChoices() {
-        return Map.copyOf(choices);
-    }
-
     private record StoredVoice(String modelName, int speakerId) {}
 }
