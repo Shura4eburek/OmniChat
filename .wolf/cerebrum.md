@@ -32,3 +32,6 @@
 - [2026-10-03] TTS engines are owned by TtsPlaybackWorker (load/cache/release on its thread); OmnichatClient.loadEngineForModel returns null on failure — never cache fallbacks. Catch LinkageError around native engine creation.
 - [2026-10-03] Model transfers: static scheduler in ModelFileServer, registered ONCE in onInitialize (Fabric events can't be unregistered; SERVER_STARTED fires per world on integrated server). 2 chunks/tick/transfer, 2 global transfers. No public connection-open check in Yarn 1.21.11 → use player.isDisconnected().
 - [2026-10-03] Parallel fixes via worktree subagents worked well when file ownership was split explicitly in prompts.
+- [2026-10-03] Client TTS lives in tts/TtsService (async loader thread "OmniChat-TTS-Loader"); chat goes through chat/ChatPipeline (single CHAT listener, HearingRange.BLOCKS=40). Spatial audio: AL_LINEAR_DISTANCE_CLAMPED, per-sender queue, SoundEngineMixin drops AL objects on SoundEngine.close.
+- [2026-10-03] Model downloads: ModelDownloadStatusS2CPayload (QUEUED/FAILED), client writes to config/omnichat/downloads/<name>.part and installs atomically; sherpa natives cached in config/omnichat/natives/win-x64-<hash>.
+- [2026-10-03] After editing jar excludes in build.gradle, Gradle may keep :jar UP-TO-DATE — run `./gradlew clean build`.

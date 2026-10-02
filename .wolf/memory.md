@@ -60,3 +60,24 @@
 | 23:56 | Edited .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | 2→2 lines | ~35 |
 | 23:56 | Edited .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/Omnichat.java | 1→3 lines | ~28 |
 | 00:01 | fixed high issues #2 #3 #4 #5 #38 via 4 parallel worktree agents, merged, build+smoke pass | src/** | ok | ~300k |
+| 00:01 | Created src/client/java/org/mamoru/omnichat/client/HearingRange.java | — | ~109 |
+| 00:03 | Created .claude/worktrees/agent-a5d904f267503a752/src/main/java/org/mamoru/omnichat/server/VoiceStorage.java | — | ~1588 |
+| 00:03 | Created .claude/worktrees/agent-a7cc3647b1bb950ce/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | — | ~3111 |
+| 00:03 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/jp.sh | — | ~137 |
+| 00:04 | Created .claude/worktrees/agent-aa981e6d544b0e574/src/client/java/org/mamoru/omnichat/client/tts/TtsService.java | — | ~2236 |
+| 00:04 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/jp.sh | — | ~288 |
+| 00:04 | Edited .claude/worktrees/agent-a4e9cfddd757037e8/build.gradle | 4→9 lines | ~131 |
+| 00:04 | Created .claude/worktrees/agent-a4a8aef936b1e70b5/src/main/java/org/mamoru/omnichat/network/ModelDownloadStatusS2CPayload.java | — | ~616 |
+| 00:04 | Edited .claude/worktrees/agent-a4a8aef936b1e70b5/src/main/java/org/mamoru/omnichat/Omnichat.java | 2→3 lines | ~61 |
+| 00:04 | Edited .claude/worktrees/agent-a4a8aef936b1e70b5/src/client/java/org/mamoru/omnichat/client/network/ClientNetworkHandler.java | 2→4 lines | ~61 |
+| 00:04 | Edited .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | modified type() | ~106 |
+| 00:04 | Edited .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | modified listAvailableModels() | ~339 |
+| 00:04 | Created .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/chat/ChatPipeline.java | — | ~1381 |
+| 00:05 | Created .claude/worktrees/agent-a524a0230060258fe/src/client/java/org/mamoru/omnichat/client/tts/SpatialAudioPlayer.java | — | ~3403 |
+| 00:05 | Created .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/chat/ChatMessageHandler.java | — | ~497 |
+| 00:05 | Edited .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/OmnichatClient.java | 2→2 lines | ~31 |
+| 00:05 | Edited .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/OmnichatClient.java | — | ~0 |
+| 00:05 | Edited .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/OmnichatClient.java | added 1 import(s) | ~30 |
+| 00:05 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/srv.py | — | ~2426 |
+| 00:06 | Created .claude/worktrees/agent-a4a8aef936b1e70b5/src/client/java/org/mamoru/omnichat/client/network/ModelDownloadManager.java | — | ~4335 |
+| 00:10 | medium issues #6-#12 #14-#21 via 7 parallel worktree agents; 1 merge conflict (OmnichatClient); jar 101→38 MB; smoke pass (voice sync on join verified: listener used 'irina') | src/**, build.gradle | ok | ~600k |

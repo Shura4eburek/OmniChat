@@ -111,6 +111,7 @@ public class ServerNetworkHandler {
 
         if (!registry.isValidModel(modelName)) {
             LOGGER.warn("Player {} requested invalid model '{}'", player.getName().getString(), modelName);
+            ModelFileServer.reject(player, modelName, "unknown model");
             return;
         }
 

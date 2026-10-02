@@ -1,12 +1,14 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T20:56:37.740Z
-> Files: 529 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:06:10.620Z
+> Files: 545 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
 - `edit_client.py` — Returns the engine for the given model name, loading and caching it if needed. (~1278 tok)
+- `jp.sh` (~288 tok)
 - `R.java` — R: main (~257 tok)
+- `srv.py` — Tells the client its request for {@code modelName} was refused or aborted. (~2426 tok)
 
 ## ./
 
@@ -30,6 +32,27 @@
 
 - `openwolf.md` (~313 tok)
 
+## .claude/worktrees/agent-a4a8aef936b1e70b5/src/client/java/org/mamoru/omnichat/client/network/
+
+- `ClientNetworkHandler.java` — ClientNetworkHandler: registerHandlers (~799 tok)
+- `ModelDownloadManager.java` — Downloads models from the server one at a time. Chunks arrive on the client thread and (~4335 tok)
+
+## .claude/worktrees/agent-a4a8aef936b1e70b5/src/main/java/org/mamoru/omnichat/
+
+- `Omnichat.java` — Omnichat: onInitialize, getVoiceRegistry (~863 tok)
+
+## .claude/worktrees/agent-a4a8aef936b1e70b5/src/main/java/org/mamoru/omnichat/network/
+
+- `ModelDownloadStatusS2CPayload.java` — Server-side state of a model download request that isn't carried by the chunks themselves: (~616 tok)
+
+## .claude/worktrees/agent-a4e9cfddd757037e8/
+
+- `build.gradle` — Declares as (~1253 tok)
+
+## .claude/worktrees/agent-a524a0230060258fe/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `SpatialAudioPlayer.java` — Plays TTS clips on raw OpenAL sources in Minecraft's AL context. (~3403 tok)
+
 ## .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/
 
 - `Omnichat.java` — Omnichat: onInitialize, getVoiceRegistry (~744 tok)
@@ -40,11 +63,36 @@
 - `ModelTransfer.java` — Streaming state of one model being sent to one player. Files are read chunk by chunk (~790 tok)
 - `ServerNetworkHandler.java` — ServerNetworkHandler: registerHandlers, onPlayerJoin (~1020 tok)
 
+## .claude/worktrees/agent-a5d904f267503a752/src/main/java/org/mamoru/omnichat/server/
+
+- `VoiceStorage.java` — Persists voice choices to voice_choices.json. Writes are coalesced (at most one per (~1588 tok)
+
 ## .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/
 
 - `GladosTtsEngine.java` — GladosTtsEngine: create, create, getSampleRate (~1139 tok)
 - `TtsEngine.java` — Validates that the ONNX model is a VITS TTS model by checking for (~1979 tok)
 - `TtsPlaybackWorker.java` — Owns its engines: they are created, used and released only on the worker thread, (~1786 tok)
+
+## .claude/worktrees/agent-a7cc3647b1bb950ce/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `SherpaNatives.java` — Extracts the bundled sherpa-onnx / onnxruntime natives into a stable, content-addressed (~3111 tok)
+
+## .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/
+
+- `OmnichatClient.java` — Loads a fresh engine for the given model name, or returns null if the model is (~1841 tok)
+
+## .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/chat/
+
+- `ChatMessageHandler.java` — TTS sink of the {@link ChatPipeline}: turns an already filtered chat message into a TTS (~497 tok)
+- `ChatPipeline.java` — The single CHAT listener. Filters each player chat message once (type, text, own message, (~1381 tok)
+
+## .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/config/
+
+- `OmnichatConfig.java` — Directory of a model whose name came from the server, or null if the name isn't a single (~1853 tok)
+
+## .claude/worktrees/agent-aa981e6d544b0e574/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `TtsService.java` — Owns the TTS playback worker (which in turn owns its engines). Engines are built on a (~2236 tok)
 
 ## .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/
 
@@ -921,3 +969,7 @@
 - `mcproc.ps1` — Helpers for scripts/smoke.sh: tell dev Minecraft processes apart by command line (~646 tok)
 - `mcproc.ps1` — find/focus/kill dev Minecraft java.exe by command-line regex; window handle by PID. (~400 tok)
 - `mcproc.ps1` — find/focus/kill dev Minecraft java.exe by command-line regex; window handle by PID. (~400 tok)
+
+## src/client/java/org/mamoru/omnichat/client/
+
+- `HearingRange.java` — How far a player's chat can be heard and seen. Shared by the TTS filter, the spatial audio (~109 tok)
