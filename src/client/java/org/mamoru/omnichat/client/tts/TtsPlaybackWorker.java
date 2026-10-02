@@ -31,6 +31,8 @@ public class TtsPlaybackWorker {
     private final Map<String, ITtsEngine> engines = new HashMap<>();
     private final Queue<String> pendingEvictions = new ConcurrentLinkedQueue<>();
     private volatile boolean running = true;
+    // Bumped by clearQueue (disconnect): a clip synthesized before it is dropped, not played in the menu
+    private volatile int epoch;
 
     /** @param defaultModelName the model {@code defaultEngine} was built from (may be a fallback) */
     public TtsPlaybackWorker(ITtsEngine defaultEngine, String defaultModelName, OmnichatConfig config) {
@@ -77,6 +79,7 @@ public class TtsPlaybackWorker {
 
     /** Drops pending requests without stopping the worker (e.g. on disconnect). */
     public void clearQueue() {
+        epoch++;
         queue.clear();
     }
 
@@ -105,6 +108,7 @@ public class TtsPlaybackWorker {
     }
 
     private void processMessage(TtsRequest request) {
+        int startEpoch = epoch;
         // Pick the engine for the sender's model (falls back to default if unavailable)
         ITtsEngine engine = getEngine(request.modelName());
 
@@ -114,7 +118,7 @@ public class TtsPlaybackWorker {
         String modelLabel = request.modelName() != null ? request.modelName() : "default";
         long start = System.nanoTime();
         float[] samples = engine.generate(request.text(), speakerId, config.getSpeed());
-        if (!running) return;
+        if (!running || epoch != startEpoch) return;
         if (samples == null || samples.length == 0) {
             LOGGER.warn("TTS generated no audio for {} chars (model '{}', speaker {})",
                     request.text().length(), modelLabel, speakerId);
@@ -131,9 +135,9 @@ public class TtsPlaybackWorker {
         byte[] pcmData = AudioUtils.floatPcmToInt16(samples, config.getVolume());
 
         if (request.senderUuid() != null) {
-            SpatialAudioPlayer.playSpatial(pcmData, engine.getSampleRate(), request.senderUuid(), () -> running);
+            SpatialAudioPlayer.playSpatial(pcmData, engine.getSampleRate(), request.senderUuid(), () -> running && epoch == startEpoch);
         } else {
-            SpatialAudioPlayer.playMono(pcmData, engine.getSampleRate(), () -> running);
+            SpatialAudioPlayer.playMono(pcmData, engine.getSampleRate(), () -> running && epoch == startEpoch);
         }
     }
 
