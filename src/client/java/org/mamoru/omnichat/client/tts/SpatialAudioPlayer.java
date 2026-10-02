@@ -147,7 +147,17 @@ public class SpatialAudioPlayer {
             while (!queue.isEmpty() && playing.size() < MAX_ACTIVE_SOURCES) {
                 Clip clip = queue.pollFirst();
                 if (!clip.active().getAsBoolean()) continue;
-                ActiveSource source = start(clip);
+                Vec3d pos = null;
+                if (clip.senderUuid() != null) {
+                    // Synthesis is async: the sender may have left, changed dimension or walked
+                    // away since the message arrived. Never fall back to the origin or the camera.
+                    pos = audiblePosition(clip.senderUuid());
+                    if (pos == null) {
+                        LOGGER.debug("Dropping TTS clip: sender gone or out of hearing range");
+                        continue;
+                    }
+                }
+                ActiveSource source = start(clip, pos);
                 if (source != null) {
                     playing.put(key, source);
                     break;
@@ -158,8 +168,11 @@ public class SpatialAudioPlayer {
         }
     }
 
-    /** Creates buffer + source and starts playback. Returns null (with nothing leaked) on AL failure. */
-    private static ActiveSource start(Clip clip) {
+    /**
+     * Creates buffer + source and starts playback. Returns null (with nothing leaked) on AL failure.
+     * {@code pos} is the sender position for spatial clips and is ignored for mono ones.
+     */
+    private static ActiveSource start(Clip clip, Vec3d pos) {
         AL10.alGetError(); // clear stale state so the checks below report our own calls
 
         int buffer = AL10.alGenBuffers();
@@ -191,9 +204,6 @@ public class SpatialAudioPlayer {
             AL10.alSourcef(source, AL10.AL_MAX_DISTANCE, MAX_DISTANCE);
             AL10.alSourcef(source, AL10.AL_ROLLOFF_FACTOR, 1.0f);
             AL10.alSourcei(source, AL10.AL_SOURCE_RELATIVE, AL10.AL_FALSE);
-            Vec3d pos = senderPosition(clip.senderUuid());
-            if (pos == null) pos = listenerPosition();
-            if (pos == null) pos = Vec3d.ZERO;
             AL10.alSource3f(source, AL10.AL_POSITION, (float) pos.x, (float) pos.y, (float) pos.z);
         } else {
             // Like vanilla Source.disableAttenuation for relative sounds.
@@ -250,9 +260,8 @@ public class SpatialAudioPlayer {
             ActiveSource active = it.next();
             if (active.senderUuid() == null) continue;
             Vec3d pos = senderPosition(active.senderUuid());
-            if (pos == null) continue; // sender unloaded: keep last position and let the clip finish
-
-            if (listener != null && listener.distanceTo(pos) > STOP_DISTANCE) {
+            // Sender unloaded, left or changed dimension: its frozen position is meaningless now
+            if (pos == null || (listener != null && listener.distanceTo(pos) > STOP_DISTANCE)) {
                 AL10.alSourceStop(active.sourceId());
                 deleteQuietly(active.sourceId(), active.bufferId());
                 it.remove();
@@ -262,6 +271,15 @@ public class SpatialAudioPlayer {
                     (float) pos.x, (float) pos.y, (float) pos.z);
         }
         AL10.alGetError();
+    }
+
+    /** Sender position if the sender is loaded and within hearing range of the listener, else null. */
+    private static Vec3d audiblePosition(UUID senderUuid) {
+        Vec3d pos = senderPosition(senderUuid);
+        if (pos == null) return null;
+        Vec3d listener = listenerPosition();
+        if (listener == null || listener.distanceTo(pos) > HearingRange.BLOCKS) return null;
+        return pos;
     }
 
     private static Vec3d senderPosition(UUID senderUuid) {
