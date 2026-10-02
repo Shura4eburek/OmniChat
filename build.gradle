@@ -19,6 +19,23 @@ loom {
             sourceSet sourceSets.client
         }
     }
+
+    // scripts/smoke.sh: dedicated server + a second client that watches the first one speak
+    runs {
+        smokeServer {
+            server()
+            configName = "Smoke Server"
+            runDir = "run/smoke/server"
+            ideConfigGenerated false
+        }
+        smokeListener {
+            client()
+            configName = "Smoke Listener"
+            runDir = "run/smoke/listener"
+            programArgs "--username", "Listener", "--quickPlayMultiplayer", "localhost:25599"
+            ideConfigGenerated false
+        }
+    }
 }
 
 fabricApi {
