@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.mamoru.omnichat.network.ModelDownloadStatusS2CPayload;
+import org.mamoru.omnichat.network.ModelFileChunkS2CPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,13 @@ public class ModelFileServer {
     /** Tells the client its request for {@code modelName} was refused or aborted. */
     public static void reject(ServerPlayerEntity player, String modelName, String reason) {
         if (player.isDisconnected()) return;
-        ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.failed(modelName, reason));
+        sendStatus(player, ModelDownloadStatusS2CPayload.failed(modelName, reason));
+    }
+
+    private static void sendStatus(ServerPlayerEntity player, ModelDownloadStatusS2CPayload payload) {
+        if (ServerPlayNetworking.canSend(player, ModelDownloadStatusS2CPayload.ID)) {
+            ServerPlayNetworking.send(player, payload);
+        }
     }
 
     private static synchronized void enqueue(ServerPlayerEntity player, Request request) {
@@ -100,12 +107,12 @@ public class ModelFileServer {
             current.close();
             active.remove(playerId);
             queue.addFirst(request);
-            ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
+            sendStatus(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
             LOGGER.info("Restarting model '{}' transfer to {}", request.modelName(), request.playerName());
             return;
         }
         if (queue.stream().anyMatch(r -> r.modelName().equals(request.modelName()))) {
-            ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
+            sendStatus(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
             return;
         }
         if (queue.size() >= MAX_QUEUED_PER_PLAYER) {
@@ -114,7 +121,7 @@ public class ModelFileServer {
             return;
         }
         queue.add(request);
-        ServerPlayNetworking.send(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
+        sendStatus(player, ModelDownloadStatusS2CPayload.queued(request.modelName()));
         LOGGER.info("Player {} requested download of model '{}'", request.playerName(), request.modelName());
     }
 
@@ -125,7 +132,8 @@ public class ModelFileServer {
         while (it.hasNext()) {
             ModelTransfer transfer = it.next();
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(transfer.playerId);
-            if (player == null || player.isDisconnected()) {
+            if (player == null || player.isDisconnected()
+                    || !ServerPlayNetworking.canSend(player, ModelFileChunkS2CPayload.ID)) {
                 transfer.close();
                 it.remove();
                 continue;

@@ -98,7 +98,7 @@ public class ModelDownloadManager {
         if (current != null || queuedRequests.isEmpty()) return;
         long now = System.currentTimeMillis();
         if (now - lastRequestSentAt < REQUEST_SPACING_MS) return; // retried from tick()
-        if (!ClientPlayNetworking.canSend(ModelDownloadRequestC2SPayload.ID)) return;
+        if (!ClientNetworkHandler.canSend(ModelDownloadRequestC2SPayload.ID)) return;
 
         String modelName = queuedRequests.poll();
         current = downloads.get(modelName);

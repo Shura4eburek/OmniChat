@@ -11,6 +11,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.network.ClientNetworkHandler;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
 import org.mamoru.omnichat.client.network.VoiceCache;
 import org.mamoru.omnichat.client.tts.SpeakerCounts;
@@ -255,7 +256,7 @@ public class OmnichatSettingsScreen extends Screen {
             // Rebuilds the engine (off-thread) only if the model or enabled state changed
             OmnichatClient.getTts().applySettings();
 
-            if (connectedToServer && ClientPlayNetworking.canSend(VoiceSelectionC2SPayload.ID)) {
+            if (connectedToServer && ClientNetworkHandler.canSend(VoiceSelectionC2SPayload.ID)) {
                 ClientPlayNetworking.send(new VoiceSelectionC2SPayload(config.getModelPath(), config.getSpeakerId()));
             }
 

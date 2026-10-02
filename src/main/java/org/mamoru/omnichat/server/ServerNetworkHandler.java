@@ -36,6 +36,9 @@ public class ServerNetworkHandler {
     /** Minimum interval between typing-state broadcasts for one player. */
     private static final long TYPING_COOLDOWN_MS = 500;
 
+    /** Players whose client completed the handshake with a matching protocol version. */
+    private final Set<UUID> compatible = new HashSet<>();
+
     public ServerNetworkHandler(VoiceRegistry registry, ModelFileServer fileServer, MinecraftServer server) {
         this.registry = registry;
         this.fileServer = fileServer;
@@ -48,17 +51,21 @@ public class ServerNetworkHandler {
      * The receivers delegate to whatever handler {@code current} returns (null when no server runs).
      */
     public static void registerReceivers(Supplier<ServerNetworkHandler> current) {
+        ServerPlayNetworking.registerGlobalReceiver(ProtocolVersionPayload.ID, (payload, context) -> {
+            ServerNetworkHandler handler = current.get();
+            if (handler != null) handler.onProtocolVersion(payload, context);
+        });
         ServerPlayNetworking.registerGlobalReceiver(VoiceSelectionC2SPayload.ID, (payload, context) -> {
             ServerNetworkHandler handler = current.get();
-            if (handler != null) handler.onVoiceSelection(payload, context);
+            if (handler != null && handler.isCompatible(context.player())) handler.onVoiceSelection(payload, context);
         });
         ServerPlayNetworking.registerGlobalReceiver(ModelDownloadRequestC2SPayload.ID, (payload, context) -> {
             ServerNetworkHandler handler = current.get();
-            if (handler != null) handler.onModelDownloadRequest(payload, context);
+            if (handler != null && handler.isCompatible(context.player())) handler.onModelDownloadRequest(payload, context);
         });
         ServerPlayNetworking.registerGlobalReceiver(TypingIndicatorC2SPayload.ID, (payload, context) -> {
             ServerNetworkHandler handler = current.get();
-            if (handler != null) handler.onTypingIndicator(payload, context);
+            if (handler != null && handler.isCompatible(context.player())) handler.onTypingIndicator(payload, context);
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             ServerNetworkHandler handler = current.get();
@@ -67,6 +74,27 @@ public class ServerNetworkHandler {
                 handler.flushPendingTyping();
             }
         });
+    }
+
+    private boolean isCompatible(ServerPlayerEntity player) {
+        return compatible.contains(player.getUuid());
+    }
+
+    /** Client handshake: always answer with our version, then sync state only if they match. */
+    private void onProtocolVersion(ProtocolVersionPayload payload, ServerPlayNetworking.Context context) {
+        ServerPlayerEntity player = context.player();
+        if (ServerPlayNetworking.canSend(player, ProtocolVersionPayload.ID)) {
+            ServerPlayNetworking.send(player, new ProtocolVersionPayload(ProtocolVersionPayload.PROTOCOL_VERSION));
+        }
+        if (payload.version() != ProtocolVersionPayload.PROTOCOL_VERSION) {
+            compatible.remove(player.getUuid());
+            LOGGER.warn("Player {} uses OmniChat protocol {}, server uses {}: OmniChat features disabled for them",
+                    player.getName().getString(), payload.version(), ProtocolVersionPayload.PROTOCOL_VERSION);
+            return;
+        }
+        if (compatible.add(player.getUuid())) {
+            sendInitialState(player);
+        }
     }
 
     private void onVoiceSelection(VoiceSelectionC2SPayload payload, ServerPlayNetworking.Context context) {
@@ -181,23 +209,36 @@ public class ServerNetworkHandler {
     }
 
     public void onPlayerJoin(ServerPlayerEntity player) {
-        // Send model list
-        ServerPlayNetworking.send(player, new ModelListS2CPayload(registry.getAvailableModels()));
-
-        // Send voice map of all online players
-        List<UUID> onlineUuids = new ArrayList<>();
-        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            onlineUuids.add(p.getUuid());
-        }
-        Map<UUID, VoiceChoice> voices = registry.getOnlineVoices(onlineUuids);
-        if (!voices.isEmpty()) {
-            ServerPlayNetworking.send(player, new VoiceMapS2CPayload(voices));
+        // Model list and voice map wait for the client's handshake (onProtocolVersion).
+        // A client with OmniChat channels but no handshake channel runs a pre-versioning build.
+        if (!ServerPlayNetworking.canSend(player, ProtocolVersionPayload.ID)
+                && ServerPlayNetworking.canSend(player, ModelListS2CPayload.ID)) {
+            LOGGER.warn("Player {} uses an outdated OmniChat version: OmniChat features disabled for them",
+                    player.getName().getString());
+            player.sendMessage(Text.literal("[OmniChat] Your OmniChat version doesn't match the server's; "
+                    + "voice sync is disabled here. Update the mod to use it.").formatted(Formatting.YELLOW), false);
         }
 
         // Tell players already online about the joiner's stored voice
         VoiceChoice choice = registry.getVoice(player.getUuid());
         if (choice != null) {
             broadcast(new VoiceInfoS2CPayload(player.getUuid(), choice.modelName(), choice.speakerId()), player);
+        }
+    }
+
+    /** Model list and voice map of everyone online, sent once the handshake succeeds. */
+    private void sendInitialState(ServerPlayerEntity player) {
+        if (ServerPlayNetworking.canSend(player, ModelListS2CPayload.ID)) {
+            ServerPlayNetworking.send(player, new ModelListS2CPayload(registry.getAvailableModels()));
+        }
+
+        List<UUID> onlineUuids = new ArrayList<>();
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            onlineUuids.add(p.getUuid());
+        }
+        Map<UUID, VoiceChoice> voices = registry.getOnlineVoices(onlineUuids);
+        if (!voices.isEmpty() && ServerPlayNetworking.canSend(player, VoiceMapS2CPayload.ID)) {
+            ServerPlayNetworking.send(player, new VoiceMapS2CPayload(voices));
         }
     }
 
@@ -225,6 +266,7 @@ public class ServerNetworkHandler {
     }
 
     public void onPlayerLeave(ServerPlayerEntity player) {
+        compatible.remove(player.getUuid());
         lastVoiceSelection.remove(player.getUuid());
         pendingVoiceSelection.remove(player.getUuid());
         // The client's own typing=false is lost on crash/kick/timeout; clear "..." for everyone else
@@ -239,7 +281,7 @@ public class ServerNetworkHandler {
 
     private void broadcast(CustomPayload payload, ServerPlayerEntity exclude) {
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            if (p != exclude && ServerPlayNetworking.canSend(p, payload.getId())) {
+            if (p != exclude && isCompatible(p) && ServerPlayNetworking.canSend(p, payload.getId())) {
                 ServerPlayNetworking.send(p, payload);
             }
         }
