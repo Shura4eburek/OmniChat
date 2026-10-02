@@ -31,8 +31,14 @@ public class VoiceRegistry {
         return modelsDir;
     }
 
-    public void setVoice(UUID playerUuid, String modelName, int speakerId) {
-        storage.setVoice(playerUuid, new VoiceChoice(modelName, speakerId));
+    /** @return false if the stored choice was already identical */
+    public boolean setVoice(UUID playerUuid, String modelName, int speakerId) {
+        return storage.setVoice(playerUuid, new VoiceChoice(modelName, speakerId));
+    }
+
+    /** Flushes pending voice choices and stops the background writer. */
+    public void close() {
+        storage.close();
     }
 
     public VoiceChoice getVoice(UUID playerUuid) {
