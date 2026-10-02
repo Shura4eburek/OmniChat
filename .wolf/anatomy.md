@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T22:11:20.803Z
-> Files: 571 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T22:20:27.595Z
+> Files: 572 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -619,6 +619,10 @@
 - `hud-style.html` (~2282 tok)
 - `visual-style.html` (~2157 tok)
 - `waiting-1.html` (~52 tok)
+
+## docs/superpowers/plans/
+
+- `2026-10-03-pixel-hud-ui.md` — Pixel HUD UI Implementation Plan (~30474 tok)
 
 ## docs/superpowers/specs/
 

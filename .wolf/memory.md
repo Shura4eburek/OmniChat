@@ -125,3 +125,5 @@
 | 01:06 | Created .superpowers/brainstorm/202-1790978593/content/hud-style.html | — | ~2282 |
 | 01:06 | Created .superpowers/brainstorm/202-1790978593/content/waiting-1.html | — | ~52 |
 | 01:11 | Created docs/superpowers/specs/2026-10-03-pixel-hud-ui-design.md | — | ~2196 |
+| 01:20 | Created docs/superpowers/plans/2026-10-03-pixel-hud-ui.md | — | ~32506 |
+| 01:25 | pixel HUD UI: brainstorm (teal tactical HUD, voice.json+portrait, own widgets), spec + 11-task plan committed; issues #48-#58 + epic #59; implementation planned for 2026-10-04 | docs/superpowers/** | ok | ~120k |
