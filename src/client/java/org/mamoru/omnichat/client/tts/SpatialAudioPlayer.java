@@ -12,6 +12,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class SpatialAudioPlayer {
@@ -49,6 +50,7 @@ public class SpatialAudioPlayer {
                         (float) pos.x, (float) pos.y, (float) pos.z);
 
                 AL10.alSourcePlay(source);
+                logStarted(source, pcm, sampleRate, "spatial");
                 activeSources.add(new ActiveSource(source, buffer, senderUuid));
             } catch (Exception e) {
                 LOGGER.error("Failed to play spatial audio", e);
@@ -68,11 +70,23 @@ public class SpatialAudioPlayer {
                 AL10.alSource3f(source, AL10.AL_POSITION, 0.0f, 0.0f, 0.0f);
 
                 AL10.alSourcePlay(source);
+                logStarted(source, pcm, sampleRate, "mono");
                 activeSources.add(new ActiveSource(source, buffer, null));
             } catch (Exception e) {
                 LOGGER.error("Failed to play mono audio", e);
             }
         });
+    }
+
+    // pcm is 16-bit mono, so 2 bytes per sample
+    private static void logStarted(int source, byte[] pcm, int sampleRate, String kind) {
+        double seconds = pcm.length / 2.0 / sampleRate;
+        int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
+        if (state == AL10.AL_PLAYING) {
+            LOGGER.info("TTS playing ({}): {}s", kind, String.format(Locale.ROOT, "%.1f", seconds));
+        } else {
+            LOGGER.warn("TTS source not playing ({}): AL state {}, error {}", kind, state, AL10.alGetError());
+        }
     }
 
     public static void tick() {

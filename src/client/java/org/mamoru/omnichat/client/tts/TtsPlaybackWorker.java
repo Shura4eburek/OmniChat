@@ -64,10 +64,17 @@ public class TtsPlaybackWorker {
         // Use speakerId from request (server voice) if available, otherwise fall back to config
         int speakerId = request.speakerId() >= 0 ? request.speakerId() : config.getSpeakerId();
 
+        String modelLabel = request.modelName() != null ? request.modelName() : "default";
+        long start = System.nanoTime();
         float[] samples = engine.generate(request.text(), speakerId, config.getSpeed());
         if (samples == null || samples.length == 0) {
+            LOGGER.warn("TTS generated no audio for {} chars (model '{}', speaker {})",
+                    request.text().length(), modelLabel, speakerId);
             return;
         }
+        // message text itself is not logged: chat can be private
+        LOGGER.info("TTS generated {} chars in {} ms (model '{}', speaker {})",
+                request.text().length(), (System.nanoTime() - start) / 1_000_000, modelLabel, speakerId);
 
         if (config.isRobotEffect()) {
             AudioUtils.applyRobotEffect(samples, engine.getSampleRate());
