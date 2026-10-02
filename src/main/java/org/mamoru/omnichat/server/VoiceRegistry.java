@@ -11,7 +11,8 @@ import java.util.UUID;
 public class VoiceRegistry {
     private final Path modelsDir;
     private final VoiceStorage storage;
-    private List<String> availableModels;
+    // Immutable snapshot, swapped whole by refreshModels() (e.g. from /omnichat reload)
+    private volatile List<String> availableModels = List.of();
 
     public VoiceRegistry(Path configDir) {
         this.modelsDir = configDir.resolve("models");
@@ -20,7 +21,7 @@ public class VoiceRegistry {
     }
 
     public void refreshModels() {
-        this.availableModels = ModelScanner.scanModels(modelsDir);
+        this.availableModels = List.copyOf(ModelScanner.scanModels(modelsDir));
     }
 
     public List<String> getAvailableModels() {
@@ -41,14 +42,16 @@ public class VoiceRegistry {
         storage.close();
     }
 
+    /** Stored voice, or null if none or its model is no longer installed on this server. */
     public VoiceChoice getVoice(UUID playerUuid) {
-        return storage.getVoice(playerUuid);
+        VoiceChoice choice = storage.getVoice(playerUuid);
+        return choice != null && isValidModel(choice.modelName()) ? choice : null;
     }
 
     public Map<UUID, VoiceChoice> getOnlineVoices(Iterable<UUID> onlinePlayers) {
         Map<UUID, VoiceChoice> map = new java.util.HashMap<>();
         for (UUID uuid : onlinePlayers) {
-            VoiceChoice choice = storage.getVoice(uuid);
+            VoiceChoice choice = getVoice(uuid);
             if (choice != null) {
                 map.put(uuid, choice);
             }

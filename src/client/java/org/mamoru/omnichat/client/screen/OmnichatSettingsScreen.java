@@ -8,10 +8,12 @@ import net.minecraft.client.gui.widget.CyclingButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.MathHelper;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
 import org.mamoru.omnichat.client.network.VoiceCache;
+import org.mamoru.omnichat.client.tts.SpeakerCounts;
 import org.mamoru.omnichat.network.VoiceSelectionC2SPayload;
 
 import java.nio.file.Files;
@@ -27,6 +29,9 @@ public class OmnichatSettingsScreen extends Screen {
     private boolean enabled;
     private boolean readOwnMessages;
     private String selectedModel;
+    private int speakerId;
+    // Set when the speaker selector has to appear/disappear (model changed or its count loaded)
+    private volatile boolean needsReinit;
     private boolean robotEffect;
     private float speed;
     private float volume;
@@ -45,6 +50,7 @@ public class OmnichatSettingsScreen extends Screen {
         this.enabled = config.isEnabled();
         this.readOwnMessages = config.isReadOwnMessages();
         this.selectedModel = config.getModelPath();
+        this.speakerId = config.getSpeakerId();
         this.robotEffect = config.isRobotEffect();
         this.speed = config.getSpeed();
         this.volume = config.getVolume();
@@ -102,15 +108,42 @@ public class OmnichatSettingsScreen extends Screen {
         if (!availableModels.isEmpty()) {
             int initialIndex = Math.max(0, availableModels.indexOf(selectedModel));
             String initialModel = availableModels.get(initialIndex);
+            // Speaker selector only for local multi-speaker models (hidden for GLaDOS/single-speaker)
+            int speakers = SpeakerCounts.get(initialModel, () -> needsReinit = true);
+            boolean multiSpeaker = speakers > 1;
+            int modelWidth = multiSpeaker ? widgetWidth - 84 : widgetWidth;
             this.addDrawableChild(CyclingButtonWidget.<String>builder(
                             value -> Text.literal("Voice: " + modelDisplayName(value)), initialModel)
                     .values(availableModels)
-                    .build(centerX - widgetWidth / 2, startY + 52, widgetWidth, 20,
+                    .build(centerX - widgetWidth / 2, startY + 52, modelWidth, 20,
                             Text.literal("Voice Model"),
                             (button, value) -> {
                                 selectedModel = value;
+                                // Speaker ids are per model: keep the saved one only for the saved model
+                                speakerId = isModelChanged() ? 0 : OmnichatClient.getConfig().getSpeakerId();
+                                needsReinit = true;
                                 updateApplyButton();
                             }));
+
+            if (multiSpeaker) {
+                int maxId = speakers - 1;
+                speakerId = MathHelper.clamp(speakerId, 0, maxId);
+                SliderWidget speakerSlider = new SliderWidget(
+                        centerX - widgetWidth / 2 + modelWidth + 4, startY + 52, 80, 20,
+                        Text.literal("Speaker: " + speakerId), (double) speakerId / maxId) {
+                    @Override
+                    protected void updateMessage() {
+                        this.setMessage(Text.literal("Speaker: " + (int) Math.round(this.value * maxId)));
+                    }
+
+                    @Override
+                    protected void applyValue() {
+                        speakerId = (int) Math.round(this.value * maxId);
+                    }
+                };
+                speakerSlider.setTooltip(Tooltip.of(Text.literal("Speaker of this model (0-" + maxId + ")")));
+                this.addDrawableChild(speakerSlider);
+            }
         }
 
         // Robot Effect toggle
@@ -124,7 +157,7 @@ public class OmnichatSettingsScreen extends Screen {
         this.addDrawableChild(new SliderWidget(
                 centerX - widgetWidth / 2, startY + 104, widgetWidth, 20,
                 Text.literal("Speed: " + String.format("%.1f", speed)),
-                (speed - 0.5) / 1.5) {
+                MathHelper.clamp((speed - 0.5) / 1.5, 0.0, 1.0)) {
             @Override
             protected void updateMessage() {
                 float val = (float) (this.value * 1.5 + 0.5);
@@ -141,7 +174,7 @@ public class OmnichatSettingsScreen extends Screen {
         this.addDrawableChild(new SliderWidget(
                 centerX - widgetWidth / 2, startY + 130, widgetWidth, 20,
                 Text.literal("Volume: " + String.format("%.1f", volume)),
-                volume / 2.0) {
+                MathHelper.clamp(volume / 2.0, 0.0, 1.0)) {
             @Override
             protected void updateMessage() {
                 float val = (float) (this.value * 2.0);
@@ -165,7 +198,7 @@ public class OmnichatSettingsScreen extends Screen {
         this.addDrawableChild(new SliderWidget(
                 centerX - widgetWidth / 2, startY + 182, widgetWidth, 20,
                 Text.literal("Bubble Speed: " + (bubbleTextSpeed <= 0 ? "Instant" : String.format("%.0f", bubbleTextSpeed))),
-                bubbleTextSpeed / 100.0) {
+                MathHelper.clamp(bubbleTextSpeed / 100.0, 0.0, 1.0)) {
             @Override
             protected void updateMessage() {
                 float val = (float) (this.value * 100.0);
@@ -212,6 +245,7 @@ public class OmnichatSettingsScreen extends Screen {
             if (isModelChanged()) {
                 config.setModelPath(selectedModel);
             }
+            config.setSpeakerId(speakerId);
             config.setRobotEffect(robotEffect);
             config.setSpeed(speed);
             config.setVolume(volume);
@@ -232,6 +266,15 @@ public class OmnichatSettingsScreen extends Screen {
         // Cancel button
         this.addDrawableChild(ButtonWidget.builder(ScreenTexts.CANCEL, button -> close())
                 .dimensions(centerX - widgetWidth / 2 + 104, buttonY, 96, 20).build());
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (needsReinit) {
+            needsReinit = false;
+            clearAndInit(); // all widget state lives in fields, so rebuilding keeps it
+        }
     }
 
     private boolean isModelChanged() {

@@ -4,6 +4,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import org.mamoru.omnichat.command.OmnichatCommand;
 import org.mamoru.omnichat.network.*;
 import org.mamoru.omnichat.server.ModelFileServer;
 import org.mamoru.omnichat.server.ServerNetworkHandler;
@@ -41,6 +42,7 @@ public class Omnichat implements ModInitializer {
         // integrated server starts a new MinecraftServer per world. They delegate to the
         // current per-server handler, which only exists between SERVER_STARTED and SERVER_STOPPED.
         ServerNetworkHandler.registerReceivers(() -> networkHandler);
+        OmnichatCommand.register(() -> networkHandler);
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             Path configDir = server.getRunDirectory().resolve("config").resolve("omnichat");
