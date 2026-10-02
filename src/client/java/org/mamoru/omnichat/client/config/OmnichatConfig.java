@@ -90,9 +90,44 @@ public class OmnichatConfig {
             config = new OmnichatConfig();
         }
 
+        config.validate();
         config.ensureDirectories();
-        config.save();
+        config.save(); // writes corrected values back
         return config;
+    }
+
+    public static final float MIN_SPEED = 0.5f, MAX_SPEED = 2.0f;
+    public static final float MAX_VOLUME = 2.0f;
+    public static final float MAX_BUBBLE_TEXT_SPEED = 100.0f;
+
+    /**
+     * Replaces nulls and clamps hand-edited or corrupted values into the ranges the UI and the
+     * engines accept (e.g. maxQueueSize <= 0 would crash the playback worker at startup).
+     */
+    private void validate() {
+        if (modelPath == null || modelPath.isBlank()) {
+            LOGGER.warn("Config: modelPath is empty, using 'default'");
+            modelPath = "default";
+        }
+        if (speakerId < 0) {
+            LOGGER.warn("Config: speakerId {} is negative, using 0", speakerId);
+            speakerId = 0;
+        }
+        if (maxQueueSize < 1) {
+            LOGGER.warn("Config: maxQueueSize {} must be at least 1, using 10", maxQueueSize);
+            maxQueueSize = 10;
+        }
+        speed = clamp("speed", speed, MIN_SPEED, MAX_SPEED, 1.0f);
+        volume = clamp("volume", volume, 0.0f, MAX_VOLUME, 1.0f);
+        bubbleTextSpeed = clamp("bubbleTextSpeed", bubbleTextSpeed, 0.0f, MAX_BUBBLE_TEXT_SPEED, 30.0f);
+    }
+
+    private static float clamp(String name, float value, float min, float max, float fallback) {
+        float result = Float.isNaN(value) ? fallback : Math.max(min, Math.min(max, value));
+        if (result != value) {
+            LOGGER.warn("Config: {} {} is out of range [{}, {}], using {}", name, value, min, max, result);
+        }
+        return result;
     }
 
     public void save() {
@@ -130,6 +165,10 @@ public class OmnichatConfig {
 
     public int getSpeakerId() {
         return speakerId;
+    }
+
+    public void setSpeakerId(int speakerId) {
+        this.speakerId = Math.max(0, speakerId);
     }
 
     public float getSpeed() {

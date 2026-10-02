@@ -5,6 +5,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.network.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,10 +103,12 @@ public class ServerNetworkHandler {
 
         if (speakerId < 0) {
             LOGGER.warn("Player {} selected invalid speaker {}", player.getName().getString(), speakerId);
+            rejectSelection(player, "invalid speaker " + speakerId);
             return;
         }
         if (!registry.isValidModel(modelName)) {
             LOGGER.warn("Player {} selected invalid model '{}'", player.getName().getString(), modelName);
+            rejectSelection(player, "model '" + modelName + "' is not installed on this server");
             return;
         }
 
@@ -115,6 +119,11 @@ public class ServerNetworkHandler {
 
         // Broadcast to all players
         broadcast(new VoiceInfoS2CPayload(player.getUuid(), modelName, speakerId), null);
+    }
+
+    /** Tells the player why their voice wasn't applied instead of failing silently. */
+    private static void rejectSelection(ServerPlayerEntity player, String reason) {
+        player.sendMessage(Text.literal("[OmniChat] Voice not applied: " + reason).formatted(Formatting.RED), false);
     }
 
     private void onModelDownloadRequest(ModelDownloadRequestC2SPayload payload, ServerPlayNetworking.Context context) {
@@ -190,6 +199,29 @@ public class ServerNetworkHandler {
         if (choice != null) {
             broadcast(new VoiceInfoS2CPayload(player.getUuid(), choice.modelName(), choice.speakerId()), player);
         }
+    }
+
+    /**
+     * Rescans the models directory and re-sends the model list and the (filtered) voice map to
+     * everyone online, so added models become selectable and removed ones stop being used.
+     * Runs on the server thread (from /omnichat reload).
+     * @return the number of models now available
+     */
+    public int reloadModels() {
+        registry.refreshModels();
+        List<String> models = registry.getAvailableModels();
+        List<ServerPlayerEntity> players = server.getPlayerManager().getPlayerList();
+        List<UUID> onlineUuids = new ArrayList<>();
+        for (ServerPlayerEntity p : players) {
+            onlineUuids.add(p.getUuid());
+        }
+        // Sent even when empty: the client replaces its whole map, dropping voices of removed models
+        VoiceMapS2CPayload voices = new VoiceMapS2CPayload(registry.getOnlineVoices(onlineUuids));
+        broadcast(voices, null);
+        // Model list last: clients answer it by re-sending their configured voice
+        broadcast(new ModelListS2CPayload(models), null);
+        LOGGER.info("Reloaded OmniChat models: {}", models);
+        return models.size();
     }
 
     public void onPlayerLeave(ServerPlayerEntity player) {
