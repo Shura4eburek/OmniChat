@@ -18,6 +18,7 @@ public class GladosTtsEngine implements ITtsEngine {
     private final OrtEnvironment env;
     private final OrtSession session;
     private final GladosG2P g2p;
+    private boolean closed;
 
     private GladosTtsEngine(OrtEnvironment env, OrtSession session, GladosG2P g2p) {
         this.env = env;
@@ -92,10 +93,13 @@ public class GladosTtsEngine implements ITtsEngine {
     }
 
     @Override
-    public void release() {
+    public synchronized void release() {
+        // OrtSession.close() throws IllegalStateException when called twice
+        if (closed) return;
+        closed = true;
         try {
             session.close();
-        } catch (OrtException e) {
+        } catch (OrtException | RuntimeException e) {
             LOGGER.error("Failed to close ONNX session", e);
         }
     }
