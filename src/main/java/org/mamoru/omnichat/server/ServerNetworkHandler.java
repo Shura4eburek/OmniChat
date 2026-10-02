@@ -25,6 +25,15 @@ public class ServerNetworkHandler {
     /** Minimum interval between accepted voice selections from one player. */
     private static final long VOICE_SELECTION_COOLDOWN_MS = 1000;
 
+    // Typing indicator: players whose typing=true was last broadcast, plus a per-player
+    // throttle (toggles inside the cooldown collapse into one pending state, flushed on tick)
+    private final Set<UUID> typingBroadcast = new HashSet<>();
+    private final Map<UUID, Long> lastTypingBroadcast = new HashMap<>();
+    private final Map<UUID, Boolean> pendingTyping = new HashMap<>();
+
+    /** Minimum interval between typing-state broadcasts for one player. */
+    private static final long TYPING_COOLDOWN_MS = 500;
+
     public ServerNetworkHandler(VoiceRegistry registry, ModelFileServer fileServer, MinecraftServer server) {
         this.registry = registry;
         this.fileServer = fileServer;
@@ -51,7 +60,10 @@ public class ServerNetworkHandler {
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             ServerNetworkHandler handler = current.get();
-            if (handler != null) handler.flushPendingVoiceSelections();
+            if (handler != null) {
+                handler.flushPendingVoiceSelections();
+                handler.flushPendingTyping();
+            }
         });
     }
 
@@ -121,12 +133,42 @@ public class ServerNetworkHandler {
 
     private void onTypingIndicator(TypingIndicatorC2SPayload payload, ServerPlayNetworking.Context context) {
         ServerPlayerEntity player = context.player();
-        TypingIndicatorS2CPayload broadcast = new TypingIndicatorS2CPayload(player.getUuid(), payload.typing());
-        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            if (p != player) {
-                ServerPlayNetworking.send(p, broadcast);
+        UUID uuid = player.getUuid();
+        boolean typing = payload.typing();
+        if (typing == typingBroadcast.contains(uuid)) {
+            pendingTyping.remove(uuid); // repeat, or a toggle that cancels a pending one
+            return;
+        }
+        Long last = lastTypingBroadcast.get(uuid);
+        long now = System.currentTimeMillis();
+        if (last != null && now - last < TYPING_COOLDOWN_MS) {
+            pendingTyping.put(uuid, typing);
+            return;
+        }
+        applyTyping(player, typing, now);
+    }
+
+    private void flushPendingTyping() {
+        if (pendingTyping.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        Iterator<Map.Entry<UUID, Boolean>> it = pendingTyping.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, Boolean> entry = it.next();
+            Long last = lastTypingBroadcast.get(entry.getKey());
+            if (last != null && now - last < TYPING_COOLDOWN_MS) continue;
+            it.remove();
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(entry.getKey());
+            if (player != null) {
+                applyTyping(player, entry.getValue(), now);
             }
         }
+    }
+
+    private void applyTyping(ServerPlayerEntity player, boolean typing, long now) {
+        UUID uuid = player.getUuid();
+        if (typing ? !typingBroadcast.add(uuid) : !typingBroadcast.remove(uuid)) return;
+        lastTypingBroadcast.put(uuid, now);
+        broadcast(new TypingIndicatorS2CPayload(uuid, typing), player);
     }
 
     public void onPlayerJoin(ServerPlayerEntity player) {
@@ -153,6 +195,12 @@ public class ServerNetworkHandler {
     public void onPlayerLeave(ServerPlayerEntity player) {
         lastVoiceSelection.remove(player.getUuid());
         pendingVoiceSelection.remove(player.getUuid());
+        // The client's own typing=false is lost on crash/kick/timeout; clear "..." for everyone else
+        pendingTyping.remove(player.getUuid());
+        lastTypingBroadcast.remove(player.getUuid());
+        if (typingBroadcast.remove(player.getUuid())) {
+            broadcast(new TypingIndicatorS2CPayload(player.getUuid(), false), player);
+        }
         // Let remaining players drop the cached voice
         broadcast(new VoiceRemoveS2CPayload(player.getUuid()), player);
     }

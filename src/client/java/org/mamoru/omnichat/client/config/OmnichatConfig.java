@@ -35,6 +35,8 @@ public class OmnichatConfig {
     private boolean bubbleEmotes = true;
     private boolean speakTeamMessages = true;
     private boolean bubbleTeamMessages = true;
+    // Broadcast our own "..." typing indicator to other players
+    private boolean sendTypingIndicator = true;
 
     public static Path getConfigDir() {
         return FabricLoader.getInstance().getConfigDir().resolve("omnichat");
@@ -236,5 +238,13 @@ public class OmnichatConfig {
 
     public void setBubbleTeamMessages(boolean bubbleTeamMessages) {
         this.bubbleTeamMessages = bubbleTeamMessages;
+    }
+
+    public boolean isSendTypingIndicator() {
+        return sendTypingIndicator;
+    }
+
+    public void setSendTypingIndicator(boolean sendTypingIndicator) {
+        this.sendTypingIndicator = sendTypingIndicator;
     }
 }
