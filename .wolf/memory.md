@@ -34,3 +34,29 @@
 | 23:28 | Session end: 9 writes across 3 files (smoke.sh, build.gradle, mcproc.ps1) | 2 reads | ~4125 tok |
 | 23:31 | Session end: 9 writes across 3 files (smoke.sh, build.gradle, mcproc.ps1) | 2 reads | ~4125 tok |
 | 23:45 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/R.java | — | ~257 |
+| 23:50 | code audit (workflow, 107 agents): 45 GH issues #1-#45 + tracking #46; fixed #1 path traversal, #13 sherpa speed, #29 HUD alpha, docs #39 #44 #45 | src, README.md, CLAUDE.md | smoke passes | ~6.3M subagent |
+| 23:53 | Created .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/network/VoiceRemoveS2CPayload.java | — | ~220 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | added 1 import(s) | ~18 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | 3→5 lines | ~30 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | added 2 condition(s) | ~175 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | added error handling | ~251 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | inline fix | ~11 |
+| 23:53 | Edited .claude/worktrees/agent-ae3d773eda8fd9747/README.md | 1→3 lines | ~118 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | added 1 import(s) | ~26 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | 5→2 lines | ~26 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | added 2 condition(s) | ~243 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/Omnichat.java | 2→3 lines | ~37 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/Omnichat.java | added 1 condition(s) | ~82 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/ClientNetworkHandler.java | 2→3 lines | ~43 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/ClientNetworkHandler.java | modified onVoiceRemove() | ~92 |
+| 23:53 | Edited .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/VoiceCache.java | modified removeVoice() | ~38 |
+| 23:54 | Created .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/TtsPlaybackWorker.java | — | ~1786 |
+| 23:54 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/edit_client.py | — | ~1278 |
+| 23:54 | Edited .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/GladosTtsEngine.java | added 1 condition(s) | ~71 |
+| 23:54 | Edited .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/GladosTtsEngine.java | 2→3 lines | ~17 |
+| 23:55 | Edited .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java | added error handling | ~80 |
+| 23:56 | Created .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/server/ModelTransfer.java | — | ~790 |
+| 23:56 | Created .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/server/ModelFileServer.java | — | ~1980 |
+| 23:56 | Edited .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | 2→2 lines | ~35 |
+| 23:56 | Edited .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/Omnichat.java | 1→3 lines | ~28 |
+| 00:01 | fixed high issues #2 #3 #4 #5 #38 via 4 parallel worktree agents, merged, build+smoke pass | src/** | ok | ~300k |

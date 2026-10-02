@@ -28,3 +28,7 @@
 - [2026-10-02] smoke.sh is now 2-client: runSmokeServer (run/smoke/server, offline flat, port 25599, Speaker op) + runClient as Speaker + runSmokeListener (run/smoke/listener); models shared via junctions. Pick game processes by `dli.env=client|server` in java cmdline, not by username (gradlew wrapper matches too).
 - [2026-10-02] Decision: user chose a second client (not F5) to verify chat bubbles/TTS from another player's view.
 - [2026-10-02] TTS logging never includes message text (chat can be private) — only length, model, speaker, timing.
+- [2026-10-02] Audit backlog lives in GitHub issues labelled 'audit' (tracking issue #46 has the structure report). sherpa-onnx OfflineTts.generate speed arg already means faster>1 — don't invert it.
+- [2026-10-03] TTS engines are owned by TtsPlaybackWorker (load/cache/release on its thread); OmnichatClient.loadEngineForModel returns null on failure — never cache fallbacks. Catch LinkageError around native engine creation.
+- [2026-10-03] Model transfers: static scheduler in ModelFileServer, registered ONCE in onInitialize (Fabric events can't be unregistered; SERVER_STARTED fires per world on integrated server). 2 chunks/tick/transfer, 2 global transfers. No public connection-open check in Yarn 1.21.11 → use player.isDisconnected().
+- [2026-10-03] Parallel fixes via worktree subagents worked well when file ownership was split explicitly in prompts.

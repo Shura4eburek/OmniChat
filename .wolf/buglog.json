@@ -98,6 +98,86 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-02T22:15:00"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-10-02T20:53:34.149Z",
+      "error_message": "Missing error handling in unknown",
+      "file": ".claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block | Also: private boolean closed;; public synchronized void release() {",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-10-02T20:55:05.735Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-10-02T20:53:40.504Z",
+      "error_message": "Wrong reference: elsewhere should be on",
+      "file": ".claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java",
+      "root_cause": "Used \"elsewhere\" instead of \"on\"",
+      "fix": "Changed elsewhere → on",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T20:53:40.504Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-10-02T20:53:41.290Z",
+      "error_message": "Null/undefined access in ",
+      "file": ".claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T20:53:41.290Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-10-02T20:53:41.762Z",
+      "error_message": "Null/undefined access in ",
+      "file": ".claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/Omnichat.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T20:53:41.762Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-10-02T20:54:59.159Z",
+      "error_message": "Missing guard clause",
+      "file": ".claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/GladosTtsEngine.java",
+      "root_cause": "No early return/throw for edge case: closed",
+      "fix": "Added guard clause: if (closed)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T20:54:59.159Z"
     }
   ]
 }

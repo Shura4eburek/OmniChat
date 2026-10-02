@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T20:45:12.980Z
-> Files: 514 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T20:56:37.740Z
+> Files: 529 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
+- `edit_client.py` — Returns the engine for the given model name, loading and caching it if needed. (~1278 tok)
 - `R.java` — R: main (~257 tok)
 
 ## ./
@@ -28,6 +29,47 @@
 ## .claude/rules/
 
 - `openwolf.md` (~313 tok)
+
+## .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/
+
+- `Omnichat.java` — Omnichat: onInitialize, getVoiceRegistry (~744 tok)
+
+## .claude/worktrees/agent-a5a4e154da7781865/src/main/java/org/mamoru/omnichat/server/
+
+- `ModelFileServer.java` — Sends model files to players, paced by the server tick. State is static because the (~1980 tok)
+- `ModelTransfer.java` — Streaming state of one model being sent to one player. Files are read chunk by chunk (~790 tok)
+- `ServerNetworkHandler.java` — ServerNetworkHandler: registerHandlers, onPlayerJoin (~1020 tok)
+
+## .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `GladosTtsEngine.java` — GladosTtsEngine: create, create, getSampleRate (~1139 tok)
+- `TtsEngine.java` — Validates that the ONNX model is a VITS TTS model by checking for (~1979 tok)
+- `TtsPlaybackWorker.java` — Owns its engines: they are created, used and released only on the worker thread, (~1786 tok)
+
+## .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/
+
+- `ClientNetworkHandler.java` — ClientNetworkHandler: registerHandlers (~748 tok)
+- `VoiceCache.java` — VoiceCache: getInstance, setServerModels, getServerModels, setVoiceMap (~394 tok)
+
+## .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/
+
+- `Omnichat.java` — Omnichat: onInitialize, getVoiceRegistry (~820 tok)
+
+## .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/network/
+
+- `VoiceRemoveS2CPayload.java` — Class: VoiceRemoveS2CPayload (~220 tok)
+
+## .claude/worktrees/agent-ac8d0f57e82c4385c/src/main/java/org/mamoru/omnichat/server/
+
+- `ServerNetworkHandler.java` — ServerNetworkHandler: registerHandlers, onPlayerJoin, onPlayerLeave (~1221 tok)
+
+## .claude/worktrees/agent-ae3d773eda8fd9747/
+
+- `README.md` — Project documentation (~899 tok)
+
+## .claude/worktrees/agent-ae3d773eda8fd9747/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `TtsEngine.java` — Validates that the ONNX model is a VITS TTS model by checking for (~2232 tok)
 
 ## .gradle/
 
