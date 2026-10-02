@@ -3,9 +3,15 @@
   "id": "omnichat",
   "version": "${version}",
   "name": "OmniChat",
-  "description": "",
-  "authors": [],
-  "contact": {},
+  "description": "Text-to-speech for chat with positional audio (sherpa-onnx and GLaDOS voices), plus chat bubbles and typing indicators above players' heads. Settings open with the O key by default.",
+  "authors": [
+    "Shura4eburek"
+  ],
+  "contact": {
+    "homepage": "https://github.com/Shura4eburek/OmniChat",
+    "sources": "https://github.com/Shura4eburek/OmniChat",
+    "issues": "https://github.com/Shura4eburek/OmniChat/issues"
+  },
   "license": "All-Rights-Reserved",
   "icon": "assets/omnichat/icon.png",
   "environment": "*",
@@ -29,6 +35,7 @@
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
+    "java": ">=21",
     "fabric-api": "*",
     "minecraft": "${minecraft_version}"
   }

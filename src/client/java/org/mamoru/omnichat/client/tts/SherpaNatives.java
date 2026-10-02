@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * Extracts the bundled sherpa-onnx / onnxruntime natives into a stable, content-addressed
+ * Extracts the bundled sherpa-onnx natives into a stable, content-addressed
  * directory ({@code config/omnichat/natives/win-x64-<hash>/}) and loads them exactly once per JVM.
  * <p>
  * The directory name is derived from the SHA-256 of all bundled DLLs, so a mod update with new
@@ -40,10 +40,11 @@ final class SherpaNatives {
     private static final String PLATFORM = "win-x64";
     /** Prefix of the per-launch temp dirs created by older builds in java.io.tmpdir. */
     private static final String LEGACY_TEMP_PREFIX = "omnichat-natives";
-    /** Load order matters: dependencies first. */
+    /**
+     * Load order matters: dependencies first. No onnxruntime.dll here on purpose: sherpa binds to
+     * the one onnxruntime-java (GLaDOS) already loaded, see {@link #loadSharedOnnxRuntime()}.
+     */
     private static final String[] NATIVE_LIBS = {
-            "onnxruntime.dll",
-            "onnxruntime_providers_shared.dll",
             "cargs.dll",
             "sherpa-onnx-c-api.dll",
             "sherpa-onnx-cxx-api.dll",
@@ -71,6 +72,8 @@ final class SherpaNatives {
 
         // Disable sherpa-onnx's own auto-loading; we handle it ourselves
         LibraryLoader.setAutoLoadEnabled(false);
+
+        loadSharedOnnxRuntime();
 
         Map<String, byte[]> bundled = readBundledLibraries();
         Map<String, byte[]> digests = new LinkedHashMap<>();
@@ -117,6 +120,26 @@ final class SherpaNatives {
         // Best-effort housekeeping after a successful load; never fails the caller.
         cleanupStaleVersions(nativesRoot, dir);
         cleanupLegacyTempDirs();
+    }
+
+    /**
+     * Loads onnxruntime-java's own onnxruntime.dll before any sherpa DLL, so the process holds a
+     * single ORT build. Windows resolves an import of {@code onnxruntime.dll} to whichever module of
+     * that name was loaded first, regardless of directory or SetDllDirectory; with two copies
+     * (sherpa's 1.17.1 and onnxruntime-java's 1.19.2) the first engine created decided the ORT of
+     * the other one, and GLaDOS-after-sherpa ran the 1.19.2 JNI against the 1.17.1 runtime.
+     * <p>
+     * Both sherpa DLLs and onnxruntime4j_jni import only OrtGetApiBase / ...AppendExecutionProvider_CPU
+     * (same ordinals in both builds) and request a versioned OrtApi; an older client (sherpa,
+     * built against API 17) on a newer runtime is the direction ORT guarantees to be compatible.
+     */
+    private static void loadSharedOnnxRuntime() {
+        try {
+            ai.onnxruntime.OrtEnvironment env = ai.onnxruntime.OrtEnvironment.getEnvironment();
+            LOGGER.info("sherpa-onnx uses the shared onnxruntime {}", env.getVersion());
+        } catch (LinkageError | RuntimeException e) {
+            throw new RuntimeException("Failed to load onnxruntime for sherpa-onnx", e);
+        }
     }
 
     static boolean isWindowsX64(String osName, String osArch) {
