@@ -2,6 +2,7 @@ package org.mamoru.omnichat.client.tts;
 
 import com.k2fsa.sherpa.onnx.*;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +30,7 @@ public class TtsEngine implements ITtsEngine {
             throw new RuntimeException("Model directory not found: " + modelDir);
         }
 
-        String modelFile = findOnnxModel(modelDir);
+        String modelFile = ModelScanner.resolveOnnxModel(modelDir).toString();
         validateVitsModel(Path.of(modelFile));
 
         Path tokensFile = modelDir.resolve("tokens.txt");
@@ -127,18 +128,6 @@ public class TtsEngine implements ITtsEngine {
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to read model file: " + modelPath, e);
-        }
-    }
-
-    private static String findOnnxModel(Path modelDir) {
-        try (var stream = Files.list(modelDir)) {
-            return stream
-                    .filter(p -> p.getFileName().toString().endsWith(".onnx"))
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("No .onnx model file found in " + modelDir))
-                    .toString();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to scan model directory: " + modelDir, e);
         }
     }
 }
