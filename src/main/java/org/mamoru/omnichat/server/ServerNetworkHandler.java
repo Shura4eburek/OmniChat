@@ -57,7 +57,7 @@ public class ServerNetworkHandler {
             return;
         }
 
-        LOGGER.info("Player {} requested download of model '{}'", player.getName().getString(), modelName);
+        // queued and logged by the file server; requests are rate-limited there
         fileServer.sendModel(player, modelName);
     }
 

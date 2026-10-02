@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -21,6 +22,9 @@ public class ModelDownloadManager {
 
     private final Map<String, Map<String, ByteArrayOutputStream>> pendingDownloads = new ConcurrentHashMap<>();
     private final Map<String, DownloadProgress> progressMap = new ConcurrentHashMap<>();
+    // The server sends one model at a time, so requests are sent one by one
+    private final ArrayDeque<String> queuedRequests = new ArrayDeque<>();
+    private String currentDownload;
     private Consumer<String> onDownloadComplete;
 
     private ModelDownloadManager() {}
@@ -33,15 +37,22 @@ public class ModelDownloadManager {
         this.onDownloadComplete = callback;
     }
 
-    public void requestDownload(String modelName) {
+    public synchronized void requestDownload(String modelName) {
         if (progressMap.containsKey(modelName)) {
             LOGGER.info("Model '{}' download already in progress", modelName);
             return;
         }
         progressMap.put(modelName, new DownloadProgress());
-        pendingDownloads.put(modelName, new ConcurrentHashMap<>());
-        ClientPlayNetworking.send(new ModelDownloadRequestC2SPayload(modelName));
-        LOGGER.info("Requested download of model '{}'", modelName);
+        queuedRequests.add(modelName);
+        sendNextRequest();
+    }
+
+    private synchronized void sendNextRequest() {
+        if (currentDownload != null || queuedRequests.isEmpty()) return;
+        currentDownload = queuedRequests.poll();
+        pendingDownloads.put(currentDownload, new ConcurrentHashMap<>());
+        ClientPlayNetworking.send(new ModelDownloadRequestC2SPayload(currentDownload));
+        LOGGER.info("Requested download of model '{}'", currentDownload);
     }
 
     public boolean isDownloading(String modelName) {
@@ -91,9 +102,16 @@ public class ModelDownloadManager {
         }
 
         if (payload.lastFile() && payload.lastChunk()) {
-            saveModel(modelName, fileMap);
-            pendingDownloads.remove(modelName);
-            progressMap.remove(modelName);
+            try {
+                saveModel(modelName, fileMap);
+            } finally {
+                synchronized (this) {
+                    pendingDownloads.remove(modelName);
+                    progressMap.remove(modelName);
+                    if (modelName.equals(currentDownload)) currentDownload = null;
+                    sendNextRequest();
+                }
+            }
         }
     }
 
@@ -126,9 +144,11 @@ public class ModelDownloadManager {
         }
     }
 
-    public void clear() {
+    public synchronized void clear() {
         pendingDownloads.clear();
         progressMap.clear();
+        queuedRequests.clear();
+        currentDownload = null;
     }
 
     private static class DownloadProgress {

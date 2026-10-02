@@ -33,6 +33,8 @@ public class Omnichat implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(ModelDownloadRequestC2SPayload.ID, ModelDownloadRequestC2SPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(TypingIndicatorC2SPayload.ID, TypingIndicatorC2SPayload.CODEC);
 
+        ModelFileServer.register();
+
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             Path configDir = server.getRunDirectory().resolve("config").resolve("omnichat");
             voiceRegistry = new VoiceRegistry(configDir);
