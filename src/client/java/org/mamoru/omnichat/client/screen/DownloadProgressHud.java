@@ -16,7 +16,7 @@ public class DownloadProgressHud implements HudRenderCallback {
     private static final int BG_COLOR = 0xAA000000;
     private static final int BAR_BG_COLOR = 0xFF333333;
     private static final int BAR_FILL_COLOR = 0xFF55FF55;
-    private static final int TEXT_COLOR = 0xFFFFFF;
+    private static final int TEXT_COLOR = 0xFFFFFFFF;
 
     public static void register() {
         HudRenderCallback.EVENT.register(new DownloadProgressHud());

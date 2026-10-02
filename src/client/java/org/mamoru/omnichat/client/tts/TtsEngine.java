@@ -87,7 +87,7 @@ public class TtsEngine implements ITtsEngine {
 
     @Override
     public float[] generate(String text, int speakerId, float speed) {
-        GeneratedAudio audio = tts.generate(text, speakerId, 1.0f / speed);
+        GeneratedAudio audio = tts.generate(text, speakerId, speed);
         return audio.getSamples();
     }
 

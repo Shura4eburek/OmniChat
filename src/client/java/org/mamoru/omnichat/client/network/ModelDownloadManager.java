@@ -98,11 +98,22 @@ public class ModelDownloadManager {
     }
 
     private void saveModel(String modelName, Map<String, ByteArrayOutputStream> fileMap) {
-        Path modelDir = OmnichatConfig.getModelsDir().resolve(modelName);
+        // names come from the server: never let them point outside the models dir
+        Path modelDir = OmnichatConfig.resolveModelDir(modelName);
+        if (modelDir == null) {
+            LOGGER.error("Rejected model '{}': invalid name from server", modelName);
+            return;
+        }
+        for (String fileName : fileMap.keySet()) {
+            if (OmnichatConfig.resolveInside(modelDir, fileName) == null) {
+                LOGGER.error("Rejected model '{}': invalid file name '{}' from server", modelName, fileName);
+                return;
+            }
+        }
         try {
             Files.createDirectories(modelDir);
             for (Map.Entry<String, ByteArrayOutputStream> entry : fileMap.entrySet()) {
-                Path filePath = modelDir.resolve(entry.getKey());
+                Path filePath = OmnichatConfig.resolveInside(modelDir, entry.getKey());
                 Files.createDirectories(filePath.getParent());
                 Files.write(filePath, entry.getValue().toByteArray());
             }

@@ -10,6 +10,7 @@ import org.mamoru.omnichat.util.ModelScanner;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -34,6 +35,27 @@ public class OmnichatConfig {
 
     public static Path getModelsDir() {
         return getConfigDir().resolve("models");
+    }
+
+    /**
+     * Directory of a model whose name came from the server, or null if the name isn't a single
+     * plain directory name inside the models dir (absolute paths, "..", separators).
+     */
+    public static Path resolveModelDir(String modelName) {
+        Path dir = resolveInside(getModelsDir(), modelName);
+        return dir != null && dir.getParent().equals(getModelsDir().toAbsolutePath().normalize()) ? dir : null;
+    }
+
+    /** {@code base.resolve(relative)}, or null if the result would leave {@code base}. */
+    public static Path resolveInside(Path base, String relative) {
+        if (relative == null || relative.isEmpty()) return null;
+        Path root = base.toAbsolutePath().normalize();
+        try {
+            Path resolved = root.resolve(relative).normalize();
+            return resolved.startsWith(root) && !resolved.equals(root) ? resolved : null;
+        } catch (InvalidPathException e) {
+            return null;
+        }
     }
 
     public static Path getConfigFile() {

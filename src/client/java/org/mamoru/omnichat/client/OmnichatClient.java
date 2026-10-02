@@ -124,8 +124,8 @@ public class OmnichatClient implements ClientModInitializer {
         }
 
         return engineCache.computeIfAbsent(modelName, name -> {
-            Path modelDir = OmnichatConfig.getModelsDir().resolve(name);
-            if (!Files.isDirectory(modelDir)) {
+            Path modelDir = OmnichatConfig.resolveModelDir(name);
+            if (modelDir == null || !Files.isDirectory(modelDir)) {
                 LOGGER.debug("Model '{}' not available locally, using default engine", name);
                 return engine;
             }

@@ -14,6 +14,7 @@ import org.mamoru.omnichat.client.network.VoiceCache;
 import org.mamoru.omnichat.network.VoiceSelectionC2SPayload;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,7 +63,8 @@ public class OmnichatSettingsScreen extends Screen {
     }
 
     private boolean isModelLocal(String modelName) {
-        return Files.isDirectory(OmnichatConfig.getModelsDir().resolve(modelName));
+        Path dir = OmnichatConfig.resolveModelDir(modelName);
+        return dir != null && Files.isDirectory(dir);
     }
 
     private String modelDisplayName(String modelName) {
