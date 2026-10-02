@@ -2,28 +2,28 @@ package org.mamoru.omnichat.client.tts;
 
 import ai.onnxruntime.*;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.FloatBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
 public class GladosTtsEngine implements ITtsEngine {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
-    private static final int SAMPLE_RATE = 22050;
-
     private final OrtEnvironment env;
     private final OrtSession session;
     private final GladosG2P g2p;
+    private final GladosG2P.ModelConfig modelConfig;
     private boolean closed;
 
     private GladosTtsEngine(OrtEnvironment env, OrtSession session, GladosG2P g2p) {
         this.env = env;
         this.session = session;
         this.g2p = g2p;
+        this.modelConfig = g2p.modelConfig();
     }
 
     public static GladosTtsEngine create(OmnichatConfig config) {
@@ -31,7 +31,7 @@ public class GladosTtsEngine implements ITtsEngine {
     }
 
     public static GladosTtsEngine create(Path modelDir) {
-        Path modelFile = findOnnxModel(modelDir);
+        Path modelFile = ModelScanner.resolveOnnxModel(modelDir);
 
         try {
             GladosG2P g2p = new GladosG2P(modelDir);
@@ -41,8 +41,11 @@ public class GladosTtsEngine implements ITtsEngine {
             opts.setIntraOpNumThreads(2);
             OrtSession session = env.createSession(modelFile.toString(), opts);
 
+            GladosG2P.ModelConfig mc = g2p.modelConfig();
             LOGGER.info("GLaDOS TTS engine initialized (model={}, sampleRate={})",
-                    modelFile.getFileName(), SAMPLE_RATE);
+                    modelFile.getFileName(), mc.sampleRate());
+            LOGGER.debug("GLaDOS inference scales: noise={}, length={}, noiseW={}",
+                    mc.noiseScale(), mc.lengthScale(), mc.noiseW());
             return new GladosTtsEngine(env, session, g2p);
         } catch (OrtException | IOException e) {
             throw new RuntimeException("Failed to initialize GLaDOS TTS engine", e);
@@ -63,7 +66,8 @@ public class GladosTtsEngine implements ITtsEngine {
 
             long[][] inputData = new long[][] { phonemeIds };
             long[] inputLengths = new long[] { phonemeIds.length };
-            float[] scales = new float[] { 0.667f, 1.0f / speed, 0.8f };
+            float[] scales = new float[] {
+                    modelConfig.noiseScale(), modelConfig.lengthScale() / speed, modelConfig.noiseW() };
 
             try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, inputData);
                  OnnxTensor lengthsTensor = OnnxTensor.createTensor(env, inputLengths);
@@ -89,7 +93,7 @@ public class GladosTtsEngine implements ITtsEngine {
 
     @Override
     public int getSampleRate() {
-        return SAMPLE_RATE;
+        return modelConfig.sampleRate();
     }
 
     @Override
@@ -101,17 +105,6 @@ public class GladosTtsEngine implements ITtsEngine {
             session.close();
         } catch (OrtException | RuntimeException e) {
             LOGGER.error("Failed to close ONNX session", e);
-        }
-    }
-
-    private static Path findOnnxModel(Path modelDir) {
-        try (var stream = Files.list(modelDir)) {
-            return stream
-                    .filter(p -> p.getFileName().toString().endsWith(".onnx"))
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("No .onnx model file found in " + modelDir));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to scan model directory: " + modelDir, e);
         }
     }
 }

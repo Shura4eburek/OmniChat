@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.toast.SystemToast;
 import net.minecraft.text.Text;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -191,7 +192,8 @@ public class TtsService {
     }
 
     static ITtsEngine createEngineForModel(Path modelDir) {
-        if (Files.exists(modelDir.resolve("dictionary.txt"))) {
+        ModelScanner.requireComplete(modelDir);
+        if (ModelScanner.detectType(modelDir) == ModelScanner.ModelType.GLADOS) {
             LOGGER.info("Detected GLaDOS-type model in '{}'", modelDir.getFileName());
             return GladosTtsEngine.create(modelDir);
         }
