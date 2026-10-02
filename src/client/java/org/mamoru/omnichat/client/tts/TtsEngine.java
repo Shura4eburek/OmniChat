@@ -99,9 +99,17 @@ public class TtsEngine implements ITtsEngine {
         return sampleRate;
     }
 
+    private boolean closed;
+
     @Override
-    public void release() {
-        tts.release();
+    public synchronized void release() {
+        if (closed) return;
+        closed = true;
+        try {
+            tts.release();
+        } catch (RuntimeException e) {
+            LOGGER.error("Failed to release sherpa TTS engine", e);
+        }
     }
 
     private static synchronized void loadNativeLibraries() {

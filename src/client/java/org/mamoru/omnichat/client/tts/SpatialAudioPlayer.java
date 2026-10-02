@@ -14,6 +14,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 public class SpatialAudioPlayer {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
@@ -25,7 +26,13 @@ public class SpatialAudioPlayer {
     private record ActiveSource(int sourceId, int bufferId, UUID senderUuid) {}
 
     public static void playSpatial(byte[] pcm, int sampleRate, UUID senderUuid) {
+        playSpatial(pcm, sampleRate, senderUuid, () -> true);
+    }
+
+    /** {@code active} is checked on the render thread, so nothing starts after the caller shut down. */
+    public static void playSpatial(byte[] pcm, int sampleRate, UUID senderUuid, BooleanSupplier active) {
         MinecraftClient.getInstance().execute(() -> {
+            if (!active.getAsBoolean()) return;
             try {
                 cleanup();
 
@@ -59,7 +66,12 @@ public class SpatialAudioPlayer {
     }
 
     public static void playMono(byte[] pcm, int sampleRate) {
+        playMono(pcm, sampleRate, () -> true);
+    }
+
+    public static void playMono(byte[] pcm, int sampleRate, BooleanSupplier active) {
         MinecraftClient.getInstance().execute(() -> {
+            if (!active.getAsBoolean()) return;
             try {
                 cleanup();
                 int buffer = createBuffer(pcm, sampleRate);
