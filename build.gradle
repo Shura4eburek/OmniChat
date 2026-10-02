@@ -115,9 +115,14 @@ jar {
     // Shade sherpa-onnx Java API classes into mod JAR
     from(zipTree('libs/sherpa-onnx-v1.12.4-java21.jar'))
 
-    // Shade onnxruntime Java API classes into mod JAR
+    // Shade onnxruntime Java API classes + runtime natives into mod JAR.
+    // Natives for all platforms ORT ships (win-x64, linux-x64/aarch64, osx-x64/aarch64)
+    // are kept because GLaDOS TTS runs through ORT on every OS; only debug symbols
+    // (Windows .pdb, macOS .dSYM bundles) are dropped — they are never loaded at runtime.
     from(configurations.shade.collect { zipTree(it) }) {
         exclude 'META-INF/**'
+        exclude '**/*.pdb'
+        exclude '**/*.dSYM/**'
     }
 }
 
