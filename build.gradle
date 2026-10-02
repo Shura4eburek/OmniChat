@@ -1,6 +1,5 @@
 plugins {
     id 'fabric-loom' version '1.15-SNAPSHOT'
-    id 'maven-publish'
 }
 
 version = project.mod_version
@@ -38,18 +37,37 @@ loom {
     }
 }
 
-fabricApi {
-    configureDataGeneration {
-        client = true
-    }
-}
-
 configurations {
-    shade
+    // onnxruntime as published on Maven; repackaged without debug symbols before nesting
+    onnxruntimeJar
 }
 
 repositories {
     mavenCentral()
+    // Loom only nests module components, so local jars are exposed through a flat repo
+    flatDir {
+        dirs layout.buildDirectory.dir('nested')
+    }
+}
+
+// Nested library jars carry their own fabric.mod.json (gradle/nested/*) so the ids are valid and
+// match what other mods would generate, letting Fabric keep a single copy.
+// The Maven onnxruntime jar also carries ~300 MB of debug symbols (.pdb, .dSYM) that are never loaded.
+tasks.register('onnxruntimeNested', Jar) {
+    archiveFileName = 'onnxruntime-nested-1.19.2.jar'
+    destinationDirectory = layout.buildDirectory.dir('nested')
+    from(zipTree(configurations.onnxruntimeJar.singleFile)) {
+        exclude '**/*.pdb'
+        exclude '**/*.dSYM/**'
+    }
+    from('gradle/nested/onnxruntime')
+}
+
+tasks.register('sherpaNested', Jar) {
+    archiveFileName = 'sherpa-onnx-nested-1.12.4.jar'
+    destinationDirectory = layout.buildDirectory.dir('nested')
+    from(zipTree('libs/sherpa-onnx-v1.12.4-java21.jar'))
+    from('gradle/nested/sherpa-onnx')
 }
 
 dependencies {
@@ -68,7 +86,20 @@ dependencies {
 
     // ONNX Runtime for direct model inference (GLaDOS TTS)
     implementation 'com.microsoft.onnxruntime:onnxruntime:1.19.2'
-    shade 'com.microsoft.onnxruntime:onnxruntime:1.19.2'
+    onnxruntimeJar('com.microsoft.onnxruntime:onnxruntime:1.19.2') { transitive = false }
+
+    // Jar-in-jar instead of shading: Fabric dedupes nested libraries shared with other mods,
+    // and onnxruntime keeps finding its natives under its own package path
+    include ':sherpa-onnx-nested:1.12.4'
+    include ':onnxruntime-nested:1.19.2'
+
+    // `./gradlew prodClient` runs the built jar like a real launcher would
+    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+
+tasks.register('prodClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    runDir = file('run/prod')
 }
 
 processResources {
@@ -108,38 +139,11 @@ java {
 }
 
 jar {
-    from("LICENSE") {
-        rename { "${it}_${project.archives_base_name}" }
-    }
-
-    // Shade sherpa-onnx Java API classes into mod JAR
-    from(zipTree('libs/sherpa-onnx-v1.12.4-java21.jar'))
-
-    // Shade onnxruntime Java API classes + runtime natives into mod JAR.
-    // Natives for all platforms ORT ships (win-x64, linux-x64/aarch64, osx-x64/aarch64)
-    // are kept because GLaDOS TTS runs through ORT on every OS; only debug symbols
-    // (Windows .pdb, macOS .dSYM bundles) are dropped — they are never loaded at runtime.
-    from(configurations.shade.collect { zipTree(it) }) {
-        exclude 'META-INF/**'
-        exclude '**/*.pdb'
-        exclude '**/*.dSYM/**'
+    from("LICENSE.txt") {
+        rename { "LICENSE_${project.archives_base_name}.txt" }
     }
 }
 
-// configure the maven publication
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
-        }
-    }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
-    }
+tasks.named('processIncludeJars') {
+    dependsOn 'onnxruntimeNested', 'sherpaNested'
 }

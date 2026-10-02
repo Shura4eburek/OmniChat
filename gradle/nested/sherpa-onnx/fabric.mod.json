@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "com_k2fsa_sherpa_onnx",
+  "version": "1.12.4",
+  "name": "sherpa-onnx",
+  "license": "Apache-2.0",
+  "custom": {
+    "fabric-loom:generated": true
+  }
+}

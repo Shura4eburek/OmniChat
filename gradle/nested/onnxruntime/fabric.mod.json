@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "com_microsoft_onnxruntime_onnxruntime",
+  "version": "1.19.2",
+  "name": "ONNX Runtime",
+  "license": "MIT",
+  "custom": {
+    "fabric-loom:generated": true
+  }
+}
