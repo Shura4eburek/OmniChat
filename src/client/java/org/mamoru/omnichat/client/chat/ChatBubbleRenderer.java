@@ -8,8 +8,10 @@ import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
+import org.mamoru.omnichat.client.HearingRange;
 import org.mamoru.omnichat.client.OmnichatClient;
 
 import java.util.ArrayList;
@@ -19,7 +21,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public class ChatBubbleRenderer {
-    private static final double MAX_DISTANCE = 40.0;
+    /** Vanilla hides a sneaking player's name tag from this distance on. */
+    private static final double SNEAKING_LABEL_DISTANCE = 32.0;
     private static final int MAX_LINE_WIDTH = 200;
     private static final double LINE_HEIGHT = 0.25;
 
@@ -30,7 +33,7 @@ public class ChatBubbleRenderer {
             }
 
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client.world == null || client.player == null) {
+            if (client.world == null || client.player == null || !MinecraftClient.isHudEnabled()) {
                 return;
             }
 
@@ -108,7 +111,8 @@ public class ChatBubbleRenderer {
 
         Vec3d playerPos = player.getEntityPos();
         double squaredDist = client.player.getEntityPos().squaredDistanceTo(playerPos);
-        if (squaredDist > MAX_DISTANCE * MAX_DISTANCE) return;
+        if (squaredDist > HearingRange.BLOCKS * HearingRange.BLOCKS) return;
+        if (!isLabelVisible(client, player, squaredDist)) return;
 
         List<String> lines = wrapText(text, client.textRenderer);
 
@@ -126,11 +130,42 @@ public class ChatBubbleRenderer {
             Vec3d labelOffset = new Vec3d(0, yOffset, 0);
 
             commandQueue.submitLabel(matrices, labelOffset, 0,
-                    Text.literal(lines.get(i)), true,
+                    // Sneaking players' bubbles are dimmed and hidden behind walls, like name tags
+                    Text.literal(lines.get(i)), !player.isSneaky(),
                     LightmapTextureManager.MAX_LIGHT_COORDINATE,
                     squaredDist, cameraState);
         }
 
         matrices.pop();
+    }
+
+    /**
+     * Mirrors vanilla's name tag rules (LivingEntityRenderer#hasLabel) so a bubble or typing
+     * indicator never reveals a player whose name tag would be hidden.
+     */
+    private static boolean isLabelVisible(MinecraftClient client, PlayerEntity player, double squaredDist) {
+        if (player == client.getCameraEntity()) return false;
+        if (player.isSneaky() && squaredDist >= SNEAKING_LABEL_DISTANCE * SNEAKING_LABEL_DISTANCE) return false;
+
+        // Covers the invisibility effect, including teammates seen via seeFriendlyInvisibles
+        boolean visible = !player.isInvisibleTo(client.player);
+
+        AbstractTeam team = player.getScoreboardTeam();
+        AbstractTeam viewerTeam = client.player.getScoreboardTeam();
+        if (team != null) {
+            switch (team.getNameTagVisibilityRule()) {
+                case NEVER:
+                    return false;
+                case HIDE_FOR_OTHER_TEAMS:
+                    if (viewerTeam != null && !team.isEqual(viewerTeam)) return false;
+                    break;
+                case HIDE_FOR_OWN_TEAM:
+                    if (viewerTeam != null && team.isEqual(viewerTeam)) return false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return visible;
     }
 }

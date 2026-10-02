@@ -1,13 +1,5 @@
 package org.mamoru.omnichat.client.chat;
 
-import com.mojang.authlib.GameProfile;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.message.MessageType;
-import net.minecraft.network.message.SignedMessage;
-import net.minecraft.text.Text;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.client.network.VoiceCache;
@@ -17,12 +9,14 @@ import org.mamoru.omnichat.network.VoiceChoice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * TTS sink of the {@link ChatPipeline}: turns an already filtered chat message into a TTS
+ * request with the sender's voice.
+ */
 public class ChatMessageHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
-    private static final double MAX_DISTANCE = 100.0;
 
     private final OmnichatConfig config;
 
@@ -31,11 +25,15 @@ public class ChatMessageHandler {
     }
 
     public void register() {
-        ClientReceiveMessageEvents.CHAT.register(this::onChatMessage);
+        ChatPipeline.register();
+        ChatPipeline.setTtsHandler(this);
         LOGGER.info("Chat message handler registered");
     }
 
-    private void onChatMessage(Text message, SignedMessage signedMessage, GameProfile sender, MessageType.Parameters params, Instant receptionTimestamp) {
+    /**
+     * @param senderUuid the in-range sender for spatial playback, or null for non-positional playback
+     */
+    void speak(String text, UUID senderUuid) {
         if (!config.isEnabled()) {
             return;
         }
@@ -43,41 +41,6 @@ public class ChatMessageHandler {
         TtsPlaybackWorker worker = OmnichatClient.getWorker();
         if (worker == null) {
             return;
-        }
-
-        if (!config.isReadOwnMessages() && sender != null) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player != null && sender.id().equals(client.player.getUuid())) {
-                return;
-            }
-        }
-
-        String text;
-        if (signedMessage != null) {
-            text = signedMessage.getContent().getString();
-        } else {
-            text = message.getString();
-        }
-        if (text.isEmpty()) {
-            return;
-        }
-
-        UUID senderUuid = null;
-        if (sender != null) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            ClientWorld world = client.world;
-            if (world != null && client.player != null) {
-                PlayerEntity senderEntity = world.getPlayerByUuid(sender.id());
-                if (senderEntity != null) {
-                    double distance = client.player.getEntityPos().distanceTo(senderEntity.getEntityPos());
-                    if (distance > MAX_DISTANCE) {
-                        return;
-                    }
-                    senderUuid = sender.id();
-                } else {
-                    return;
-                }
-            }
         }
 
         // Lookup voice from server cache

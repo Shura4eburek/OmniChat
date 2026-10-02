@@ -28,6 +28,13 @@ public class OmnichatConfig {
     private int maxQueueSize = 10;
     private boolean showChatBubbles = true;
     private float bubbleTextSpeed = 30.0f;
+    // Per message type (see ChatPipeline): /msg whispers, /me emotes, /teammsg team messages
+    private boolean speakWhispers = true;
+    private boolean bubbleWhispers = true;
+    private boolean speakEmotes = true;
+    private boolean bubbleEmotes = true;
+    private boolean speakTeamMessages = true;
+    private boolean bubbleTeamMessages = true;
 
     public static Path getConfigDir() {
         return FabricLoader.getInstance().getConfigDir().resolve("omnichat");
@@ -181,5 +188,53 @@ public class OmnichatConfig {
 
     public static List<String> listAvailableModels() {
         return ModelScanner.scanModels(getModelsDir());
+    }
+
+    public boolean isSpeakWhispers() {
+        return speakWhispers;
+    }
+
+    public void setSpeakWhispers(boolean speakWhispers) {
+        this.speakWhispers = speakWhispers;
+    }
+
+    public boolean isBubbleWhispers() {
+        return bubbleWhispers;
+    }
+
+    public void setBubbleWhispers(boolean bubbleWhispers) {
+        this.bubbleWhispers = bubbleWhispers;
+    }
+
+    public boolean isSpeakEmotes() {
+        return speakEmotes;
+    }
+
+    public void setSpeakEmotes(boolean speakEmotes) {
+        this.speakEmotes = speakEmotes;
+    }
+
+    public boolean isBubbleEmotes() {
+        return bubbleEmotes;
+    }
+
+    public void setBubbleEmotes(boolean bubbleEmotes) {
+        this.bubbleEmotes = bubbleEmotes;
+    }
+
+    public boolean isSpeakTeamMessages() {
+        return speakTeamMessages;
+    }
+
+    public void setSpeakTeamMessages(boolean speakTeamMessages) {
+        this.speakTeamMessages = speakTeamMessages;
+    }
+
+    public boolean isBubbleTeamMessages() {
+        return bubbleTeamMessages;
+    }
+
+    public void setBubbleTeamMessages(boolean bubbleTeamMessages) {
+        this.bubbleTeamMessages = bubbleTeamMessages;
     }
 }
