@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-10-02T18:57:58.766Z",
+      "error_message": "Incorrect value in code",
+      "file": "scripts/smoke.sh",
+      "root_cause": "Had \"--quickPlaySingleplayer \\\"",
+      "fix": "Changed to \"--args=--quickPlaySingleplayer '",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-10-02T18:58:29.328Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-10-02T22:01:00",
+      "error_message": "Task 'New World' not found (smoke.sh runClient --args)",
+      "file": "scripts/smoke.sh",
+      "root_cause": "gradlew re-parses \"$@\" via eval, splitting args with spaces",
+      "fix": "escape the --args value with printf '%q'",
+      "tags": [
+        "gradle",
+        "gradlew",
+        "args",
+        "smoke"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T22:01:00"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-10-02T22:01:00",
+      "error_message": "Cyrillic chat message typed as 'тЄюЁющ яЁюуюэ'",
+      "file": "scripts/smoke.sh",
+      "root_cause": "um WinDrive reads stdin in OEM codepage, Python writes cp1251",
+      "fix": "non-ASCII messages go through Set-Clipboard (base64 UTF-8) + Ctrl+V",
+      "tags": [
+        "encoding",
+        "um",
+        "windrive",
+        "smoke"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T22:01:00"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-10-02T22:15:00",
+      "error_message": "smoke.sh: couldn't focus Speaker's window",
+      "file": "scripts/smoke.sh",
+      "root_cause": "cmdline regex 'username Speaker' also matched the gradlew wrapper java.exe (no window)",
+      "fix": "match 'dli\\.env=client.*username X' (Loom dev-launch-injector flag)",
+      "tags": [
+        "smoke",
+        "windows",
+        "process"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T22:15:00"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-10-02T22:15:00",
+      "error_message": "Listener: Model directory not found ...run/smoke/listener/config/omnichat/models/default",
+      "file": "scripts/smoke.sh",
+      "root_cause": "client created empty models dir before the junction existed; check used -e",
+      "fix": "test -L, rmdir empty dir, then New-Item -ItemType Junction (cmd mklink /J breaks under MSYS path conversion)",
+      "tags": [
+        "smoke",
+        "junction",
+        "msys"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T22:15:00"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-10-02T22:15:00",
+      "error_message": "chat keys ignored, screenshot shows Game Menu",
+      "file": "scripts/smoke.sh",
+      "root_cause": "unfocused dev client opens pause menu (pauseOnLostFocus) which swallows T",
+      "fix": "set pauseOnLostFocus:false in both clients' options.txt",
+      "tags": [
+        "smoke",
+        "minecraft",
+        "options"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T22:15:00"
+    }
+  ]
+}
