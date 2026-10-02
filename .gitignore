@@ -31,3 +31,8 @@ libs/*.tar.bz2
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 !libs/*.jar
+
+# OpenWolf per-session state
+.wolf/hooks/_session.json
+.wolf/token-ledger.json
+.wolf/cron-state.json
