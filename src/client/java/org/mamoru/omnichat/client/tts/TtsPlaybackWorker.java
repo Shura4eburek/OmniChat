@@ -1,6 +1,5 @@
 package org.mamoru.omnichat.client.tts;
 
-import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,9 +32,10 @@ public class TtsPlaybackWorker {
     private final Queue<String> pendingEvictions = new ConcurrentLinkedQueue<>();
     private volatile boolean running = true;
 
-    public TtsPlaybackWorker(ITtsEngine defaultEngine, OmnichatConfig config) {
+    /** @param defaultModelName the model {@code defaultEngine} was built from (may be a fallback) */
+    public TtsPlaybackWorker(ITtsEngine defaultEngine, String defaultModelName, OmnichatConfig config) {
         this.defaultEngine = defaultEngine;
-        this.defaultModelName = config.getModelPath();
+        this.defaultModelName = defaultModelName;
         this.config = config;
         this.queue = new LinkedBlockingQueue<>(config.getMaxQueueSize());
 
@@ -73,6 +73,11 @@ public class TtsPlaybackWorker {
         while (!queue.offer(request)) {
             queue.poll();
         }
+    }
+
+    /** Drops pending requests without stopping the worker (e.g. on disconnect). */
+    public void clearQueue() {
+        queue.clear();
     }
 
     /** Drops the cached engine for a model (e.g. it was just re-downloaded). Safe from any thread. */
@@ -141,7 +146,7 @@ public class TtsPlaybackWorker {
         if (cached != null) {
             return cached;
         }
-        ITtsEngine loaded = OmnichatClient.loadEngineForModel(modelName);
+        ITtsEngine loaded = TtsService.loadEngineForModel(modelName);
         if (loaded == null) {
             return defaultEngine;
         }
