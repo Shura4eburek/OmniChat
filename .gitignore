@@ -36,3 +36,6 @@ libs/*.tar.bz2
 .wolf/hooks/_session.json
 .wolf/token-ledger.json
 .wolf/cron-state.json
+
+# brainstorming companion mockups
+.superpowers/

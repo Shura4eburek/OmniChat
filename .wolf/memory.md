@@ -120,3 +120,8 @@
 | 00:29 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/p26.py | — | ~2065 |
 | 00:30 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/c26.py | — | ~2273 |
 | 00:41 | low wave 2: #26 protocol handshake + canSend, #37 dead code, #35 jar-in-jar, #41 LICENSE; fixed handshake-in-config-phase disconnect found by smoke; prodClient verified | build.gradle, src/** | smoke pass | ~200k |
+| 01:02 | in-game model download test: Download All of dmitri+ruslan (78 MB each, ~70 s each, sequential), sha256 match, Apply dmitri loads engine; found settings UI overflow → #47 | run/smoke (restored) | pass | ~40k |
+| 01:04 | Created .superpowers/brainstorm/202-1790978593/content/visual-style.html | — | ~2157 |
+| 01:06 | Created .superpowers/brainstorm/202-1790978593/content/hud-style.html | — | ~2282 |
+| 01:06 | Created .superpowers/brainstorm/202-1790978593/content/waiting-1.html | — | ~52 |
+| 01:11 | Created docs/superpowers/specs/2026-10-03-pixel-hud-ui-design.md | — | ~2196 |

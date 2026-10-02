@@ -37,3 +37,4 @@
 - [2026-10-03] After editing jar excludes in build.gradle, Gradle may keep :jar UP-TO-DATE — run `./gradlew clean build`.
 - [2026-10-03] sherpa natives no longer ship onnxruntime.dll: SherpaNatives loads ORT 1.19.2 (OrtEnvironment) first, sherpa binds to it. Don't re-add the bundled 1.17.1 DLL.
 - [2026-10-03] Fabric C2SPlayChannelEvents.REGISTER can fire in the configuration phase (before JOIN): never send play payloads from it unless JOIN already happened. Built jar can be tested with ./gradlew prodClient (run/prod).
+- [2026-10-03] Manual UI testing: um WinDrive targets the FIRST java window — close other clients first. Settings screen overflows at 854x480 auto GUI scale (#47); use guiScale:1 in run/smoke/listener/options.txt for UI tests. Remove junctions with cmd rmdir (no /s) — never rm -rf a junction.

@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:30:39.150Z
-> Files: 567 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T22:11:20.803Z
+> Files: 571 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -613,6 +613,16 @@
 ## .gradle/vcs-1/
 
 - `gc.properties` (~0 tok)
+
+## .superpowers/brainstorm/202-1790978593/content/
+
+- `hud-style.html` (~2282 tok)
+- `visual-style.html` (~2157 tok)
+- `waiting-1.html` (~52 tok)
+
+## docs/superpowers/specs/
+
+- `2026-10-03-pixel-hud-ui-design.md` — Pixel HUD UI: дизайн (~2059 tok)
 
 ## gradle/wrapper/
 
