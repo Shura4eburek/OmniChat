@@ -12,6 +12,7 @@ import net.minecraft.text.Text;
 import org.mamoru.omnichat.client.chat.ChatBubbleManager;
 import org.mamoru.omnichat.client.chat.ChatBubbleRenderer;
 import org.mamoru.omnichat.client.chat.ChatMessageHandler;
+import org.mamoru.omnichat.client.chat.ChatPipeline;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.client.network.ClientNetworkHandler;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
@@ -51,8 +52,8 @@ public class OmnichatClient implements ClientModInitializer {
         });
         ChatBubbleRenderer.register();
 
-        // Register chat bubble listener (independent of TTS)
-        ClientReceiveMessageEvents.CHAT.register(OmnichatClient::onChatMessageForBubble);
+        // Single chat listener feeding bubbles (always) and TTS (once it is up)
+        ChatPipeline.register();
 
         // Register client network handlers and HUD
         ClientNetworkHandler.registerHandlers();
@@ -171,31 +172,6 @@ public class OmnichatClient implements ClientModInitializer {
 
         initializeTts();
         LOGGER.info("TTS engine reinitialized");
-    }
-
-    private static void onChatMessageForBubble(Text message, SignedMessage signedMessage,
-                                                   GameProfile sender, MessageType.Parameters params,
-                                                   Instant receptionTimestamp) {
-        if (!config.isShowChatBubbles() || sender == null) return;
-
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || client.player == null) return;
-
-        // Skip own messages
-        if (sender.id().equals(client.player.getUuid())) return;
-
-        // Check player exists in world
-        if (client.world.getPlayerByUuid(sender.id()) == null) return;
-
-        String text;
-        if (signedMessage != null) {
-            text = signedMessage.getContent().getString();
-        } else {
-            text = message.getString();
-        }
-        if (!text.isEmpty()) {
-            ChatBubbleManager.getInstance().addBubble(sender.id(), text);
-        }
     }
 
     public static OmnichatConfig getConfig() {
