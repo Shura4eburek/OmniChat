@@ -4,7 +4,8 @@
   "package": "org.mamoru.omnichat.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ChatScreenMixin"
+    "ChatScreenMixin",
+    "SoundEngineMixin"
   ],
   "injectors": {
     "defaultRequire": 1
