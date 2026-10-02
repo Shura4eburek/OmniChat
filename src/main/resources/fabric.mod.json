@@ -16,9 +16,6 @@
   "icon": "assets/omnichat/icon.png",
   "environment": "*",
   "entrypoints": {
-    "fabric-datagen": [
-      "org.mamoru.omnichat.client.OmnichatDataGenerator"
-    ],
     "client": [
       "org.mamoru.omnichat.client.OmnichatClient"
     ],

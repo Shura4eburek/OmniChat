@@ -5,6 +5,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import org.mamoru.omnichat.client.OmnichatClient;
+import org.mamoru.omnichat.client.network.ClientNetworkHandler;
 import org.mamoru.omnichat.network.TypingIndicatorC2SPayload;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -66,12 +67,8 @@ public class ChatScreenMixin {
     private void omnichat$send(boolean typing) {
         if (typing == omnichat$typingSent) return;
         omnichat$typingSent = typing;
-        try {
-            if (ClientPlayNetworking.canSend(TypingIndicatorC2SPayload.ID)) {
-                ClientPlayNetworking.send(new TypingIndicatorC2SPayload(typing));
-            }
-        } catch (Exception ignored) {
-            // not connected
+        if (ClientNetworkHandler.canSend(TypingIndicatorC2SPayload.ID)) {
+            ClientPlayNetworking.send(new TypingIndicatorC2SPayload(typing));
         }
     }
 }

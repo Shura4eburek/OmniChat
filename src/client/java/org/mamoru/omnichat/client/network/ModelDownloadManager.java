@@ -98,7 +98,7 @@ public class ModelDownloadManager {
         if (current != null || queuedRequests.isEmpty()) return;
         long now = System.currentTimeMillis();
         if (now - lastRequestSentAt < REQUEST_SPACING_MS) return; // retried from tick()
-        if (!ClientPlayNetworking.canSend(ModelDownloadRequestC2SPayload.ID)) return;
+        if (!ClientNetworkHandler.canSend(ModelDownloadRequestC2SPayload.ID)) return;
 
         String modelName = queuedRequests.poll();
         current = downloads.get(modelName);
@@ -119,19 +119,6 @@ public class ModelDownloadManager {
             }
         }
         sendNextRequest();
-    }
-
-    public synchronized boolean isDownloading(String modelName) {
-        return downloads.containsKey(modelName);
-    }
-
-    /**
-     * Returns download progress as 0.0-1.0, or -1 if not downloading.
-     */
-    public synchronized float getProgress(String modelName) {
-        Download d = downloads.get(modelName);
-        if (d == null) return -1f;
-        return d.totalBytes > 0 ? (float) d.receivedBytes / d.totalBytes : 0f;
     }
 
     /**

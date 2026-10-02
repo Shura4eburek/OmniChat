@@ -1,7 +1,6 @@
 package org.mamoru.omnichat.client.tts;
 
 import ai.onnxruntime.*;
-import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +23,6 @@ public class GladosTtsEngine implements ITtsEngine {
         this.session = session;
         this.g2p = g2p;
         this.modelConfig = g2p.modelConfig();
-    }
-
-    public static GladosTtsEngine create(OmnichatConfig config) {
-        return create(config.getResolvedModelDir());
     }
 
     public static GladosTtsEngine create(Path modelDir) {

@@ -24,6 +24,7 @@ public class Omnichat implements ModInitializer {
     public void onInitialize() {
         // Register payload types
         // S2C
+        PayloadTypeRegistry.playS2C().register(ProtocolVersionPayload.ID, ProtocolVersionPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ModelListS2CPayload.ID, ModelListS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(VoiceInfoS2CPayload.ID, VoiceInfoS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(VoiceMapS2CPayload.ID, VoiceMapS2CPayload.CODEC);
@@ -32,6 +33,7 @@ public class Omnichat implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(TypingIndicatorS2CPayload.ID, TypingIndicatorS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(VoiceRemoveS2CPayload.ID, VoiceRemoveS2CPayload.CODEC);
         // C2S
+        PayloadTypeRegistry.playC2S().register(ProtocolVersionPayload.ID, ProtocolVersionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(VoiceSelectionC2SPayload.ID, VoiceSelectionC2SPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ModelDownloadRequestC2SPayload.ID, ModelDownloadRequestC2SPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(TypingIndicatorC2SPayload.ID, TypingIndicatorC2SPayload.CODEC);
@@ -73,9 +75,5 @@ public class Omnichat implements ModInitializer {
         });
 
         LOGGER.info("OmniChat mod loaded");
-    }
-
-    public static VoiceRegistry getVoiceRegistry() {
-        return voiceRegistry;
     }
 }
