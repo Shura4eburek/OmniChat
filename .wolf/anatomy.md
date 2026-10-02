@@ -1,14 +1,21 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:06:10.620Z
-> Files: 545 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-02T21:20:12.949Z
+> Files: 564 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
 - `edit_client.py` — Returns the engine for the given model name, loading and caching it if needed. (~1278 tok)
+- `icon.py` (~244 tok)
+- `javap.sh` (~250 tok)
 - `jp.sh` (~288 tok)
+- `msg.txt` (~195 tok)
 - `R.java` — R: main (~257 tok)
 - `srv.py` — Tells the client its request for {@code modelName} was refused or aborted. (~2426 tok)
+
+## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
+
+- `Smoke.java` — args: mode(sherpaFirst|ortFirst|ortFirstSkipBundled) nativesDir modelsDir (~1352 tok)
 
 ## ./
 
@@ -31,6 +38,26 @@
 ## .claude/rules/
 
 - `openwolf.md` (~313 tok)
+
+## .claude/worktrees/agent-a38147cab403ccc2a/
+
+- `README.md` — Project documentation (~1198 tok)
+
+## .claude/worktrees/agent-a38147cab403ccc2a/src/client/java/org/mamoru/omnichat/client/config/
+
+- `OmnichatConfig.java` — Directory of a model whose name came from the server, or null if the name isn't a single (~2310 tok)
+
+## .claude/worktrees/agent-a38147cab403ccc2a/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `SpeakerCounts.java` — Number of speakers of a locally installed model, for the settings screen's speaker selector. (~1018 tok)
+
+## .claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/
+
+- `Omnichat.java` — Omnichat: onInitialize, getVoiceRegistry (~1043 tok)
+
+## .claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/command/
+
+- `OmnichatCommand.java` — {@code /omnichat reload}: rescans the server's models directory without a restart (ops only). (~427 tok)
 
 ## .claude/worktrees/agent-a4a8aef936b1e70b5/src/client/java/org/mamoru/omnichat/client/network/
 
@@ -77,6 +104,10 @@
 
 - `SherpaNatives.java` — Extracts the bundled sherpa-onnx / onnxruntime natives into a stable, content-addressed (~3111 tok)
 
+## .claude/worktrees/agent-a80ccbdd56d60f200/src/client/java/org/mamoru/omnichat/client/chat/
+
+- `ChatMessageHandler.java` — TTS sink of the {@link ChatPipeline}: turns an already filtered chat message into a TTS (~540 tok)
+
 ## .claude/worktrees/agent-a9045c2eac250265f/src/client/java/org/mamoru/omnichat/client/
 
 - `OmnichatClient.java` — Loads a fresh engine for the given model name, or returns null if the model is (~1841 tok)
@@ -90,9 +121,42 @@
 
 - `OmnichatConfig.java` — Directory of a model whose name came from the server, or null if the name isn't a single (~1853 tok)
 
+## .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `SherpaNatives.java` — Extracts the bundled sherpa-onnx natives into a stable, content-addressed (~3546 tok)
+
+## .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/
+
+- `fabric.mod.json` (~343 tok)
+
+## .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/assets/omnichat/lang/
+
+- `en_us.json` (~30 tok)
+- `ru_ru.json` (~31 tok)
+
 ## .claude/worktrees/agent-aa981e6d544b0e574/src/client/java/org/mamoru/omnichat/client/tts/
 
 - `TtsService.java` — Owns the TTS playback worker (which in turn owns its engines). Engines are built on a (~2236 tok)
+
+## .claude/worktrees/agent-ab6de4b5790a9b038/src/client/java/org/mamoru/omnichat/client/tts/
+
+- `TtsService.java` — Owns the TTS playback worker (which in turn owns its engines). Engines are built on a (~2327 tok)
+
+## .claude/worktrees/agent-ab6de4b5790a9b038/src/main/java/org/mamoru/omnichat/util/
+
+- `ModelScanner.java` — Single source of truth for what a model directory contains: its type, which (~1527 tok)
+
+## .claude/worktrees/agent-abad821473aa9429e/src/client/java/org/mamoru/omnichat/client/config/
+
+- `OmnichatConfig.java` — Directory of a model whose name came from the server, or null if the name isn't a single (~1945 tok)
+
+## .claude/worktrees/agent-abad821473aa9429e/src/client/java/org/mamoru/omnichat/mixin/client/
+
+- `ChatScreenMixin.java` — Drives the typing indicator from what the player actually does in the chat field: (~776 tok)
+
+## .claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/
+
+- `ServerNetworkHandler.java` — Minimum interval between accepted voice selections from one player. (~2681 tok)
 
 ## .claude/worktrees/agent-ac8d0f57e82c4385c/src/client/java/org/mamoru/omnichat/client/network/
 

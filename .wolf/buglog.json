@@ -178,6 +178,134 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-02T20:54:59.159Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-10-02T21:13:24.435Z",
+      "error_message": "Missing error handling in unknown",
+      "file": ".claude/worktrees/agent-ab6de4b5790a9b038/src/main/java/org/mamoru/omnichat/util/ModelScanner.java",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:13:24.435Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-10-02T21:13:24.691Z",
+      "error_message": "Wrong condition in logic",
+      "file": ".claude/worktrees/agent-ab6de4b5790a9b038/src/client/java/org/mamoru/omnichat/client/tts/TtsService.java",
+      "root_cause": "Condition was: if (Files.exists(modelDir.resolve(\"dictionary.txt\")",
+      "fix": "Changed to: if (ModelScanner.detectType(modelDir)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:13:24.691Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-10-02T21:14:17.533Z",
+      "error_message": "Null/undefined access in ",
+      "file": ".claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:14:17.533Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-10-02T21:14:38.853Z",
+      "error_message": "Wrong reference: network should be command",
+      "file": ".claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/Omnichat.java",
+      "root_cause": "Used \"network\" instead of \"command\"",
+      "fix": "Changed network → command",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:14:38.853Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-10-02T21:16:05.454Z",
+      "error_message": "Significant refactor of ",
+      "file": ".claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/fabric.mod.json",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→9 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "json"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:16:05.454Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-10-02T21:18:34.658Z",
+      "error_message": "Missing guard clause",
+      "file": "../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/Smoke.java",
+      "root_cause": "No early return/throw for edge case: !p.toLowerCase(",
+      "fix": "Added guard clause: if (!p.toLowerCase()",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:18:34.658Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-10-02T21:19:17.540Z",
+      "error_message": "Significant refactor of ",
+      "file": ".claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 5→6 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:19:17.540Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-10-02T21:19:18.012Z",
+      "error_message": "Missing error handling in unknown",
+      "file": ".claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-02T21:19:18.012Z"
     }
   ]
 }

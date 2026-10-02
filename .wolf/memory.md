@@ -81,3 +81,38 @@
 | 00:05 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/srv.py | — | ~2426 |
 | 00:06 | Created .claude/worktrees/agent-a4a8aef936b1e70b5/src/client/java/org/mamoru/omnichat/client/network/ModelDownloadManager.java | — | ~4335 |
 | 00:10 | medium issues #6-#12 #14-#21 via 7 parallel worktree agents; 1 merge conflict (OmnichatClient); jar 101→38 MB; smoke pass (voice sync on join verified: listener used 'irina') | src/**, build.gradle | ok | ~600k |
+| 00:13 | Created .claude/worktrees/agent-ab6de4b5790a9b038/src/main/java/org/mamoru/omnichat/util/ModelScanner.java | — | ~1471 |
+| 00:13 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/javap.sh | — | ~250 |
+| 00:13 | Edited .claude/worktrees/agent-ab6de4b5790a9b038/src/main/java/org/mamoru/omnichat/util/ModelScanner.java | added error handling | ~79 |
+| 00:13 | Edited .claude/worktrees/agent-ab6de4b5790a9b038/src/client/java/org/mamoru/omnichat/client/tts/TtsService.java | 5→6 lines | ~86 |
+| 00:13 | Edited .claude/worktrees/agent-ab6de4b5790a9b038/src/client/java/org/mamoru/omnichat/client/tts/TtsService.java | added 1 import(s) | ~28 |
+| 00:13 | Created .claude/worktrees/agent-abad821473aa9429e/src/client/java/org/mamoru/omnichat/mixin/client/ChatScreenMixin.java | — | ~776 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | 2→4 lines | ~43 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | modified isSendTypingIndicator() | ~76 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | added 5 condition(s) | ~460 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | added 1 condition(s) | ~111 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | modified if() | ~40 |
+| 00:14 | Edited .claude/worktrees/agent-abad821473aa9429e/src/main/java/org/mamoru/omnichat/server/ServerNetworkHandler.java | expanded (+9 lines) | ~158 |
+| 00:14 | Edited .claude/worktrees/agent-a80ccbdd56d60f200/src/client/java/org/mamoru/omnichat/client/chat/ChatMessageHandler.java | 1→2 lines | ~53 |
+| 00:14 | Created .claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/command/OmnichatCommand.java | — | ~427 |
+| 00:14 | Edited .claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/Omnichat.java | added 1 import(s) | ~24 |
+| 00:14 | Edited .claude/worktrees/agent-a38147cab403ccc2a/src/main/java/org/mamoru/omnichat/Omnichat.java | 2→3 lines | ~34 |
+| 00:14 | Edited .claude/worktrees/agent-a38147cab403ccc2a/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | added 4 condition(s) | ~443 |
+| 00:14 | Edited .claude/worktrees/agent-a38147cab403ccc2a/src/client/java/org/mamoru/omnichat/client/config/OmnichatConfig.java | modified setSpeakerId() | ~35 |
+| 00:15 | Created .claude/worktrees/agent-a38147cab403ccc2a/src/client/java/org/mamoru/omnichat/client/tts/SpeakerCounts.java | — | ~1018 |
+| 00:15 | Created .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/assets/omnichat/lang/en_us.json | — | ~30 |
+| 00:15 | Created .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/assets/omnichat/lang/ru_ru.json | — | ~31 |
+| 00:15 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/icon.py | — | ~244 |
+| 00:16 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/fabric.mod.json | expanded (+6 lines) | ~127 |
+| 00:16 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/main/resources/fabric.mod.json | 1→2 lines | ~18 |
+| 00:16 | Edited .claude/worktrees/agent-a38147cab403ccc2a/README.md | expanded (+10 lines) | ~285 |
+| 00:16 | Edited .claude/worktrees/agent-a38147cab403ccc2a/README.md | inline fix | ~42 |
+| 00:16 | Edited .claude/worktrees/agent-a38147cab403ccc2a/README.md | inline fix | ~47 |
+| 00:17 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/Smoke.java | — | ~1029 |
+| 00:18 | Edited ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/Smoke.java | added 2 condition(s) | ~405 |
+| 00:19 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | 5→6 lines | ~76 |
+| 00:19 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | 3→5 lines | ~42 |
+| 00:19 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | added error handling | ~343 |
+| 00:19 | Edited .claude/worktrees/agent-aa8ead0e5aa48420c/src/client/java/org/mamoru/omnichat/client/tts/SherpaNatives.java | inline fix | ~13 |
+| 00:20 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/msg.txt | — | ~208 |
+| 00:23 | low issues wave 1 (5 agents): fixed #22-#25 #27 #28 #30-#34 #36 #40 #42 #43; #41 partial, #35 blocked (build.gradle edit denied to subagent); sherpa now on shared ORT 1.19.2; smoke pass | src/** | ok | ~550k |

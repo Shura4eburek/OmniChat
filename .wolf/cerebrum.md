@@ -35,3 +35,4 @@
 - [2026-10-03] Client TTS lives in tts/TtsService (async loader thread "OmniChat-TTS-Loader"); chat goes through chat/ChatPipeline (single CHAT listener, HearingRange.BLOCKS=40). Spatial audio: AL_LINEAR_DISTANCE_CLAMPED, per-sender queue, SoundEngineMixin drops AL objects on SoundEngine.close.
 - [2026-10-03] Model downloads: ModelDownloadStatusS2CPayload (QUEUED/FAILED), client writes to config/omnichat/downloads/<name>.part and installs atomically; sherpa natives cached in config/omnichat/natives/win-x64-<hash>.
 - [2026-10-03] After editing jar excludes in build.gradle, Gradle may keep :jar UP-TO-DATE — run `./gradlew clean build`.
+- [2026-10-03] sherpa natives no longer ship onnxruntime.dll: SherpaNatives loads ORT 1.19.2 (OrtEnvironment) first, sherpa binds to it. Don't re-add the bundled 1.17.1 DLL.
