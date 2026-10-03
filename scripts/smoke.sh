@@ -146,6 +146,18 @@ shot="$OUT/listener.png"
 um win shot "$shot" --hwnd "$listener_hwnd" --scale 0.33 >/dev/null || echo "[smoke] screenshot failed"
 sleep 4   # generation runs on the worker thread; give it time before reading logs
 
+# --- 5b. HUD screens from Listener's window (O opens, 2/3 switch tabs, Esc closes)
+listener_pid_ui=$(mcproc pid "dli\.env=client.*username Listener")
+[ "$(mcproc focus "$listener_pid_ui")" = "True" ] && {
+  drive "key 0x4F" >/dev/null; sleep 1
+  um win shot "$OUT/ui-voice.png" --hwnd "$listener_hwnd" --scale 0.5 >/dev/null
+  drive "key 0x32" >/dev/null; sleep 0.5
+  um win shot "$OUT/ui-audio.png" --hwnd "$listener_hwnd" --scale 0.5 >/dev/null
+  drive "key 0x33" >/dev/null; sleep 0.5
+  um win shot "$OUT/ui-bubbles.png" --hwnd "$listener_hwnd" --scale 0.5 >/dev/null
+  drive "key 0x1B" >/dev/null
+}
+
 # --- 6. log check
 # dev clients run with offline accounts: authlib 401 and Realms errors are expected noise
 NOISE="Failed to fetch user properties|Failed to fetch Realms|Realms|authlib|profile key pair|No key layers in MapLike"
@@ -168,4 +180,5 @@ echo "--- listener received the message: $([ "$heard" -gt 0 ] && echo yes || ech
 echo "--- listener played TTS: $([ "$played" -gt 0 ] && echo yes || echo NO)"
 echo "--- errors: $errs"; head -n 20 "$OUT/errors.log"
 echo "--- screenshot: ${shot%.png}_small.png"
+echo "--- ui: $OUT/ui-voice_small.png ui-audio_small.png ui-bubbles_small.png"
 (( errs == 0 && heard > 0 && played > 0 ))
