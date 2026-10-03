@@ -64,6 +64,12 @@ def header_html(env) -> str:
             f'<span class="hud-badge">{html.escape(env_badge(env))}</span></div>')
 
 
+def slice_message(n: int, recognised: bool) -> str:
+    if not n:
+        return S.SLICED_NONE
+    return (S.SLICED_TEXT if recognised else S.SLICED_NO_TEXT).format(n=n)
+
+
 def guarded(n_out: int, msg_idx: int = 0):
     """Core errors become a gr.Warning toast plus red text in the section's message slot;
     every other output is left untouched. Never a traceback in the browser."""
@@ -429,10 +435,10 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 n = slicer.slice_project(p, isolate=iso,
                                          progress=lambda f, frac: progress(frac, desc=S.SLICING.format(name=f)))
                 st, rows = table_update(p, flagged)
-            return msg_html(S.SLICED.format(n=n)), steps_html(p, sec), st, rows
+            return msg_html(slice_message(n, transcriber.has_whisper())), steps_html(p, sec), st, rows
 
         slice_btn.click(on_slice, [project_dd, isolate, section, only_flagged],
-                        [audio_msg, steps, stats, table])
+                        [audio_msg, steps, stats, table], show_progress_on=[audio_msg])
 
         # ---------------- phrases ----------------
         def on_filter(name, flagged):
@@ -462,7 +468,8 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 st, rows = table_update(p, flagged)
             return msg_html(S.TRANSCRIBED.format(n=n)), st, rows
 
-        transcribe_btn.click(on_transcribe, [project_dd, only_flagged], [phrases_msg, stats, table])
+        transcribe_btn.click(on_transcribe, [project_dd, only_flagged], [phrases_msg, stats, table],
+                             show_progress_on=[phrases_msg])
 
         @guarded(3)
         def on_save(name, rows, flagged):

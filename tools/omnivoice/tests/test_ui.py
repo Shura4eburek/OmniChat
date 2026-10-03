@@ -76,3 +76,21 @@ def test_setup_section_has_data_dir_box_above_install(tmp_path, monkeypatch):
     move = next(b for b in blocks if isinstance(b, gr.Button) and b.value == S.DATA_DIR_MOVE)
     install = next(b for b in blocks if isinstance(b, gr.Button) and b.value == S.SETUP_INSTALL)
     assert box._id < move._id < install._id
+
+
+def test_slice_and_transcribe_show_progress_on_their_message_only(tmp_path):
+    from omnivoice.ui import strings as S
+    demo = build(tmp_path)
+    cfg = demo.get_config_file()
+    btn = {b.value: b._id for b in demo.blocks.values() if isinstance(b, gr.Button)}
+    for label in (S.SLICE, S.TRANSCRIBE):
+        dep = next(d for d in cfg["dependencies"] if [btn[label], "click"] in [list(t) for t in d["targets"]])
+        assert dep["show_progress_on"] and len(dep["show_progress_on"]) == 1
+        assert dep["show_progress_on"][0] == dep["outputs"][0]
+
+
+def test_slice_message_says_whether_text_was_recognised(monkeypatch, tmp_path):
+    from omnivoice.ui import app as ui_app, strings as S
+    assert ui_app.slice_message(3, True) == S.SLICED_TEXT.format(n=3)
+    assert ui_app.slice_message(3, False) == S.SLICED_NO_TEXT.format(n=3)
+    assert ui_app.slice_message(0, True) == S.SLICED_NONE
