@@ -341,6 +341,150 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-04T16:20:00"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-10-03T13:19:23.159Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/client/java/org/mamoru/omnichat/client/tts/OnnxMetadata.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:19:23.159Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-10-03T13:26:35.834Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:26:35.834Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-10-03T13:26:36.083Z",
+      "error_message": "Wrong condition in logic",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "Condition was: if (e != null && e.state()",
+      "fix": "Changed to: if (e != null && ModelHealthView.canActivate(e.state()",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-10-03T13:26:36.316Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-10-03T13:26:36.820Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:26:36.820Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-10-03T13:26:37.066Z",
+      "error_message": "Incorrect value in code",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "Had \"omnichat.ui.voice.preview_hint\"",
+      "fix": "Changed to \"omnichat.ui.voice.preview_remote\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:26:37.066Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-10-03T13:38:39.152Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/client/java/org/mamoru/omnichat/client/tts/ModelRepair.java",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→32 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:38:39.152Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-10-03T13:39:13.157Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/ModelHealthCache.java",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:39:13.157Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-10-03T13:39:28.513Z",
+      "error_message": "Significant refactor of ",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 13→21 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:39:28.513Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-10-03T13:43:28.109Z",
+      "error_message": "Null/undefined access in ",
+      "file": "src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "java"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T13:43:28.109Z"
     }
   ]
 }

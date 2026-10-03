@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T13:03:56.183Z
-> Files: 3 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T13:43:43.060Z
+> Files: 18 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
+- `patch.py` — Never throws') (~247 tok)
 - `Repro.java` — Reproduces the preview crash outside the game: same natives, same config as TtsEngine. (~422 tok)
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
@@ -12,6 +13,8 @@
 
 ## ./
 
+- `new_block.txt` — Never throws: IO problems give INCOMPATIBLE with the reason. (~1116 tok)
+- `new_tests.txt` (~647 tok)
 
 ## .claude/
 
@@ -373,6 +376,12 @@
 ## .superpowers/brainstorm/202-1790978593/content/
 
 
+## .superpowers/model-repair/
+
+- `design.md` — In-game model check & repair — approved design (~916 tok)
+- `part-b-report.md` — Part B report — in-game model check & repair UI (~1674 tok)
+- `rules.md` — Rules for implementers (~468 tok)
+
 ## .superpowers/sdd/2026-10-03-pixel-hud-ui/
 
 
@@ -519,13 +528,18 @@
 
 ## src/client/java/org/mamoru/omnichat/client/tts/
 
-- `OnnxMetadata.java` — Reads {@code metadata_props} of an ONNX model by walking the top-level fields of the (~990 tok)
+- `ModelRepair.java` — Checks a sherpa (VITS) model's ONNX metadata and repairs the missing espeak entries in place. (~2344 tok)
+- `OnnxMetadata.java` — Reads {@code metadata_props} of an ONNX model by walking the top-level fields of the (~2418 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/
 
+- `ModelHealthCache.java` — Background {@link ModelRepair#check} results per installed model, re-checked when the model's .onnx (~1302 tok)
+- `ModelHealthView.java` — Pure mapping from a model's health to what the Voice tab shows. {@code null} health = check pending. (~1272 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/screen/
 
+- `OmnichatScreen.java` — The OmniChat HUD: header, tabs, active tab, hint footer, inside an adaptive panel. (~1784 tok)
+- `VoiceTab.java` — Health of an installed model (null while its check is pending, and for other states). (~5604 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/widget/
 
@@ -535,7 +549,14 @@
 
 ## src/test/java/org/mamoru/omnichat/client/tts/
 
+- `ModelRepairManualTest.java` — Manual check on a copy of the real glados model; enable with -Dmodelrepair.manual=true. (~453 tok)
+- `ModelRepairTest.java` — Class: ModelRepairTest (~1904 tok)
 - `OnnxMetadataTest.java` — ModelProto with ir_version (varint field 1), a large "graph" (field 7) and metadata_props (field 14) (~829 tok)
+
+## src/test/java/org/mamoru/omnichat/client/ui/
+
+- `ModelHealthCacheTest.java` — Class: ModelHealthCacheTest (~1047 tok)
+- `ModelHealthViewTest.java` — Class: ModelHealthViewTest (~1583 tok)
 
 ## src/test/java/org/mamoru/omnichat/voice/
 
