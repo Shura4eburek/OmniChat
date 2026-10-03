@@ -357,8 +357,15 @@ class TrainRunner:
 # ---------- setup (dependencies) ----------
 
 def needs_setup(env) -> bool:
-    """No usable training environment and the omnivoice WSL distro isn't built (None = still probing)."""
-    return env is not None and env.backend is None and not env.wsl_ready
+    """No usable training environment and the omnivoice WSL distro isn't built (None = still probing).
+    Without an NVIDIA GPU on the host setup skips WSL (deps.check_all), so the Colab hint is shown instead."""
+    return env is not None and env.backend is None and not env.wsl_ready and env.gpu_name is not None
+
+
+def last_epoch_target(p, n_epochs: int) -> int:
+    """The epoch number the training log reaches when `n_epochs` more epochs are done."""
+    from omnivoice import train
+    return train.target_epochs(p, n_epochs) - 1  # Lightning prints 0-based last epoch
 
 
 def checklist_html(items) -> str:

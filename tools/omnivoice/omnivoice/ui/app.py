@@ -27,9 +27,9 @@ from omnivoice.ui import strings as S
 from omnivoice.ui import theme
 from omnivoice.ui.helpers import (COLUMNS, NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  copy_uploads, counter_label, env_badge, error_text, list_projects, needs_setup,
-                                  list_raw_files, portrait_preview, report_html, segments_rows, stats_line,
-                                  steps_bar_html, toggle_dropped)
+                                  copy_uploads, counter_label, env_badge, error_text, last_epoch_target,
+                                  list_projects, needs_setup, list_raw_files, portrait_preview, report_html,
+                                  segments_rows, stats_line, steps_bar_html, toggle_dropped)
 
 log = logging.getLogger("omnivoice.ui")
 # Gradio warns on every update that a Styler can't be shown in an interactive table, yet the row
@@ -484,7 +484,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 p = load(name)
                 n_epochs = int(n_epochs or 1000)
                 runner(name).start(p, epochs=n_epochs, resume=resume, batch=int(n_batch) if n_batch else None,
-                                   env=probe.env, target=train.base_epoch(p) + n_epochs,
+                                   env=probe.env, target=last_epoch_target(p, n_epochs),
                                    on_prepared=lambda: locks.release(key))
             except BaseException:
                 locks.release(key)

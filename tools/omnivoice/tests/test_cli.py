@@ -110,3 +110,14 @@ def test_setup_check_failure_is_friendly(monkeypatch):
     monkeypatch.setattr(deps, "check_all", boom)
     r = CliRunner().invoke(app, ["setup", "--check"])
     assert r.exit_code == 1 and "wsl.exe недоступен" in r.output
+
+
+def test_setup_check_without_gpu_exits_0_and_points_to_colab(monkeypatch):
+    st = wslenv.EnvStatus(False, False, False, False, None, "WSL не установлен")
+    monkeypatch.setattr(deps.wslenv, "status", lambda run=None: st)
+    monkeypatch.setattr(deps, "host_gpu", lambda run=None: False)
+    monkeypatch.setattr(deps, "prep_ok", lambda: True)
+    monkeypatch.setattr(deps, "ffmpeg_path", lambda: "C:/ff/ffmpeg.exe")
+    r = CliRunner().invoke(app, ["setup", "--check"])
+    assert r.exit_code == 0, r.output
+    assert f"✗ Среда обучения (необязательно) — {deps.NO_GPU_DETAIL}" in r.output

@@ -307,6 +307,8 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
             return 0
     if stop():
         return STOPPED
+    if on_line and not checkpoints.local(p.base_checkpoint).is_file():
+        on_line(checkpoints.LABEL)
     try:
         ckpt = checkpoints.ensure(p.base_checkpoint, progress=progress)
     except checkpoints.CheckpointError as e:

@@ -404,7 +404,7 @@ def test_checklist_html_pending():
 def test_needs_setup():
     from omnivoice.train import Env
     assert not h.needs_setup(None)  # still probing: don't nag
-    assert h.needs_setup(Env(False, False, None, None))
+    assert h.needs_setup(Env(False, False, "RTX 4070", 12000))
     assert not h.needs_setup(Env(False, False, None, None, backend=None, wsl_ready=True, wsl_gpu=False))
     assert not h.needs_setup(Env(True, True, "RTX", 8000, backend="docker"))
 
@@ -497,3 +497,41 @@ def test_env_probe_restart():
     assert not probe.env.docker
     probe.restart(); probe.join(5)
     assert probe.env.docker and len(n) == 2
+
+
+def test_needs_setup_without_host_gpu_points_to_colab_not_setup():
+    from omnivoice.train import Env
+    # no NVIDIA GPU: setup skips the WSL environment, so «Сначала установи зависимости» would never go away
+    assert not h.needs_setup(Env(False, False, None, None))
+
+
+def test_last_epoch_target_matches_lightning_0_based_epochs():
+    from types import SimpleNamespace
+    from omnivoice import train
+    p = SimpleNamespace(base_checkpoint="ru/ru_RU/irina/medium/epoch=4139-step=929464.ckpt")
+    # the base already did epochs 0..4139; 10 more end with Lightning printing «Epoch 4149»
+    assert h.last_epoch_target(p, 10) == train.target_epochs(p, 10) - 1 == 4149
+    assert h.last_epoch_target(SimpleNamespace(base_checkpoint="x.ckpt"), 5) == 5
+
+
+def test_setup_intro_disk_size():
+    assert "~15 ГБ на диске C:" in S.SETUP_INTRO and "6 ГБ" not in S.SETUP_INTRO
+
+
+def test_app_uses_last_epoch_target():
+    import inspect
+    from omnivoice.ui import app as ui_app
+    src = inspect.getsource(ui_app)
+    assert "target=last_epoch_target(p, n_epochs)" in src and "base_epoch(p) + n_epochs" not in src
+
+
+def test_setup_runner_done_without_gpu_is_not_missing():
+    from omnivoice import deps
+    items = [deps.Item(deps.PREP, True, "установлены"), deps.Item(deps.FFMPEG, True, "ffmpeg.exe"),
+             deps.Item(deps.WSL, False, deps.NO_GPU_DETAIL, optional=True),
+             deps.Item(deps.ENV, False, deps.NO_GPU_DETAIL, optional=True)]
+    r = h.SetupRunner(install_fn=lambda on_line, progress: on_line(deps.NO_GPU_DETAIL), check_fn=lambda: items)
+    r.start(); r.join(5)
+    html = r.status_html()
+    assert S.SETUP_DONE in html and S.SETUP_DONE_MISSING not in html
+    assert deps.NO_GPU_DETAIL in r.log_text() and deps.NO_GPU_DETAIL in h.checklist_html(r.items)

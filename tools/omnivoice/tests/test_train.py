@@ -550,3 +550,21 @@ def test_target_epochs_counts_base_as_done(tmp_path):
     p = Project.create(tmp_path / "t", name="t", language="ru")
     p.base_checkpoint = "x/epoch=4139-step=1.ckpt"
     assert train.target_epochs(p, 2) == 4142   # epochs 4140 and 4141 are the 2 new ones
+
+
+def test_train_logs_checkpoint_size_only_when_downloading(tmp_path, monkeypatch):
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    monkeypatch.setattr(dataset, "piper_csv", lambda p, out: 5)
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path / "cache"))
+    ck = tmp_path / "cache" / "checkpoints" / p.base_checkpoint
+    def ensure(path, progress=None):
+        ck.parent.mkdir(parents=True, exist_ok=True); ck.write_bytes(b"x"); return ck
+    monkeypatch.setattr(checkpoints, "ensure", ensure)
+    monkeypatch.setattr(train, "cache_dir", lambda: tmp_path / "cache")
+    env = train.Env(True, True, "RTX", 12000)
+    lines = []
+    assert train.train_project(p, env=env, run=Fake({}), on_line=lines.append) == 0
+    assert checkpoints.LABEL in lines and "МБ" in checkpoints.LABEL
+    lines.clear()
+    train.train_project(p, env=env, run=Fake({}), on_line=lines.append, resume=False)
+    assert checkpoints.LABEL not in lines  # already cached

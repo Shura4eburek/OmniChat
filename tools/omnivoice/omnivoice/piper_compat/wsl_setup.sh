@@ -31,6 +31,7 @@ PKGS=(python3 python3-venv python3-dev build-essential cmake ninja-build git ca-
 if ! dpkg -s "${PKGS[@]}" >/dev/null 2>&1; then
   apt-get update -q
   apt-get install -y -q --no-install-recommends "${PKGS[@]}"
+  apt-get clean && rm -rf /var/lib/apt/lists/*  # the WSL disk never shrinks: drop the .deb cache and package lists
 fi
 
 step 2 "Виртуальное окружение Python"

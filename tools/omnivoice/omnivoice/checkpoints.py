@@ -10,6 +10,11 @@ class CheckpointError(RuntimeError):
 def url(path: str) -> str:
     return BASE + path.replace("=", "%3D")
 
+LABEL = "Скачиваю базовую модель Piper (~850 МБ)…"
+
+def local(path: str) -> Path:
+    return cache_dir() / "checkpoints" / path
+
 def ensure(path: str, progress=None) -> Path:
-    return download.fetch(url(path), cache_dir() / "checkpoints" / path, progress=progress,
+    return download.fetch(url(path), local(path), progress=progress,
                           what="базовую модель", error=CheckpointError)

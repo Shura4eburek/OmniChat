@@ -26,6 +26,8 @@ FFMPEG_EXES = ("ffmpeg.exe", "ffprobe.exe")
 PREP_MODULES = ("faster_whisper", "silero_vad", "demucs", "pyloudnorm", "gradio", "tensorboard")
 HINT = "нажми «Установить зависимости» (omnivoice setup)"
 PREP, FFMPEG, WSL, ENV = "Пакеты (prep, ui)", "ffmpeg", "WSL", "Среда обучения"
+NO_GPU_DETAIL = "Нет видеокарты NVIDIA — обучайте в Colab (omnivoice train --colab)"
+FFMPEG_LABEL = "Скачиваю ffmpeg (~115 МБ)…"
 
 
 class DepsError(RuntimeError):
@@ -159,18 +161,31 @@ def install_prep(on_line: Callable[[str], None], popen=subprocess.Popen) -> None
     importlib.invalidate_caches()
 
 
+def host_gpu(run=subprocess.run) -> bool:
+    """An NVIDIA GPU on the Windows host (nvidia-smi from the driver). Without one, the ~15 GB WSL
+    environment is useless: training goes to Colab."""
+    try:
+        r = run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=20)
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+    return r.returncode == 0 and bool((r.stdout or "").strip())
+
+
 def check_all(run=subprocess.run) -> list[Item]:
-    """Fast checklist; never starts Docker containers."""
+    """Fast checklist; never starts Docker containers. Without an NVIDIA GPU, WSL and its environment
+    are optional (training goes to Colab)."""
     st = wslenv.status(run)
+    gpu = host_gpu(run)
     prep = prep_ok()
     ff = ffmpeg_path()
     docker = shutil.which("docker")
     wsl_ok = st.wsl and st.wsl_version_ok
+    wsl_detail = "готов" if wsl_ok else ("устарел" if st.wsl else "не установлен") + " — " + HINT
     return [
         Item(PREP, prep, "установлены" if prep else "не установлены — " + HINT),
         Item(FFMPEG, bool(ff), ff or "не найден — " + HINT),
-        Item(WSL, wsl_ok, "готов" if wsl_ok else ("устарел" if st.wsl else "не установлен") + " — " + HINT),
-        Item(ENV, st.ready, st.message),
+        Item(WSL, wsl_ok, wsl_detail if gpu or wsl_ok else NO_GPU_DETAIL, optional=not gpu),
+        Item(ENV, st.ready, st.message if gpu or st.ready else NO_GPU_DETAIL, optional=not gpu),
         Item("GPU в WSL", bool(st.gpu), "доступен" if st.gpu else "не обнаружен (проверяется после установки среды; "
              "нужен драйвер NVIDIA для Windows)", optional=True),
         Item("Docker", bool(docker), docker or "не найден (необязательно — запасной вариант обучения)", optional=True),
@@ -189,9 +204,11 @@ def install_all(on_line: Callable[[str], None], progress: Callable[[int, int], N
         on_line("Устанавливаю пакеты (prep, ui)…")
         install_prep(on_line)
     if _missing(items, FFMPEG):
-        on_line("Скачиваю ffmpeg…")
+        on_line(FFMPEG_LABEL)
         install_ffmpeg(progress)
-    if _missing(items, WSL) or _missing(items, ENV):
+    if any(i.name == ENV and i.optional for i in items):
+        on_line(NO_GPU_DETAIL)  # no NVIDIA GPU: the WSL environment (~15 GB) is skipped
+    elif _missing(items, WSL) or _missing(items, ENV):
         on_line("Настраиваю среду обучения WSL…")
         try:
             wslenv.ensure_ready(on_line, progress)

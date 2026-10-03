@@ -7,6 +7,12 @@ from omnivoice import download, wslenv
 from omnivoice.piper_compat import HERE as COMPAT
 
 
+@pytest.fixture(autouse=True)
+def _cache(tmp_path, monkeypatch):
+    """ensure_wsl writes an install marker and ensure_ready removes the rootfs: keep both in tmp."""
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+
+
 def u16(text: str) -> bytes:
     """wsl.exe writes its own messages as UTF-16LE with CRLF."""
     return text.replace("\n", "\r\n").encode("utf-16-le")
@@ -169,8 +175,11 @@ def test_ensure_wsl_installs_and_asks_for_reboot():
     assert len(ps) == 1 and "'--install','--no-distribution'" in ps[0]
 
 
-def test_ensure_wsl_installs_without_reboot():
-    assert wslenv.ensure_wsl(run=Seq(MISSING, healthy(distro=False), 0)) is None
+def test_ensure_wsl_install_always_asks_for_reboot_and_marks_attempt(tmp_path):
+    # wsl --status may answer right after the install, yet the reboot is still pending
+    assert wslenv.ensure_wsl(run=Seq(MISSING, healthy(distro=False), 0)) == wslenv.REBOOT_MSG
+    assert float(wslenv.install_marker().read_text()) > 0
+    assert wslenv.install_marker().parent == tmp_path / "wsl"
 
 
 def test_ensure_wsl_updates_old_inbox_wsl():
@@ -505,3 +514,132 @@ def test_download_unknown_length_without_sha_is_accepted(tmp_path, monkeypatch):
             super().__init__(b"data"); self.headers = {}
     monkeypatch.setattr(download.urllib.request, "urlopen", lambda req, timeout=None: NoLen())
     assert download.fetch("https://x/f", tmp_path / "f").read_bytes() == b"data"
+
+
+# --- final fix wave: reboot loop, virtualization hint, rootfs cleanup -----------------------------
+
+def test_ensure_wsl_update_with_3010_asks_for_reboot():
+    before = {"--status": (0, STATUS_EN), "--version": (1, OLD_INBOX_HELP), "-l -q": (0, LIST_NO_OMNI)}
+    assert wslenv.ensure_wsl(run=Seq(before, healthy(distro=False), 3010)) == wslenv.REBOOT_MSG
+    assert not wslenv.install_marker().exists()  # only an --install leaves the marker
+
+
+def test_reboot_msg_points_to_desktop_shortcut():
+    assert "ярлыком на рабочем столе" in wslenv.REBOOT_MSG and "Установить зависимости" in wslenv.REBOOT_MSG
+
+
+@pytest.mark.parametrize("text", [
+    "Please enable the Virtual Machine Platform Windows feature and ensure virtualization is enabled in the BIOS.",
+    "Включите компонент «Платформа виртуальной машины».",
+    "Error code: Wsl/Service/CreateInstance/CreateVm/HCS/0x80370102",
+    "Error code: Wsl/Service/HCS_E_HYPERV_NOT_INSTALLED",
+])
+def test_ensure_wsl_adds_bios_hint_from_status_output(text):
+    before = {"--status": (1, u16(text + "\n")), "--version": (1, b""), "-l -q": (1, b"")}
+    msg = wslenv.ensure_wsl(run=Seq(before, before, 0))
+    assert msg.startswith(wslenv.REBOOT_MSG) and wslenv.VMP_HINT in msg
+
+
+def test_ensure_wsl_failure_adds_bios_hint():
+    before = {"--status": (1, u16("Error code: HCS_E_HYPERV_NOT_INSTALLED\n")), "--version": (1, b""),
+              "-l -q": (1, b"")}
+    with pytest.raises(wslenv.WslError, match="BIOS"):
+        wslenv.ensure_wsl(run=Seq(before, before, 5))
+
+
+def test_ensure_wsl_plain_reboot_has_no_bios_hint():
+    assert wslenv.VMP_HINT not in wslenv.ensure_wsl(run=Seq(MISSING, MISSING, 0))
+
+
+def _mark(ts):
+    m = wslenv.install_marker(); m.parent.mkdir(parents=True, exist_ok=True); m.write_text(str(ts))
+    return m
+
+
+def test_ensure_wsl_after_reboot_still_broken_shows_bios_hint_instead_of_loop():
+    m = _mark(1000.0)
+    fake = Seq(MISSING, MISSING, 0)
+    with pytest.raises(wslenv.WslError) as e:
+        wslenv.ensure_wsl(run=fake, boot_time=lambda: 2000.0)  # booted after the install attempt
+    assert wslenv.VMP_HINT in str(e.value) and "перезагруз" in str(e.value)
+    assert not any(c.startswith("powershell") for c in fake.joined())  # no second UAC + reboot round
+    assert not m.exists()  # the next press tries the install again
+
+
+def test_ensure_wsl_marker_unknown_boot_time_shows_bios_hint():
+    _mark(1000.0)
+    with pytest.raises(wslenv.WslError, match="BIOS"):
+        wslenv.ensure_wsl(run=Seq(MISSING, MISSING, 0), boot_time=lambda: None)
+
+
+def test_ensure_wsl_marker_before_reboot_repeats_reboot_message():
+    _mark(2000.0)
+    fake = Seq(MISSING, MISSING, 0)
+    assert wslenv.ensure_wsl(run=fake, boot_time=lambda: 1000.0) == wslenv.REBOOT_MSG
+    assert not any(c.startswith("powershell") for c in fake.joined())
+
+
+def test_ensure_wsl_clears_marker_once_wsl_works():
+    m = _mark(1000.0)
+    assert wslenv.ensure_wsl(run=Fake(healthy())) is None and not m.exists()
+
+
+def test_status_no_gpu_message_mentions_driver_and_colab():
+    st = wslenv.status(run=Fake(healthy(gpu=False)))
+    assert st.message.endswith("GPU: нет — обнови драйвер NVIDIA или обучайте в Colab")
+
+
+def test_ensure_ready_logs_rootfs_size_and_deletes_tar(monkeypatch, tmp_path):
+    fake = Fake(healthy(ready=False, distro=False))
+    tar = tmp_path / "wsl" / wslenv.ROOTFS_NAME
+    def dl(progress=None):
+        tar.parent.mkdir(parents=True, exist_ok=True); tar.write_bytes(b"tar"); return tar
+    def imp(t, run=None):
+        assert t == tar and t.exists(); fake.table["-l -q"] = (0, LIST_OMNI)
+    def prov(on_line, run=None, popen=None):
+        fake.table["cat /opt/omnivoice/READY"] = (0, wslenv.ENV_VERSION.encode())
+    monkeypatch.setattr(wslenv, "download_rootfs", dl)
+    monkeypatch.setattr(wslenv, "import_distro", imp)
+    monkeypatch.setattr(wslenv, "provision", prov)
+    lines = []
+    assert wslenv.ensure_ready(lines.append, run=fake).ready
+    assert "Скачиваю образ Ubuntu (~390 МБ)…" in lines
+    assert not tar.exists()
+
+
+def test_ensure_ready_keeps_tar_when_provision_fails(monkeypatch, tmp_path):
+    fake = Fake(healthy(ready=False, distro=True))
+    tar = tmp_path / "wsl" / wslenv.ROOTFS_NAME; tar.parent.mkdir(parents=True); tar.write_bytes(b"tar")
+    def prov(on_line, run=None, popen=None):
+        raise wslenv.WslError("шаг 3")
+    monkeypatch.setattr(wslenv, "provision", prov)
+    with pytest.raises(wslenv.WslError):
+        wslenv.ensure_ready(lambda l: None, run=fake)
+    assert tar.exists()
+
+
+def test_ensure_ready_existing_distro_never_needs_the_tar(monkeypatch, tmp_path):
+    fake = Fake(healthy(ready=False, distro=True))
+    monkeypatch.setattr(wslenv, "download_rootfs", lambda *a, **k: pytest.fail("download"))
+    monkeypatch.setattr(wslenv, "import_distro", lambda *a, **k: pytest.fail("import"))
+    monkeypatch.setattr(wslenv, "provision", lambda on_line, run=None, popen=None:
+                        fake.table.__setitem__("cat /opt/omnivoice/READY", (0, wslenv.ENV_VERSION.encode())))
+    lines = []
+    assert wslenv.ensure_ready(lines.append, run=fake).ready
+    assert not any("образ Ubuntu" in l for l in lines)
+
+
+def test_download_rootfs_redownloads_when_tar_was_deleted(tmp_path, monkeypatch):
+    monkeypatch.setattr(wslenv, "ROOTFS_SHA256", hashlib.sha256(b"tar").hexdigest())
+    calls = []
+    monkeypatch.setattr(download.urllib.request, "urlopen",
+                        lambda req, timeout=None: calls.append(req) or Resp(b"tar"))
+    p = wslenv.download_rootfs()
+    p.unlink()
+    assert wslenv.download_rootfs().read_bytes() == b"tar" and len(calls) == 2
+
+
+def test_setup_script_cleans_apt_lists():
+    sh = (COMPAT / "wsl_setup.sh").read_text(encoding="utf-8")
+    step1 = sh.split('step 1 ', 1)[1].split('step 2 ', 1)[0]
+    assert "apt-get clean && rm -rf /var/lib/apt/lists/*" in step1

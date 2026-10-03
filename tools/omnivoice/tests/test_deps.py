@@ -7,12 +7,15 @@ import pytest
 
 from omnivoice import deps, slicer, wslenv
 
+REAL_HOST_GPU = deps.host_gpu  # the autouse fixture replaces it
+
 
 @pytest.fixture(autouse=True)
 def cache(tmp_path, monkeypatch):
     monkeypatch.setattr(deps, "prep_ok", lambda: False)
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path / "cache"))
     monkeypatch.setattr(deps.shutil, "which", lambda n: None)
+    monkeypatch.setattr(deps, "host_gpu", lambda run=None: True)  # never runs the real nvidia-smi
 
 
 def make_zip(path: Path, with_probe=True):
@@ -142,7 +145,8 @@ def status(**kw):
     return wslenv.EnvStatus(**base)
 
 
-def items(monkeypatch, st, prep=True, ff=True, docker=True):
+def items(monkeypatch, st, prep=True, ff=True, docker=True, gpu=True):
+    monkeypatch.setattr(deps, "host_gpu", lambda run=None: gpu)
     monkeypatch.setattr(deps.wslenv, "status", lambda run=None: st)
     monkeypatch.setattr(deps, "prep_ok", lambda: prep)
     monkeypatch.setattr(deps, "ffmpeg_path", lambda: "ffmpeg.exe" if ff else None)
@@ -341,3 +345,53 @@ def test_download_last_mirror_failure_still_raises(tmp_path, monkeypatch):
                         lambda req, timeout=None: (_ for _ in ()).throw(urllib.error.HTTPError(req.full_url, 503, "x", {}, None)))
     with pytest.raises(download.DownloadError, match="HTTP 503"):
         download.fetch(["https://x/a", "https://x/b"], tmp_path / "f")
+
+
+# --- final fix wave: no NVIDIA GPU on the host → no WSL environment, Colab instead --------------------
+
+def test_host_gpu_runs_nvidia_smi_on_the_host():
+    def run(cmd, **kw):
+        assert cmd[0] == "nvidia-smi"
+        return subprocess.CompletedProcess(cmd, 0, "GPU 0: NVIDIA GeForce RTX 4070 Ti (UUID: x)\n", "")
+    assert REAL_HOST_GPU(run) is True
+    assert REAL_HOST_GPU(lambda cmd, **kw: subprocess.CompletedProcess(cmd, 9, "", "")) is False
+    assert REAL_HOST_GPU(lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", "")) is False
+
+    def missing(cmd, **kw):
+        raise FileNotFoundError(cmd[0])
+    assert REAL_HOST_GPU(missing) is False
+
+    def hangs(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 1)
+    assert REAL_HOST_GPU(hangs) is False
+
+
+def test_check_all_without_gpu_makes_wsl_optional(monkeypatch):
+    st = status(wsl=False, wsl_version_ok=False, distro=False, ready=False, gpu=None, message="нет")
+    it = items(monkeypatch, st, gpu=False)
+    for name in (deps.WSL, deps.ENV):
+        assert not it[name].ok and it[name].optional and it[name].detail == deps.NO_GPU_DETAIL
+    assert deps.NO_GPU_DETAIL == "Нет видеокарты NVIDIA — обучайте в Colab (omnivoice train --colab)"
+    assert not it[deps.PREP].optional and not it[deps.FFMPEG].optional
+    assert all(i.ok for i in it.values() if not i.optional)
+
+
+def test_check_all_without_gpu_keeps_a_ready_env_ok(monkeypatch):
+    it = items(monkeypatch, status(gpu=False), gpu=False)
+    assert it[deps.ENV].ok and it[deps.WSL].ok
+
+
+def test_install_all_without_gpu_skips_wsl(monkeypatch):
+    calls, lines = [], []
+    fake_install(monkeypatch, status(wsl=False, wsl_version_ok=False, distro=False, ready=False, gpu=None),
+                 calls, prep=False, ff=False, gpu=False)
+    assert deps.install_all(lines.append) is None
+    assert calls == ["prep", "ffmpeg"]
+    assert deps.NO_GPU_DETAIL in lines
+
+
+def test_install_all_logs_ffmpeg_size(monkeypatch):
+    calls, lines = [], []
+    fake_install(monkeypatch, status(), calls, ff=False)
+    deps.install_all(lines.append)
+    assert "Скачиваю ffmpeg (~115 МБ)…" in lines

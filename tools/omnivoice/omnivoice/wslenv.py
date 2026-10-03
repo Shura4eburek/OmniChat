@@ -7,7 +7,8 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Callable
 
@@ -37,7 +38,14 @@ TIMEOUT = 60
 ERROR_CANCELLED = 1223  # UAC prompt declined
 START_FAILED = 9009  # Start-Process failed for another reason (elevated_command)
 REBOOT_MSG = ("WSL установлен — нужна перезагрузка Windows. Перезагрузи компьютер и снова нажми "
-              "«Установить зависимости»")
+              "«Установить зависимости»: после перезагрузки открой OmniVoice ярлыком на рабочем столе и нажми "
+              "«Установить зависимости» ещё раз")
+VMP_HINT = ("Включи виртуализацию в BIOS/UEFI (Intel VT-x / AMD SVM) и компонент Windows «Платформа виртуальной "
+            "машины», затем перезагрузи компьютер")
+# wsl.exe / Windows wording for «the VM can't start» (virtualization off, VMP feature missing), any UI language
+VMP_MARKERS = ("virtualization", "virtual machine platform", "virtualmachineplatform", "виртуализац",
+               "платформа виртуальной машины", "0x80370102", "hcs_e_hyperv_not_installed")
+ROOTFS_LABEL = "Скачиваю образ Ubuntu (~390 МБ)…"
 
 Run = Callable[..., subprocess.CompletedProcess]
 
@@ -58,6 +66,7 @@ class EnvStatus:
     ready: bool
     gpu: bool | None
     message: str
+    raw: str = field(default="", repr=False)  # `wsl --status` output, for the virtualization hint
 
 
 def decode(data: bytes | str | None) -> str:
@@ -122,7 +131,8 @@ def gpu_ok(run: Run = subprocess.run) -> bool:
 
 
 def status(run: Run = subprocess.run) -> EnvStatus:
-    wsl = _wsl_installed(*_run(run, ["wsl", "--status"]))
+    status_rc, status_out = _run(run, ["wsl", "--status"])
+    wsl = _wsl_installed(status_rc, status_out)
     ver = _wsl_version(*_run(run, ["wsl", "--version"])) if wsl else None
     version_ok = ver is not None and ver >= (2, 0, 0)
     try:
@@ -143,8 +153,8 @@ def status(run: Run = subprocess.run) -> EnvStatus:
     elif not ready:
         msg = f"Среда обучения WSL «{DISTRO}» не настроена или устарела — нажми «Установить зависимости»"
     else:
-        msg = f"Среда обучения WSL «{DISTRO}» готова, GPU: {'есть' if gpu else 'нет (обучение на CPU будет очень долгим)'}"
-    return EnvStatus(wsl, version_ok, distro, ready, gpu, msg)
+        msg = f"Среда обучения WSL «{DISTRO}» готова, GPU: {'есть' if gpu else 'нет — обнови драйвер NVIDIA или обучайте в Colab'}"
+    return EnvStatus(wsl, version_ok, distro, ready, gpu, msg, status_out)
 
 
 def elevated_command(wsl_args: list[str]) -> list[str]:
@@ -157,40 +167,108 @@ def elevated_command(wsl_args: list[str]) -> list[str]:
     return ["powershell", "-NoProfile", "-Command", script]
 
 
-def ensure_wsl(run: Run = subprocess.run) -> str | None:
+def install_marker() -> Path:
+    """Written after an elevated `wsl --install` (its timestamp): a second failure after a reboot is not
+    another reboot but virtualization / «Платформа виртуальной машины» being off."""
+    return cache_dir() / "wsl" / "install-attempted"
+
+
+def _boot_time() -> float | None:
+    """Unix time of the last Windows boot (None when unknown)."""
+    try:
+        import ctypes
+        ticks = ctypes.windll.kernel32.GetTickCount64
+        ticks.restype = ctypes.c_ulonglong
+        return time.time() - ticks() / 1000
+    except Exception:
+        return None
+
+
+def _marker_time() -> float | None:
+    try:
+        text = install_marker().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0  # unreadable stamp: the attempt happened, the time is unknown
+
+
+def _forget_marker() -> None:
+    try:
+        install_marker().unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _remember_install() -> None:
+    try:
+        m = install_marker()
+        m.parent.mkdir(parents=True, exist_ok=True)
+        m.write_text(f"{time.time():.0f}", encoding="utf-8")
+    except OSError:
+        pass  # only loses the BIOS hint on a later failure
+
+
+def needs_vmp(*outputs: str) -> bool:
+    text = " ".join(outputs).lower()
+    return any(k in text for k in VMP_MARKERS)
+
+
+def _with_vmp(msg: str, *outputs: str) -> str:
+    return f"{msg}\n{VMP_HINT}" if needs_vmp(*outputs) else msg
+
+
+def ensure_wsl(run: Run = subprocess.run, boot_time: Callable[[], float | None] = _boot_time) -> str | None:
     """Install (or update) WSL. None when WSL is usable, REBOOT_MSG when Windows needs a restart first."""
     st = status(run)
     if st.wsl and st.wsl_version_ok:
+        _forget_marker()
         return None
+    install = not st.wsl
+    if install and (since := _marker_time()) is not None:
+        booted = boot_time()
+        if booted is not None and booted < since:
+            return _with_vmp(REBOOT_MSG, st.raw)  # the reboot asked for last time hasn't happened yet
+        _forget_marker()  # the next press installs again (e.g. after fixing BIOS)
+        detail = f"\nВывод wsl --status: {st.raw.strip()}" if st.raw.strip() else ""
+        raise WslError("WSL установлен, но не запускается и после перезагрузки — скорее всего, выключена "
+                       f"виртуализация. {VMP_HINT}, и снова нажми «Установить зависимости»{detail}")
     args = ["--update"] if st.wsl else ["--install", "--no-distribution"]
     rc, out = _run(run, elevated_command(args), timeout=None)
     if rc == ERROR_CANCELLED:
         raise WslError("Установка WSL отменена: подтверди запрос администратора (UAC) и повтори")
     if rc is None or rc == START_FAILED:
-        raise WslError("Не удалось запустить установку WSL от имени администратора"
-                       + (f": {out.strip()}" if out.strip() else "")
-                       + f". Открой PowerShell от администратора и выполни «wsl {' '.join(args)}»")
+        raise WslError(_with_vmp("Не удалось запустить установку WSL от имени администратора"
+                                 + (f": {out.strip()}" if out.strip() else "")
+                                 + f". Открой PowerShell от администратора и выполни «wsl {' '.join(args)}»",
+                                 st.raw, out))
+    if install and rc in (0, 3010):
+        _remember_install()
+    # 3010 = ERROR_SUCCESS_REBOOT_REQUIRED. After --install the reboot is pending even if wsl --status answers.
+    if rc == 3010 or (install and rc == 0):
+        return _with_vmp(REBOOT_MSG, st.raw, out)
     after = status(run)
     if after.wsl and after.wsl_version_ok:
         return None
-    if rc in (0, 3010):  # 3010 = ERROR_SUCCESS_REBOOT_REQUIRED
-        return REBOOT_MSG
-    raise WslError(f"Не удалось установить WSL (код {rc}). Открой PowerShell от администратора и выполни "
-                   f"«wsl {' '.join(args)}», затем повтори")
+    if rc == 0:
+        return _with_vmp(REBOOT_MSG, st.raw, out, after.raw)
+    raise WslError(_with_vmp(f"Не удалось установить WSL (код {rc}). Открой PowerShell от администратора и "
+                             f"выполни «wsl {' '.join(args)}», затем повтори", st.raw, out, after.raw))
+
+
+def rootfs_path() -> Path:
+    return cache_dir() / "wsl" / ROOTFS_NAME
 
 
 def download_rootfs(progress: Callable[[int, int], None] | None = None) -> Path:
-    return download.fetch(ROOTFS_URLS, cache_dir() / "wsl" / ROOTFS_NAME, progress=progress,
+    return download.fetch(ROOTFS_URLS, rootfs_path(), progress=progress,
                           sha256=ROOTFS_SHA256, what="образ Ubuntu 24.04 для WSL", error=WslError)
 
 
 def _hint(out: str) -> str:
-    text = out.strip() or "нет вывода"
-    if any(k in out for k in ("HCS_E_HYPERV_NOT_INSTALLED", "VirtualMachinePlatform", "virtualization",
-                              "виртуализац", "0x80370102")):
-        text += ("\nВключи виртуализацию в BIOS/UEFI и компонент Windows «Платформа виртуальной машины», "
-                 "затем перезагрузи компьютер")
-    return text
+    return _with_vmp(out.strip() or "нет вывода", out)
 
 
 def import_distro(tar: Path, run: Run = subprocess.run) -> None:
@@ -250,12 +328,17 @@ def ensure_ready(on_line: Callable[[str], None], progress: Callable[[int, int], 
             raise RebootRequired(msg)
         st = status(run)
     if not st.distro:
+        on_line(ROOTFS_LABEL)
         import_distro(download_rootfs(progress=progress), run=run)
     if not st.ready:
         provision(on_line, run=run, popen=popen)
     st = status(run)
     if not st.ready:
         raise WslError(f"Среда WSL «{DISTRO}» настроена, но метка готовности не найдена — повтори «Установить зависимости»")
+    try:  # the distro has its own disk now; the tar only spares a rare re-download (download_rootfs refetches)
+        rootfs_path().unlink(missing_ok=True)
+    except OSError:
+        pass
     return st
 
 
