@@ -10,6 +10,7 @@ from omnivoice import deps, slicer, wslenv
 
 @pytest.fixture(autouse=True)
 def cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(deps, "prep_ok", lambda: False)
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path / "cache"))
     monkeypatch.setattr(deps.shutil, "which", lambda n: None)
 
@@ -103,7 +104,7 @@ def test_install_prep_repo_checkout(monkeypatch):
         return FakePopen(cmd)
 
     deps.install_prep(got.append, popen=pop)
-    assert cmds[0] == ["C:/uv.exe", "sync", "--all-extras", "--project", "R"]
+    assert cmds[0] == ["C:/uv.exe", "sync", "--all-extras", "--inexact", "--project", "R"]
     assert got == ["line1", "line2"]
 
 
@@ -233,3 +234,110 @@ def test_slicer_missing_ffmpeg_points_to_setup(monkeypatch):
     monkeypatch.setattr(slicer.deps, "ffmpeg_path", lambda: None)
     with pytest.raises(RuntimeError, match="Установить зависимости.*omnivoice setup"):
         slicer._decode(Path("a.mp4"))
+
+
+def test_install_prep_skips_when_already_installed(monkeypatch):
+    monkeypatch.setattr(deps, "prep_ok", lambda: True)
+    got = []
+    deps.install_prep(got.append, popen=lambda *a, **k: pytest.fail("uv"))
+    assert got == ["Пакеты уже установлены"]
+
+
+def test_install_prep_invalidates_import_caches(monkeypatch):
+    monkeypatch.setattr(deps.shutil, "which", lambda n: "uv")
+    called = []
+    monkeypatch.setattr(deps.importlib, "invalidate_caches", lambda: called.append(1))
+    deps.install_prep(lambda l: None, popen=FakePopen)
+    assert called == [1]
+
+
+@pytest.mark.parametrize("text", ["error: Access is denied. (os error 5)", "failed (OS error 5)"])
+def test_install_prep_locked_files_hint(monkeypatch, text):
+    monkeypatch.setattr(deps.shutil, "which", lambda n: "uv")
+
+    class Locked(FakePopen):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self.stdout = io.StringIO(text + " ")
+            self.returncode = 2
+
+    with pytest.raises(deps.DepsError, match="Файлы заняты запущенной программой.*Установить omnivoice.bat"):
+        deps.install_prep(lambda l: None, popen=Locked)
+
+
+def test_install_prep_popen_oserror(monkeypatch):
+    monkeypatch.setattr(deps.shutil, "which", lambda n: "uv")
+
+    def boom(*a, **k):
+        raise OSError("nope")
+
+    with pytest.raises(deps.DepsError, match="Не удалось запустить uv"):
+        deps.install_prep(lambda l: None, popen=boom)
+
+
+def test_ffmpeg_env_prepends_local_dir_only_when_used(monkeypatch):
+    monkeypatch.setenv("PATH", "P")
+    assert deps.ffmpeg_env()["PATH"] == "P"
+    deps.ffmpeg_dir().mkdir(parents=True)
+    (deps.ffmpeg_dir() / "ffmpeg.exe").write_bytes(b"x")
+    assert deps.ffmpeg_env()["PATH"] == str(deps.ffmpeg_dir()) + deps.os.pathsep + "P"
+    monkeypatch.setattr(deps.shutil, "which", lambda n: "C:/sys/ffmpeg.exe")  # system ffmpeg wins
+    assert deps.ffmpeg_env()["PATH"] == "P"
+
+
+def test_demucs_gets_ffmpeg_env(monkeypatch, tmp_path):
+    monkeypatch.setattr(slicer.deps, "ffmpeg_env", lambda: {"PATH": "X"})
+    seen = {}
+    monkeypatch.setattr(slicer.subprocess, "run", lambda cmd, **kw: seen.update(kw) or subprocess.CompletedProcess(cmd, 0))
+    with pytest.raises(RuntimeError, match="vocals"):  # fake demucs wrote nothing; only the call matters
+        slicer._isolate(Path("a.mp4"), tmp_path)
+    assert seen["env"] == {"PATH": "X"}
+
+
+def test_extract_swap_oserror_is_russian(tmp_path, monkeypatch):
+    z = tmp_path / "f.zip"
+    make_zip(z)
+
+    def boom(*a):
+        raise PermissionError("busy")
+
+    monkeypatch.setattr(deps.os, "replace", boom)
+    with pytest.raises(deps.DepsError, match="Не удалось обновить папку ffmpeg"):
+        deps.extract_ffmpeg(z)
+
+
+class _Resp:
+    def __init__(self, data):
+        self.data, self.headers, self.status = data, {"Content-Length": str(len(data))}, 200
+
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+    def read(self, n=-1):
+        d, self.data = self.data, b""
+        return d
+
+
+@pytest.mark.parametrize("fail", ["http500", "urlerror", "timeout"])
+def test_download_falls_through_on_5xx_and_network_errors(tmp_path, monkeypatch, fail):
+    import urllib.error
+    from omnivoice import download
+
+    def urlopen(req, timeout=None):
+        if "first" in req.full_url:
+            raise {"http500": urllib.error.HTTPError(req.full_url, 503, "x", {}, None),
+                   "urlerror": urllib.error.URLError("dns"), "timeout": TimeoutError()}[fail]
+        return _Resp(b"ok")
+
+    monkeypatch.setattr(download.urllib.request, "urlopen", urlopen)
+    out = download.fetch(["https://x/first", "https://x/second"], tmp_path / "f")
+    assert out.read_bytes() == b"ok"
+
+
+def test_download_last_mirror_failure_still_raises(tmp_path, monkeypatch):
+    import urllib.error
+    from omnivoice import download
+    monkeypatch.setattr(download.urllib.request, "urlopen",
+                        lambda req, timeout=None: (_ for _ in ()).throw(urllib.error.HTTPError(req.full_url, 503, "x", {}, None)))
+    with pytest.raises(download.DownloadError, match="HTTP 503"):
+        download.fetch(["https://x/a", "https://x/b"], tmp_path / "f")

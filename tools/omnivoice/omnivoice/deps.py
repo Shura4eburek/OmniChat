@@ -65,9 +65,13 @@ def extract_ffmpeg(zip_path: Path, dest: Path | None = None) -> Path:
                     raise DepsError(f"В архиве ffmpeg нет {exe}. Удали {zip_path} и повтори установку")
                 with z.open(names[exe]) as src, (tmp / exe).open("wb") as out:
                     shutil.copyfileobj(src, out)
-        if dest.exists():
-            shutil.rmtree(dest)
-        os.replace(tmp, dest)
+        try:
+            if dest.exists():
+                shutil.rmtree(dest)
+            os.replace(tmp, dest)
+        except OSError as e:
+            raise DepsError(f"Не удалось обновить папку ffmpeg {dest}: {e}. Закрой программы, которые "
+                            f"используют ffmpeg, и повтори установку") from e
     except zipfile.BadZipFile as e:
         raise DepsError(f"Архив ffmpeg повреждён ({zip_path}). Удали файл и повтори установку") from e
     finally:
@@ -83,6 +87,15 @@ def install_ffmpeg(progress: Callable[[int, int], None] | None = None) -> str:
     extract_ffmpeg(z)
     z.unlink(missing_ok=True)
     return str(ffmpeg_dir() / "ffmpeg.exe")
+
+
+def ffmpeg_env() -> dict[str, str]:
+    """os.environ for child processes (demucs...) that call ffmpeg/ffprobe by name: the cache copy joins PATH."""
+    env = dict(os.environ)
+    local = ffmpeg_dir()
+    if (local / "ffmpeg.exe").is_file() and ffmpeg_path() == str(local / "ffmpeg.exe"):
+        env["PATH"] = str(local) + os.pathsep + env.get("PATH", "")
+    return env
 
 
 def prep_ok() -> bool:
@@ -113,24 +126,37 @@ def find_uv() -> str | None:
     return None
 
 
+LOCKED_MARKERS = ("access is denied", "os error 5")
+LOCKED_MSG = ("Файлы заняты запущенной программой — закрой интерфейс omnivoice и запусти установку из "
+              "«Установить omnivoice.bat»")
+
+
 def install_prep(on_line: Callable[[str], None], popen=subprocess.Popen) -> None:
+    if prep_ok():
+        on_line("Пакеты уже установлены")
+        return
     uv = find_uv()
     if not uv:
         raise DepsError("Не найден uv. Установи его (в PowerShell: irm https://astral.sh/uv/install.ps1 | iex; "
                         "подробнее https://docs.astral.sh/uv/getting-started/installation/) и повтори установку")
     root = repo_root()
-    cmd = ([uv, "sync", "--all-extras", "--project", str(root)] if root
+    cmd = ([uv, "sync", "--all-extras", "--inexact", "--project", str(root)] if root
            else [uv, "pip", "install", "--python", sys.executable, "omnivoice[prep,ui]"])
     try:
         p = popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
     except OSError as e:
         raise DepsError(f"Не удалось запустить uv ({uv}): {e}") from e
+    seen = []
     for line in p.stdout or ():
         if line := line.rstrip():
+            seen.append(line)
             on_line(line)
     if p.wait() != 0:
+        if any(m in " ".join(seen).lower() for m in LOCKED_MARKERS):
+            raise DepsError(LOCKED_MSG)
         raise DepsError(f"Установка пакетов (uv) завершилась с ошибкой (код {p.returncode}). Лог выше; "
                         f"повтори или выполни вручную: {' '.join(cmd)}")
+    importlib.invalidate_caches()
 
 
 def check_all(run=subprocess.run) -> list[Item]:

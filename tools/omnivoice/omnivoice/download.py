@@ -69,12 +69,14 @@ def _get(u: str, part: Path, progress, what: str, error, last: bool) -> None:
         except urllib.error.HTTPError as e:
             if e.code == 416 and done:
                 return  # .part is already complete
-            if e.code in (404, 410) and not last:
+            if (e.code in (404, 410) or e.code >= 500) and not last:
                 raise _Missing() from e
             raise error(f"Не удалось скачать {what} {u}: HTTP {e.code}. Повтори команду") from e
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             if attempt == 0:
                 continue
+            if not last:
+                raise _Missing() from e  # mirror unreachable: try the next one
             raise error(f"Не удалось скачать {what} {u}: {e}. Проверь интернет и повтори команду "
                         f"(загрузка продолжится с места остановки)") from e
         if not length or done == total:

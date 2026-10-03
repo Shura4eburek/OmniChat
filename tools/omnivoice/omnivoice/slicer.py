@@ -9,17 +9,19 @@ from omnivoice.segments import plan_segments
 
 SR = audio.SR
 
-def _need_ffmpeg() -> None:
-    if not deps.ffmpeg_path():
+def _need_ffmpeg() -> str:
+    ff = deps.ffmpeg_path()
+    if not ff:
         raise RuntimeError("ffmpeg не найден — нажми «Установить зависимости» (omnivoice setup)")
+    return ff
 
 def _tail(b) -> str:
     return (b or b"").decode("utf-8", errors="replace").strip()[-300:] if isinstance(b, (bytes, bytearray)) else str(b or "").strip()[-300:]
 
 def _decode(path: Path, label: str | None = None) -> np.ndarray:
-    _need_ffmpeg()
+    ff = _need_ffmpeg()
     try:
-        raw = subprocess.run([deps.ffmpeg_path() or "ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
+        raw = subprocess.run([ff, "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
                              capture_output=True, check=True).stdout
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg не смог прочитать {label or Path(path).name}: {_tail(e.stderr)}") from e
@@ -28,7 +30,7 @@ def _decode(path: Path, label: str | None = None) -> np.ndarray:
 def _isolate(path: Path, out: Path) -> Path:
     try:
         subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs", "-o", str(out), str(path)],
-                       capture_output=True, check=True)
+                       capture_output=True, check=True, env=deps.ffmpeg_env())
     except subprocess.CalledProcessError as e:
         err = _tail(e.stderr)
         if "No module named" in err:
