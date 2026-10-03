@@ -579,3 +579,8 @@ def test_setup_runner_runs_a_custom_job_with_its_own_done_text():
     assert r.status == "error" and "Перенос не удался: Мало места" in r.status_html()
     r.start(); r.join(5)  # the next plain run uses install_fn and the usual wording again
     assert r.status == "error" and S.SETUP_ERROR in r.status_html()
+
+def test_data_dir_hint_has_single_colon(tmp_path):
+    from omnivoice.ui import helpers
+    out = helpers.data_dir_html(tmp_path, "config")
+    assert "::" not in out and tmp_path.drive in out

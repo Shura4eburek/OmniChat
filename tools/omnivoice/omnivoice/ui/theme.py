@@ -225,7 +225,9 @@ ul.option-list li.item.selected {{ color:var(--ac); }}
 
 /* a button next to a field lines up with the field, not the whole row height */
 .hud-section .row:has(> button) {{ align-items:flex-end !important; }}
-.hud-section .row > button {{ align-self:flex-end !important; min-height:40px; max-height:42px; }}
+.hud-section .row > button {{ align-self:flex-end !important; min-height:40px; max-height:42px;
+                             white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+                             margin-bottom:10px; }}  /* fields sit inside a block with 10 px padding */
 
 /* clickable things look clickable */
 button, .st, .hud-nav fieldset label, .label-wrap, input[type=checkbox], label:has(> input[type=checkbox]) {{ cursor:pointer !important; }}

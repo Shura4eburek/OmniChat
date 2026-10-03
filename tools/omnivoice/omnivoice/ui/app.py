@@ -188,7 +188,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         with gr.Row(equal_height=True):
                             data_dir_box = gr.Textbox(str(dd0), label=S.DATA_DIR, info=S.DATA_DIR_INFO, scale=4,
                                                       interactive=dd_source != "env")
-                            data_dir_btn = gr.Button(S.DATA_DIR_MOVE, scale=1, interactive=dd_source != "env")
+                            data_dir_btn = gr.Button(S.DATA_DIR_MOVE, scale=1, min_width=220, interactive=dd_source != "env")
                         data_dir_hint = gr.HTML(data_dir_html(dd0, dd_source))
                         setup_btn = gr.Button(S.SETUP_INSTALL, variant="primary")
                         setup_progress = gr.HTML(setup.progress.html())
