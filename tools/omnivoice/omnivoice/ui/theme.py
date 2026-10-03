@@ -110,7 +110,7 @@ CSS = f"""
 :root {{ --ac:{AC}; --acd:{ACD}; --flag:{FLAG}; --ok:{OK}; --bad:{BAD}; --muted:{MUTED}; }}
 footer {{ display:none !important; }}
 .form {{ background:transparent !important; border:0 !important; gap:10px !important; }}
-.gradio-container {{ max-width: 1400px !important; }}
+.gradio-container {{ max-width: 1400px !important; margin-left:auto !important; margin-right:auto !important; }}
 
 /* the whole app sits in one HUD frame with corner brackets */
 .hud-panel {{ border:1px solid var(--ac) !important; position:relative; overflow:visible !important;
@@ -183,6 +183,7 @@ button.lg, button.md, button.sm {{ letter-spacing:1px; text-transform:uppercase;
 .ck-row {{ display:grid; grid-template-columns:22px minmax(150px, 220px) 1fr; gap:10px; align-items:baseline;
           padding:6px 10px; border-bottom:1px dashed #2a2430; font-size:13px; }}
 .ck-row:last-child {{ border-bottom:0; }}
+.ck-row.muted {{ display:block; color:var(--muted); }}
 .ck-mark {{ font-weight:600; }}
 .ck-row.ok .ck-mark, .ck-row.ok .ck-name {{ color:var(--ok); }}
 .ck-row.miss .ck-mark, .ck-row.miss .ck-name {{ color:var(--bad); }}
