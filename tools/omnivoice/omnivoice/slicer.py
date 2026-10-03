@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
-from omnivoice import audio, dataset
+from omnivoice import audio, dataset, deps
 from omnivoice.dataset import Segment
 from omnivoice.hints import NEED_PREP
 from omnivoice.segments import plan_segments
@@ -10,8 +10,8 @@ from omnivoice.segments import plan_segments
 SR = audio.SR
 
 def _need_ffmpeg() -> None:
-    if not shutil.which("ffmpeg"):
-        raise RuntimeError("ffmpeg не найден. Установи ffmpeg и добавь в PATH (winget install ffmpeg).")
+    if not deps.ffmpeg_path():
+        raise RuntimeError("ffmpeg не найден — нажми «Установить зависимости» (omnivoice setup)")
 
 def _tail(b) -> str:
     return (b or b"").decode("utf-8", errors="replace").strip()[-300:] if isinstance(b, (bytes, bytearray)) else str(b or "").strip()[-300:]
@@ -19,7 +19,7 @@ def _tail(b) -> str:
 def _decode(path: Path, label: str | None = None) -> np.ndarray:
     _need_ffmpeg()
     try:
-        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
+        raw = subprocess.run([deps.ffmpeg_path() or "ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
                              capture_output=True, check=True).stdout
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"ffmpeg не смог прочитать {label or Path(path).name}: {_tail(e.stderr)}") from e

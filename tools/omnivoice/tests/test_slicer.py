@@ -10,7 +10,7 @@ def test_slice_writes_segments_and_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setattr(slicer, "_decode", lambda path: x)
     monkeypatch.setattr(slicer, "_speech", lambda y: [(1.0, 4.0)])
     monkeypatch.setattr(slicer, "_normalize", lambda y: y)
-    monkeypatch.setattr(slicer.shutil, "which", lambda n: "ffmpeg")
+    monkeypatch.setattr(slicer.deps, "ffmpeg_path", lambda: "ffmpeg")
     assert slicer.slice_project(p) == 1
     assert slicer.slice_project(p) == 0
     segs = dataset.load(p)
@@ -27,7 +27,7 @@ def _setup(tmp_path, monkeypatch, names=("a.mp4",)):
     x = np.concatenate([np.zeros(sr), 0.2 * np.sin(np.arange(3 * sr) / 10), np.zeros(sr)]).astype(np.float32)
     monkeypatch.setattr(slicer, "_speech", lambda y: [(1.0, 4.0)])
     monkeypatch.setattr(slicer, "_normalize", lambda y: y)
-    monkeypatch.setattr(slicer.shutil, "which", lambda n: "ffmpeg")
+    monkeypatch.setattr(slicer.deps, "ffmpeg_path", lambda: "ffmpeg")
     return p, x
 
 
