@@ -5,6 +5,7 @@ import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.util.Identifier;
 import org.mamoru.omnichat.voice.VoiceMeta;
+import org.mamoru.omnichat.voice.VoiceMetaReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +50,9 @@ public final class PortraitTextures {
     }
 
     private static NativeImage decode(VoiceMeta meta) {
-        if (meta.portrait().length > 0) {
+        if (meta.portrait().length > 0 && !VoiceMetaReader.isValidPortrait(meta.portrait())) {
+            LOGGER.warn("Bad portrait for voice '{}', using a generated one: not a 16x16/32x32 PNG", meta.model());
+        } else if (meta.portrait().length > 0) {
             try {
                 return NativeImage.read(meta.portrait());
             } catch (IOException | RuntimeException e) {

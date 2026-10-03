@@ -17,6 +17,7 @@
   "omnichat.ui.voice.failed": "Download failed: %s",
   "omnichat.ui.voice.download": "Download · %s",
   "omnichat.ui.voice.retry": "Retry download",
+  "omnichat.ui.voice.download_all": "Download all · %s",
   "omnichat.ui.voice.preview_hint": "RMB: listen",
   "omnichat.ui.voice.preview_remote": "Download to listen",
   "omnichat.ui.voice.speaker": "Speaker",

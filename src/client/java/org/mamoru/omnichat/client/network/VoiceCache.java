@@ -46,10 +46,6 @@ public class VoiceCache {
         return voiceMap.get(playerUuid);
     }
 
-    public boolean isConnectedToOmnichatServer() {
-        return !catalog.isEmpty();
-    }
-
     public void clear() {
         catalog = List.of();
         voiceMap.clear();

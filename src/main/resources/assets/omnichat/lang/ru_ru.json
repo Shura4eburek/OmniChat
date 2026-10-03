@@ -17,6 +17,7 @@
   "omnichat.ui.voice.failed": "Загрузка не удалась: %s",
   "omnichat.ui.voice.download": "Скачать · %s",
   "omnichat.ui.voice.retry": "Скачать снова",
+  "omnichat.ui.voice.download_all": "Скачать все · %s",
   "omnichat.ui.voice.preview_hint": "ПКМ: прослушать",
   "omnichat.ui.voice.preview_remote": "Скачай, чтобы прослушать",
   "omnichat.ui.voice.speaker": "Спикер",

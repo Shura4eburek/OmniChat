@@ -88,14 +88,15 @@ public final class VoiceCatalog {
     }
 
     /**
-     * What the Voice tab shows, without array identity: used to decide whether to rebuild.
-     * (VoiceMeta holds a byte[], so record equality would never match.)
+     * What the Voice tab's widgets depend on, without array identity: used to decide whether to rebuild.
+     * (VoiceMeta holds a byte[], so record equality would never match.) Download progress is left out:
+     * it is drawn live, and rebuilding on every percent would drop focus and slider drags.
      */
     public static List<String> signature(List<Entry> entries) {
         List<String> out = new ArrayList<>(entries.size());
         for (Entry e : entries) {
             out.add(e.meta().model() + "|" + e.meta().name() + "|" + e.state() + "|"
-                    + Math.round(e.progress() * 100) + "|" + e.failure() + "|" + e.onServer());
+                    + e.failure() + "|" + e.onServer());
         }
         return out;
     }

@@ -67,6 +67,15 @@ class VoiceCatalogTest {
     }
 
     @Test
+    void signatureIgnoresDownloadProgress() {
+        // Progress is drawn live; a rebuild per percent would drop focus and slider drags
+        VoiceMeta a = new VoiceMeta("denis", "D", "", "", "", "", 1, new byte[0]);
+        var x = VoiceCatalog.build(List.of(a), List.of(), Map.of("denis", 0.1f), Map.of());
+        var y = VoiceCatalog.build(List.of(a), List.of(), Map.of("denis", 0.9f), Map.of());
+        assertEquals(VoiceCatalog.signature(x), VoiceCatalog.signature(y));
+    }
+
+    @Test
     void selectionFallsBackWhenVoiceRemoved() {
         var e = VoiceCatalog.build(List.of(m("denis"), m("irina")), List.of(), Map.of(), Map.of());
         assertEquals("irina", VoiceCatalog.selectOrFallback(e, "irina", "denis"));

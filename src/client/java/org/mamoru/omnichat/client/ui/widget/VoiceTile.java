@@ -16,17 +16,21 @@ import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.mamoru.omnichat.client.ui.VoiceCatalog;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Portrait tile. LMB/Enter selects, RMB previews. Badge: ✓ active, ↓ remote, % downloading, ! failed. */
 public class VoiceTile extends ClickableWidget {
     private final VoiceCatalog.Entry entry;
+    // Latest catalog entry for this model: download progress changes without a rebuild
+    private final Supplier<VoiceCatalog.Entry> live;
     private final boolean selected, activeVoice;
     private final Consumer<String> onSelect, onPreview;
 
-    public VoiceTile(int x, int y, VoiceCatalog.Entry entry, boolean selected, boolean activeVoice,
-                     Consumer<String> onSelect, Consumer<String> onPreview) {
+    public VoiceTile(int x, int y, VoiceCatalog.Entry entry, Supplier<VoiceCatalog.Entry> live, boolean selected,
+                     boolean activeVoice, Consumer<String> onSelect, Consumer<String> onPreview) {
         super(x, y, HudLayout.TILE, HudLayout.TILE, Text.literal(entry.meta().name()));
         this.entry = entry;
+        this.live = live;
         this.selected = selected;
         this.activeVoice = activeVoice;
         this.onSelect = onSelect;
@@ -50,12 +54,17 @@ public class VoiceTile extends ClickableWidget {
         drawBadge(ctx, x + s, y + s);
     }
 
+    public String model() {
+        return entry.meta().model();
+    }
+
     private void drawBadge(DrawContext ctx, int right, int bottom) {
+        VoiceCatalog.Entry now = live.get();
         String text;
         int color;
-        switch (entry.state()) {
+        switch (now.state()) {
             case DOWNLOADING -> {
-                text = entry.progress() < 0 ? "…" : Math.round(entry.progress() * 100) + "%";
+                text = now.progress() < 0 ? "…" : Math.round(now.progress() * 100) + "%";
                 color = HudTheme.WARN;
             }
             case REMOTE -> { text = "↓"; color = HudTheme.WARN; }

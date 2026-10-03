@@ -33,6 +33,14 @@ class VoiceMetaReaderTest {
     }
 
     @Test
+    void missingFolderGivesBareMetaWithZeroSize() {
+        VoiceMeta m = VoiceMetaReader.read(dir.resolve("gone"), "ghost");
+        assertEquals("ghost", m.name());
+        assertEquals(0, m.sizeBytes());
+        assertEquals(0, m.portrait().length);
+    }
+
+    @Test
     void readsAndTruncatesFields() throws IOException {
         String longName = "N".repeat(50);
         Files.writeString(dir.resolve("voice.json"),

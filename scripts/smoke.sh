@@ -88,6 +88,8 @@ set_opt() {  # set_opt <options.txt> <key> <value>
 }
 set_opt "$ROOT/run/options.txt" pauseOnLostFocus false
 set_opt "$LIS/options.txt" pauseOnLostFocus false
+# the vanilla tutorial toast would cover the HUD screenshots
+set_opt "$LIS/options.txt" tutorialStep none
 
 # --- 1. server
 cleanup
@@ -156,7 +158,7 @@ listener_pid_ui=$(mcproc pid "dli\.env=client.*username Listener")
   drive "key 0x33" >/dev/null; sleep 0.5
   um win shot "$OUT/ui-bubbles.png" --hwnd "$listener_hwnd" --scale 0.5 >/dev/null
   drive "key 0x1B" >/dev/null
-}
+} || echo "[smoke] ui step skipped (couldn't focus Listener)"
 
 # --- 6. log check
 # dev clients run with offline accounts: authlib 401 and Realms errors are expected noise

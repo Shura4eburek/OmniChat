@@ -28,7 +28,11 @@ public class VoiceTab implements HudTab {
     private static int scrollRow;
 
     private OmnichatScreen screen;
+    // entries: what the widgets were built from; live: latest catalog, refreshed in tick() for progress
     private List<VoiceCatalog.Entry> entries = List.of();
+    private List<VoiceCatalog.Entry> live = List.of();
+    private HudLayout.Rect gridRect;
+    private int maxScrollRow;
     private int ticks;
 
     @Override
@@ -36,13 +40,22 @@ public class VoiceTab implements HudTab {
         this.screen = screen;
         OmnichatConfig config = OmnichatClient.getConfig();
         entries = VoiceCatalog.current();
+        live = entries;
         selected = VoiceCatalog.selectOrFallback(entries, selected, config.getModelPath());
+        gridRect = null;
         if (entries.isEmpty()) return;
 
         var g = l.grid();
-        int rowsVisible = Math.max(1, (g.h() + HudLayout.TILE_GAP) / (HudLayout.TILE + HudLayout.TILE_GAP));
+        gridRect = g;
+        List<String> pending = entries.stream()
+                .filter(e -> e.state() == VoiceCatalog.State.REMOTE || e.state() == VoiceCatalog.State.FAILED)
+                .map(e -> e.meta().model()).toList();
+        // "Download all" sits under the grid; tiles only use the rows above it
+        int gridH = pending.isEmpty() ? g.h() : g.h() - 18;
+        int rowsVisible = Math.max(1, (gridH + HudLayout.TILE_GAP) / (HudLayout.TILE + HudLayout.TILE_GAP));
         int totalRows = (entries.size() + l.columns() - 1) / l.columns();
-        scrollRow = Math.clamp(scrollRow, 0, Math.max(0, totalRows - rowsVisible));
+        maxScrollRow = Math.max(0, totalRows - rowsVisible);
+        scrollRow = Math.clamp(scrollRow, 0, maxScrollRow);
         for (int i = 0; i < entries.size(); i++) {
             int row = i / l.columns() - scrollRow, col = i % l.columns();
             if (row < 0 || row >= rowsVisible) continue;
@@ -50,7 +63,17 @@ public class VoiceTab implements HudTab {
             int x = g.x() + col * (HudLayout.TILE + HudLayout.TILE_GAP);
             int y = g.y() + row * (HudLayout.TILE + HudLayout.TILE_GAP);
             boolean active = e.meta().model().equals(config.getModelPath());
-            screen.add(new VoiceTile(x, y, e, e.meta().model().equals(selected), active, this::select, this::preview));
+            String model = e.meta().model();
+            screen.add(new VoiceTile(x, y, e, () -> liveEntry(model, e), model.equals(selected), active,
+                    this::select, this::preview));
+        }
+        if (!pending.isEmpty()) {
+            screen.add(new HudButton(g.x(), g.bottom() - 16, g.w(), 16,
+                    Text.translatable("omnichat.ui.voice.download_all", pending.size()), () -> {
+                        // The manager queues them and downloads one at a time
+                        for (String model : pending) ModelDownloadManager.getInstance().requestDownload(model);
+                        screen.rebuild();
+                    }));
         }
 
         VoiceCatalog.Entry sel = selectedEntry();
@@ -79,6 +102,13 @@ public class VoiceTab implements HudTab {
             default -> {
             }
         }
+    }
+
+    private VoiceCatalog.Entry liveEntry(String model, VoiceCatalog.Entry fallback) {
+        for (VoiceCatalog.Entry e : live) {
+            if (e.meta().model().equals(model)) return e;
+        }
+        return fallback;
     }
 
     private VoiceCatalog.Entry selectedEntry() {
@@ -123,17 +153,25 @@ public class VoiceTab implements HudTab {
 
     @Override
     public void tick() {
-        // Downloads progress, reloads and finished installs show up without reopening
+        // Progress is just redrawn from `live`; reloads, new states and finished installs rebuild the
+        // widgets, but never mid-drag (a rebuild would drop the slider being dragged)
         if (++ticks % 10 == 0) {
-            List<VoiceCatalog.Entry> now = VoiceCatalog.current();
-            if (!VoiceCatalog.signature(now).equals(VoiceCatalog.signature(entries))) screen.rebuild();
+            live = VoiceCatalog.current();
+            if (!screen.isDragging() && !VoiceCatalog.signature(live).equals(VoiceCatalog.signature(entries))) {
+                screen.rebuild();
+            }
         }
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double vertical) {
-        scrollRow = Math.max(0, scrollRow - (int) Math.signum(vertical));
-        screen.rebuild();
+        if (gridRect == null || mouseX < gridRect.x() || mouseX >= gridRect.right()
+                || mouseY < gridRect.y() || mouseY >= gridRect.bottom()) return false;
+        int row = Math.clamp(scrollRow - (int) Math.signum(vertical), 0, maxScrollRow);
+        if (row != scrollRow) {
+            scrollRow = row;
+            screen.rebuild();
+        }
         return true;
     }
 
@@ -150,8 +188,9 @@ public class VoiceTab implements HudTab {
             }
             return;
         }
-        VoiceCatalog.Entry e = selectedEntry();
-        if (e == null) return;
+        VoiceCatalog.Entry sel = selectedEntry();
+        if (sel == null) return;
+        VoiceCatalog.Entry e = liveEntry(sel.meta().model(), sel);
 
         int big = 40;
         Identifier portrait = PortraitTextures.get(e.meta());

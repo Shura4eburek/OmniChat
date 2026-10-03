@@ -1,5 +1,6 @@
 package org.mamoru.omnichat.client.ui.screen;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Drawable;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.Element;
@@ -13,6 +14,7 @@ import org.mamoru.omnichat.client.tts.VoicePreview;
 import org.mamoru.omnichat.client.ui.HudLayout;
 import org.mamoru.omnichat.client.ui.HudTheme;
 import org.mamoru.omnichat.client.ui.widget.TabBar;
+import org.mamoru.omnichat.client.ui.widget.VoiceTile;
 
 import java.util.List;
 
@@ -46,8 +48,25 @@ public class OmnichatScreen extends Screen {
         return addDrawableChild(widget);
     }
 
+    /** Re-creates all widgets, keeping keyboard focus on the same voice tile (or the same slot). */
     public void rebuild() {
+        Element focused = getFocused();
+        int focusedIndex = focused == null ? -1 : children().indexOf(focused);
         clearAndInit();
+        refocus(focused, focusedIndex);
+    }
+
+    private void refocus(Element focused, int focusedIndex) {
+        if (focused == null) return;
+        String focusedModel = focused instanceof VoiceTile t ? t.model() : null;
+        Element target = null;
+        for (Element e : children()) {
+            if (focusedModel != null && e instanceof VoiceTile t && t.model().equals(focusedModel)) target = e;
+        }
+        if (target == null && focusedModel == null && focusedIndex >= 0 && focusedIndex < children().size()) {
+            target = children().get(focusedIndex);
+        }
+        if (target != null) setFocused(target);
     }
 
     private void selectTab(int tab) {
@@ -89,6 +108,20 @@ public class OmnichatScreen extends Screen {
     @Override
     public void tick() {
         tabs[lastTab].tick();
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        Element before = getFocused();
+        int beforeIndex = before == null ? -1 : children().indexOf(before);
+        boolean handled = super.mouseClicked(click, doubled);
+        // A click handler that rebuilt the screen gets its old, removed widget focused afterwards
+        Element after = getFocused();
+        if (after != null && !children().contains(after)) {
+            setFocused(null);
+            refocus(after, after == before ? beforeIndex : -1);
+        }
+        return handled;
     }
 
     @Override

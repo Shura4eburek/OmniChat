@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,7 +95,8 @@ public final class VoiceMetaReader {
                     return 0;
                 }
             }).sum();
-        } catch (IOException e) {
+        } catch (IOException | UncheckedIOException | SecurityException e) {
+            // Files.walk fails lazily (unreadable subfolder, folder removed mid-walk)
             return 0;
         }
     }
