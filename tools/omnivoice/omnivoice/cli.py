@@ -80,10 +80,15 @@ def slice_cmd(project: Path = typer.Option(Path("."), "--project", "-p"),
     """Нарезать сырое аудио из raw/ на фразы."""
     proj = _load(project)
     try:
-        n = slicer.slice_project(proj, isolate=isolate)
+        n = slicer.slice_project(proj, isolate=isolate, log=typer.echo)
     except RuntimeError as e:
         typer.secho(str(e), fg="red"); raise typer.Exit(1)
-    typer.secho(f"Новых фраз: {n}", fg="green")
+    if not n:
+        typer.secho("Новых фраз нет: всё из raw/ уже нарезано или речь не найдена", fg="yellow")
+    elif transcriber.has_whisper():
+        typer.secho(f"Нарезано фраз: {n}, текст распознан — проверь его (omnivoice ui → «Фразы»)", fg="green")
+    else:
+        typer.secho(f"Нарезано фраз: {n} по паузам, текст не распознан — запусти omnivoice transcribe", fg="green")
 
 @app.command("transcribe")
 @_friendly

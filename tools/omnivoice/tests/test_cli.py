@@ -174,3 +174,20 @@ def test_setup_data_dir_error_stops_before_install(monkeypatch, tmp_path):
     monkeypatch.setattr(deps, "install_all", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no install")))
     r = CliRunner().invoke(app, ["setup", "--data-dir", r"G:\x"])
     assert r.exit_code == 1 and "Диск G: не найден" in r.output
+
+
+def test_cli_slice_prints_log_and_text_hint(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+    from omnivoice.cli import app
+    from omnivoice import slicer, transcriber
+    from omnivoice.project import Project
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    def fake(proj, isolate=False, progress=None, recognizer=None, log=None):
+        log("a.m4a: фраз 2"); return 2
+    monkeypatch.setattr(slicer, "slice_project", fake)
+    monkeypatch.setattr(transcriber, "has_whisper", lambda: True)
+    r = CliRunner().invoke(app, ["slice", "-p", str(p.root)])
+    assert r.exit_code == 0 and "a.m4a: фраз 2" in r.output and "текст распознан" in r.output
+    monkeypatch.setattr(transcriber, "has_whisper", lambda: False)
+    r = CliRunner().invoke(app, ["slice", "-p", str(p.root)])
+    assert "omnivoice transcribe" in r.output

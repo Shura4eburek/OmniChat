@@ -2,10 +2,10 @@ from __future__ import annotations
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
-from omnivoice import audio, dataset, deps
+from omnivoice import audio, dataset, deps, transcriber
 from omnivoice.dataset import Segment
 from omnivoice.hints import NEED_PREP
-from omnivoice.segments import plan_segments
+from omnivoice.segments import Word, plan_from_words, plan_segments, uncovered
 
 SR = audio.SR
 
@@ -79,7 +79,58 @@ def _energy(x: np.ndarray):
         return float(np.sqrt(np.mean(seg ** 2))) if len(seg) else 0.0
     return f
 
-def slice_project(p, isolate: bool = False, progress=None) -> int:
+FALLBACK_HINT = ("faster-whisper не установлен — режу по паузам (silero VAD), текст не распознан: "
+                 "его нужно распознать отдельно (omnivoice transcribe или «Расшифровать» во «Фразах»)")
+
+def _plan_vad(x: np.ndarray):
+    for s, e in plan_segments(_speech(x), _energy(x)):
+        yield s, e, None, None
+
+QUIET = 0.1   # below this fraction of the file's RMS counts as a pause when refining cuts
+
+def _loud_spans(x: np.ndarray, quiet: float, hop: float = 0.01, bridge: float = 0.2) -> list[tuple[float, float]]:
+    """Spans whose 40 ms RMS exceeds `quiet`, joining pauses shorter than `bridge`."""
+    h, w = int(hop * SR), int(0.02 * SR)
+    spans: list[list[float]] = []
+    for k in range(0, max(0, len(x) - 1), h):
+        seg = x[max(0, k - w): k + w]
+        if len(seg) and float(np.sqrt(np.mean(seg ** 2))) > quiet:
+            t = k / SR
+            if spans and t - spans[-1][1] <= bridge:
+                spans[-1][1] = t
+            else:
+                spans.append([t, t])
+    return [(a, b) for a, b in spans]
+
+def _letters(text: str) -> str:
+    return "".join(c for c in text.casefold() if c.isalnum())
+
+def _plan_words(x: np.ndarray, rec, progress) -> list[tuple[float, float, str, list[Word]]]:
+    x16 = audio.resample(x, SR, 16000)
+    words = list(rec(x16, progress))
+    quiet = QUIET * (float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0)
+    total = len(x) / SR
+    first = list(words)
+    for s, e in uncovered(first, _loud_spans(x, quiet)):   # lines Whisper skipped: recognise them alone
+        a, b = max(0.0, s - 0.1), min(total, e + 0.1)
+        extra = [Word(w.start + a, w.end + a, w.text, w.prob, w.no_speech)
+                 for w in rec(x16[int(a * 16000): int(b * 16000)], None)
+                 if a <= (w.start + w.end) / 2 + a <= b]
+        near = _letters("".join(w.text for w in first if w.end > a - 1.5 and w.start < b + 1.5))
+        if _letters("".join(w.text for w in extra)) not in near:   # not a piece of a mistimed neighbour
+            words += extra
+    words.sort(key=lambda w: w.start)
+    out = []
+    for s, e, text in plan_from_words(words, total=total, energy=_energy(x), quiet=quiet):
+        inside = [w for w in words if s <= (w.start + w.end) / 2 <= e]
+        out.append((s, e, text, inside))
+    return out
+
+def slice_project(p, isolate: bool = False, progress=None, recognizer=None, log=None) -> int:
+    """Cut raw/ files into phrases. With faster-whisper (or an injected `recognizer`:
+    rec(audio_16k, progress) -> list[Word]) every file is transcribed first and cut by sentences,
+    so phrases get their text right away; otherwise silero VAD cuts by pauses and text stays empty.
+    progress(file_name, overall_fraction); log(line) gets human-readable Russian status lines."""
     done_file = p.raw_dir / ".sliced.json"
     _need_ffmpeg()
     try:
@@ -92,28 +143,49 @@ def slice_project(p, isolate: bool = False, progress=None) -> int:
     known = {s.id.casefold() for s in segments}  # case-insensitive: ids differing by case collide on Windows
     p.segments_dir.mkdir(parents=True, exist_ok=True)
     files = [f for f in sorted(p.raw_dir.iterdir()) if f.is_file() and not f.name.startswith(".")]
+    use_words = recognizer is not None or transcriber.has_whisper()
+    rec = recognizer
+    if not use_words and log and files:
+        log(FALLBACK_HINT)
     for i, f in enumerate(files):
         st = f.stat()
         key = f"{st.st_size}:{int(st.st_mtime)}"
         if done.get(f.name) == key:
             continue
-        if progress: progress(f.name, i / max(1, len(files)))
+        frac = lambda inner, i=i: (i + inner) / max(1, len(files))
+        if progress: progress(f.name, frac(0.0))
         if isolate:
+            if log: log(f"{f.name}: отделяю голос от музыки (demucs)…")
             with tempfile.TemporaryDirectory(prefix="omnivoice-demucs-") as tmp:
                 x = _decode(_isolate(f, Path(tmp)), label=f.name)
         else:
             x = _decode(f)
+        if use_words:
+            if rec is None:
+                if log: log("Загружаю модель Whisper (при первом запуске она скачивается)…")
+                rec = transcriber.word_recognizer(p.language, None, log=log)
+            if log: log(f"{f.name}: распознаю речь и режу по фразам…")
+            plan = _plan_words(x, rec, (lambda inner: progress(f.name, frac(inner))) if progress else None)
+        else:
+            plan = list(_plan_vad(x))
         stem = dataset.sanitize_id(f.stem) or "raw"
-        for s, e in plan_segments(_speech(x), _energy(x)):
+        for s, e, raw, words in plan:
             y = audio.pad(_limit_peak(_normalize(x[int(s * SR): int(e * SR)])), SR)
             n = 0
             while f"{stem}_{n:04d}".casefold() in known:
                 n += 1
             sid = f"{stem}_{n:04d}"
             audio.write_wav(p.segments_dir / f"{sid}.wav", y)
-            segments.append(Segment(sid, "", round(len(y) / SR, 3), source=f.name))
+            seg = Segment(sid, "", round(len(y) / SR, 3), source=f.name)
+            if raw is not None:
+                conf = transcriber.word_confidence(words)
+                seg.text, seg.flags = transcriber.assess(
+                    raw, p.language, conf, suspicious=any(w.no_speech > transcriber.NO_SPEECH_WORDS_ABOVE for w in words))
+                seg.confidence = round(conf, 3)
+            segments.append(seg)
             known.add(sid.casefold())
             added += 1
+        if log: log(f"{f.name}: фраз {len(plan)}" if plan else f"{f.name}: речь не найдена")
         done[f.name] = key
         dataset.save(p, segments)
         tmp_marker = done_file.with_name(done_file.name + ".tmp")
