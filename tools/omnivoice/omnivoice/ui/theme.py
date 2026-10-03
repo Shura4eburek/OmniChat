@@ -95,6 +95,7 @@ THEME = gr.themes.Base(
         button_primary_shadow="none",
         button_secondary_shadow="none",
         input_shadow="none",
+        input_border_width="1px",
     ),
     color_accent=AC,
     button_border_width="1px",
@@ -110,7 +111,10 @@ CSS = f"""
 :root {{ --ac:{AC}; --acd:{ACD}; --flag:{FLAG}; --ok:{OK}; --bad:{BAD}; --muted:{MUTED}; }}
 footer {{ display:none !important; }}
 .form {{ background:transparent !important; border:0 !important; gap:10px !important; }}
-.gradio-container {{ max-width: 1400px !important; margin-left:auto !important; margin-right:auto !important; }}
+.gradio-container {{ width:100% !important; max-width: 1400px !important; margin-left:auto !important; margin-right:auto !important; }}
+.hud-panel {{ width:100%; }}
+/* table headers stay on one line */
+.hud-section table th {{ white-space:nowrap; }}
 
 /* the whole app sits in one HUD frame with corner brackets */
 .hud-panel {{ border:1px solid var(--ac) !important; position:relative; overflow:visible !important;
@@ -128,7 +132,13 @@ footer {{ display:none !important; }}
 .hud-badge {{ color:var(--muted); font-size:12px; }}
 .muted {{ color:var(--muted); }}
 
-/* sidebar */
+/* gradio pads every HTML block; the header and steps bar draw their own full-width rules */
+.html-container:has(.hud-top), .html-container:has(.steps) {{ padding:0 !important; }}
+.hud-top {{ padding-left:18px !important; padding-right:18px !important; }}
+
+/* sidebar: stretch to the full height so its divider runs down to the frame */
+.hud-panel > .row {{ align-items:stretch !important; gap:0 !important; }}
+.hud-nav {{ align-self:stretch !important; }}
 .hud-nav {{ border-right:1px solid var(--acd) !important; padding:10px !important; background:{BG};
            min-width:200px; }}
 .hud-nav .block {{ background:transparent !important; border:0 !important; }}
@@ -139,6 +149,7 @@ footer {{ display:none !important; }}
 .hud-nav fieldset label.selected {{ color:var(--ac) !important; border-left-color:var(--ac) !important;
            background:rgba(53,224,200,.06) !important; }}
 .hud-nav fieldset label input {{ display:none; }}
+.hud-nav fieldset label:not(.selected):hover {{ color:{TEXT} !important; background:rgba(53,224,200,.04) !important; }}
 .hud-new {{ border:1px dashed var(--acd) !important; padding:6px !important; margin-top:8px; }}
 
 /* main area */
@@ -147,7 +158,7 @@ footer {{ display:none !important; }}
 .hud-section > .styler, .hud-section .form {{ background:transparent !important; }}
 
 /* steps bar */
-.steps {{ display:flex; flex-wrap:wrap; gap:4px; padding:8px 14px; border-bottom:1px solid var(--acd); }}
+.steps {{ display:flex; flex-wrap:wrap; gap:4px; padding:10px 14px; border-bottom:1px solid var(--acd); }}
 .st {{ padding:4px 9px; border:1px solid var(--acd); color:var(--muted); cursor:pointer; user-select:none;
       font-family:'Silkscreen', 'JetBrains Mono', monospace; font-size:11px; letter-spacing:1px; }}
 .st:hover {{ border-color:var(--ac); }}
@@ -199,4 +210,24 @@ button.lg, button.md, button.sm {{ letter-spacing:1px; text-transform:uppercase;
 .setup-reboot b {{ font-family:'Silkscreen', 'JetBrains Mono', monospace; letter-spacing:2px; font-size:15px; }}
 .setup-reboot p {{ margin:6px 0 0; color:{TEXT}; }}
 .train-status.ok {{ color:var(--ok); }}
+
+/* dropdowns: pointer cursor, framed popup, teal hover */
+input[role=combobox] {{ cursor:pointer; }}
+.wrap:has(> .wrap-inner input[role=combobox]) {{ cursor:pointer; }}
+ul.option-list {{ background:{PANEL} !important; border:1px solid var(--ac) !important; padding:2px 0 !important;
+                 box-shadow:0 6px 18px rgba(0,0,0,.6) !important; }}
+ul.option-list li.item {{ background:transparent !important; color:{TEXT}; padding:6px 10px !important; }}
+ul.option-list li.item:hover, ul.option-list li.item.active {{ background:rgba(53,224,200,.12) !important; color:var(--ac); }}
+ul.option-list li.item.selected {{ color:var(--ac); }}
+
+/* lone checkboxes sit on the page, not in a filled box */
+.block:has(label.checkbox-container) {{ background:transparent !important; border:0 !important; }}
+
+/* a button next to a field lines up with the field, not the whole row height */
+.hud-section .row:has(> button) {{ align-items:flex-end !important; }}
+.hud-section .row > button {{ align-self:flex-end !important; min-height:40px; max-height:42px; }}
+
+/* clickable things look clickable */
+button, .st, .hud-nav fieldset label, .label-wrap, input[type=checkbox], label:has(> input[type=checkbox]) {{ cursor:pointer !important; }}
+button:disabled {{ cursor:not-allowed !important; opacity:.5; }}
 """

@@ -166,12 +166,12 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             with gr.Row(equal_height=False):
                 # ---------------- sidebar ----------------
                 with gr.Column(scale=1, min_width=210, elem_classes="hud-nav"):
-                    project_dd = gr.Dropdown(projects, value=first, label=S.PROJECT,
+                    project_dd = gr.Dropdown(projects, value=first, label=S.PROJECT, filterable=False,
                                              info=None if projects else S.NO_PROJECTS)
                     section = gr.Radio(list(NAV_SECTIONS), value=sec0, show_label=False, container=False)
                     with gr.Accordion(S.NEW_PROJECT, open=not projects, elem_classes="hud-new"):
                         new_name = gr.Textbox(label=S.NEW_NAME, max_lines=1)
-                        new_lang = gr.Dropdown(list(languages.PRESETS), value="ru", label=S.NEW_LANGUAGE)
+                        new_lang = gr.Dropdown(list(languages.PRESETS), value="ru", label=S.NEW_LANGUAGE, filterable=False)
                         create_btn = gr.Button(S.CREATE, variant="primary", size="sm")
                         create_msg = gr.HTML()
 
@@ -207,7 +207,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         table = gr.Dataframe(rows0, headers=COLUMNS, type="array",
                                              datatype=["str", "str", "number", "str", "bool"],
                                              interactive=True, static_columns=[0, 2, 3, 4], wrap=True,
-                                             column_widths=["14%", "54%", "10%", "14%", "8%"], max_height=420)
+                                             column_widths=["14%", "50%", "10%", "14%", "12%"], max_height=420)
                         selected = gr.State(None)
                         player = gr.Audio(label=S.PLAYER, type="filepath", interactive=False)
                         with gr.Row():
@@ -242,10 +242,10 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         train_log = gr.Textbox(label=S.TRAIN_LOG, lines=10, max_lines=10, interactive=False,
                                                autoscroll=True)
                         with gr.Row(equal_height=True):
-                            ckpt_dd = gr.Dropdown([], label=S.CHECKPOINTS, scale=3)
+                            ckpt_dd = gr.Dropdown([], label=S.CHECKPOINTS, scale=3, filterable=False)
                             refresh_btn = gr.Button(S.REFRESH, scale=1)
                         export_btn = gr.Button(S.EXPORT, variant="primary")
-                        preview_dd = gr.Dropdown([], label=S.PREVIEW_STEP)
+                        preview_dd = gr.Dropdown([], label=S.PREVIEW_STEP, filterable=False)
                         with gr.Row():
                             preview_players = [gr.Audio(label=S.PREVIEW.format(n=i + 1), type="filepath",
                                                         interactive=False, visible=False)
@@ -299,6 +299,13 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                     gr.update(visible=needs_setup(env)), steps_html(try_load(name), sec), gr.Timer(active=False))
 
         demo.load(start_probe, outputs=[header, setup_timer])
+
+        def reload_projects(current):
+            names = list_projects(root)
+            value = current if current in names else (names[0] if names else None)
+            return gr.update(choices=names, value=value, info=None if names else S.NO_PROJECTS)
+
+        demo.load(reload_projects, project_dd, project_dd)
         env_timer.tick(poll_env, [project_dd, section], [header, batch, colab_group, setup_needed, steps, env_timer],
                        show_progress="hidden")
 
