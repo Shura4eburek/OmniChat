@@ -1,0 +1,415 @@
+"""Pure helpers behind the web UI. No gradio import here, so they are testable without the ui extra.
+
+Concurrency model: ProjectLocks gives each project one non-blocking write lock. Every UI action that
+loads, modifies and saves project files holds it for its whole duration; a second action on the same
+project is refused with S.PROJECT_BUSY instead of interleaving writes. Training holds it only while
+the dataset csv is written (released at TrainRunner's first should_stop poll), not during the docker run.
+"""
+from __future__ import annotations
+
+import html
+import io
+import re
+import shutil
+import subprocess
+import threading
+from contextlib import contextmanager
+from collections import deque
+from pathlib import Path
+
+from PIL import Image
+
+from omnivoice import modrules
+from omnivoice.dataset import clean_text
+from omnivoice.project import FILE as PROJECT_FILE
+from omnivoice.ui import strings as S
+
+SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_TRAIN, S.SEC_PACK)
+SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "train", "pack")))
+COLUMNS = [S.COL_ID, S.COL_TEXT, S.COL_DURATION, S.COL_FLAGS, S.COL_DROPPED]
+FLAG = "⚑"
+
+
+# ---------- projects ----------
+
+def list_projects(root: Path) -> list[str]:
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    return sorted(d.name for d in root.iterdir() if d.is_dir() and (d / PROJECT_FILE).is_file())
+
+
+# ---------- steps bar ----------
+
+def steps_bar_html(steps: dict, current: str | None) -> str:
+    """`current` is a step key (project.STEPS), e.g. "phrases".
+    Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey."""
+    chips = []
+    for i, section in enumerate(SECTIONS, 1):
+        step = SECTION_STEP[section]
+        done = bool(steps.get(step))
+        cls = "st on" if step == current else ("st done" if done else "st")
+        label = f"{i} {section.upper()}{' ✓' if done else ''}"
+        chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}</span>')
+    return '<div class="steps">' + "".join(chips) + "</div>"
+
+
+# ---------- uploads ----------
+
+_BAD_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def safe_upload_name(name: str) -> str:
+    """Last path component only, no leading dots, no characters Windows forbids."""
+    base = re.split(r"[\\/]", name or "")[-1]
+    base = _BAD_CHARS.sub("_", base).strip().lstrip(".").strip()
+    return base or "audio"
+
+
+def copy_uploads(paths, raw_dir: Path, names=None) -> list[Path]:
+    """Copy uploaded files into raw_dir under sanitized, non-clashing names."""
+    raw_dir = Path(raw_dir)
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    root = raw_dir.resolve()
+    out = []
+    for i, src in enumerate(paths):
+        src = Path(src)
+        name = safe_upload_name(names[i] if names else src.name)
+        stem, suffix = Path(name).stem or "audio", Path(name).suffix
+        dest, n = raw_dir / name, 1
+        while dest.exists():
+            n += 1
+            dest = raw_dir / f"{stem}_{n}{suffix}"
+        if dest.resolve().parent != root:  # belt and braces: never escape raw/
+            raise ValueError(S.BAD_FILE_NAME.format(name=name))
+        shutil.copyfile(src, dest)
+        out.append(dest)
+    return out
+
+
+def list_raw_files(raw_dir: Path) -> list[list]:
+    raw_dir = Path(raw_dir)
+    if not raw_dir.is_dir():
+        return []
+    return [[f.name, f"{f.stat().st_size / 1024:.1f} {S.KB}"]
+            for f in sorted(raw_dir.iterdir()) if f.is_file() and not f.name.startswith(".")]
+
+
+# ---------- phrases ----------
+
+def stats_line(segments) -> str:
+    live = [s for s in segments if not s.dropped]
+    minutes = sum(s.duration for s in live) / 60
+    check = sum(1 for s in live if "check" in s.flags)
+    dropped = len(segments) - len(live)
+    return (f'<div class="stat"><span>{S.STAT_PHRASES} <b>{len(live)}</b></span>'
+            f'<span>{S.STAT_SPEECH} <b>{minutes:.1f} {S.STAT_MINUTES}</b></span>'
+            f'<span class="flag">{S.STAT_CHECK}: {check}</span>'
+            f'<span class="muted">{S.STAT_DROPPED}: {dropped}</span></div>')
+
+
+def code_label(code: str) -> str:
+    """Human Russian label for an internal flag / issue code; unknown codes are shown as is."""
+    return S.code_labels.get(code, code)
+
+
+def flags_text(flags) -> str:
+    return " ".join(f"{FLAG} {code_label(f)}" for f in flags)
+
+
+def segments_rows(segments, only_flagged: bool = False) -> list[list]:
+    return [[s.id, s.text, round(float(s.duration), 2), flags_text(s.flags), bool(s.dropped)]
+            for s in segments if not only_flagged or (s.flags and not s.dropped)]
+
+
+def apply_edits(segments, rows) -> int:
+    """Write edited texts back. A changed text marks the segment edited and clears its `check` flag."""
+    by_id = {s.id: s for s in segments}
+    changed = 0
+    for row in rows or []:
+        if not row:
+            continue
+        s = by_id.get(str(row[0]))
+        if s is None:
+            continue
+        text = clean_text(str(row[1] if len(row) > 1 and row[1] is not None else ""))
+        if text != s.text:
+            s.text, s.edited = text, True
+            s.flags = [f for f in s.flags if f != "check"]
+            changed += 1
+    return changed
+
+
+def toggle_dropped(segments, seg_id: str) -> bool:
+    for s in segments:
+        if s.id == seg_id:
+            s.dropped = not s.dropped
+            return s.dropped
+    raise ValueError(S.NO_SEGMENT.format(id=seg_id))
+
+
+# ---------- check ----------
+
+def report_html(r) -> str:
+    e = html.escape
+    parts = [f'<div class="report"><p>{e(S.CHECK_SUMMARY.format(minutes=r.total_minutes, phrases=r.phrases))}</p>']
+    parts += [f'<p class="err">✗ {e(x)}</p>' for x in r.errors]
+    parts += [f'<p class="warn">! {e(x)}</p>' for x in r.warnings]
+    if not r.errors:
+        parts.append(f'<p class="ok">✓ {e(S.CHECK_OK)}</p>')
+    if r.per_segment:
+        parts.append(f'<p>{e(S.CHECK_ISSUES)}</p><table class="issues">')
+        for sid, issues in sorted(r.per_segment.items()):
+            parts.append(f"<tr><td>{e(sid)}</td><td>{e(', '.join(code_label(i) for i in issues))}</td></tr>")
+        parts.append("</table>")
+    parts.append("</div>")
+    return "".join(parts)
+
+
+# ---------- train ----------
+
+_EPOCH = re.compile(r"Epoch (\d+)")
+
+
+def parse_epoch(line: str) -> int | None:
+    m = _EPOCH.search(line)
+    return int(m.group(1)) if m else None
+
+
+def env_badge(env) -> str:
+    if env is None:
+        return S.ENV_CHECKING
+    if env.gpu_name:
+        gpu = S.GPU_PREFIX + env.gpu_name + ("" if env.gpu else S.GPU_DOCKER_NO)
+    else:
+        gpu = S.NO_GPU
+    return f"{gpu} · {S.DOCKER_OK if env.docker else S.DOCKER_NO}"
+
+
+class EnvProbe:
+    """Runs detect_env() once in a daemon thread (it can take ~2 minutes)."""
+
+    def __init__(self, detect):
+        self._detect = detect
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+        self.env = None
+
+    @property
+    def done(self) -> bool:
+        return self.env is not None
+
+    def start(self) -> None:
+        with self._lock:
+            if self._thread is None:
+                self._thread = threading.Thread(target=self._run, daemon=True, name="omnivoice-env")
+                self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            env = self._detect()
+        except Exception:
+            from omnivoice.train import Env
+            env = Env(False, False, None, None)
+        self.env = env
+
+    def join(self, timeout=None) -> None:
+        if self._thread:
+            self._thread.join(timeout)
+
+
+class TrainRunner:
+    """One background training run per project; Stop = `docker stop <container>`."""
+
+    def __init__(self, train_fn=None, run=subprocess.run, max_lines: int = 400):
+        self._train = train_fn or self._default_train
+        self._run = run
+        self._lines: deque[str] = deque(maxlen=max_lines)
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self.status = "idle"  # idle | running | done | stopped | failed | error
+        self.code: int | None = None
+        self.epoch: int | None = None
+        self.target: int | None = None
+        self._name: str | None = None
+        self._stop = threading.Event()
+        self._prepared = None
+        self._last_pct = -1
+
+    def _download_progress(self, done, total) -> None:
+        """Like the CLI: log the base checkpoint download at most every 5 %."""
+        if total:
+            pct = done * 100 // total // 5 * 5
+            if pct > self._last_pct:
+                self._last_pct = pct
+                self._line(S.TRAIN_DOWNLOAD.format(pct=pct))
+
+    def _default_train(self, p, **kw):
+        from omnivoice import train
+        return train.train_project(p, progress=self._download_progress, **kw)
+
+    def _release_prepared(self) -> None:
+        cb, self._prepared = self._prepared, None
+        if cb:
+            cb()
+
+    def _should_stop(self) -> bool:
+        # train_project polls first right after the dataset csv is written: the project lock can go.
+        self._release_prepared()
+        return self._stop.is_set()
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _line(self, line: str) -> None:
+        with self._lock:
+            self._lines.append(line)
+        ep = parse_epoch(line)
+        if ep is not None:
+            self.epoch = ep
+
+    def log_text(self) -> str:
+        with self._lock:
+            return "\n".join(self._lines)
+
+    def start(self, p, epochs: int, resume: bool, batch, env, target: int | None = None,
+              on_prepared=None) -> None:
+        """on_prepared() runs once: after the dataset csv is written, or when the run ends earlier."""
+        from omnivoice.train import container_name
+        with self._lock:
+            if self.running:
+                raise RuntimeError(S.TRAIN_BUSY)
+            self._name = container_name(p)
+            self.status, self.code, self.epoch, self.target = "running", None, None, target
+            self._lines.clear()
+            self._stop.clear()
+            self._prepared, self._last_pct = on_prepared, -1
+            self._thread = threading.Thread(target=self._work, args=(p, epochs, resume, batch, env),
+                                            daemon=True, name=f"omnivoice-train-{p.name}")
+            self._thread.start()
+
+    def _work(self, p, epochs, resume, batch, env) -> None:
+        try:
+            code = self._train(p, epochs=epochs, resume=resume, on_line=self._line, batch=batch, env=env,
+                               should_stop=self._should_stop)
+        except Exception as e:  # TrainError / RuntimeError / OSError: shown in the log, never a traceback
+            self._line(str(e) or type(e).__name__)
+            if self.status != "stopped":
+                self.status = "error"
+            return
+        finally:
+            self._release_prepared()
+        self.code = code
+        if self.status != "stopped":
+            self.status = "done" if code == 0 else "failed"
+
+    def stop(self, timeout: int = 60) -> None:
+        if not self.running or not self._name:
+            return
+        self.status = "stopped"
+        self._stop.set()  # covers the download / image-build phase, before any container exists
+        self._line(S.TRAIN_STOPPING)
+        try:
+            self._run(["docker", "stop", self._name], capture_output=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError) as e:
+            self._line(str(e))
+
+    def join(self, timeout=None) -> None:
+        if self._thread:
+            self._thread.join(timeout)
+
+    def status_text(self) -> str:
+        if self.status == "running":
+            if self.epoch is None:
+                return S.TRAIN_RUNNING_NO_EPOCH
+            return S.TRAIN_RUNNING.format(epoch=self.epoch, target=self.target if self.target is not None else "?")
+        return {"idle": S.TRAIN_IDLE, "done": S.TRAIN_DONE, "stopped": S.TRAIN_STOPPED,
+                "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
+
+
+# ---------- per-project write lock ----------
+
+class ProjectBusy(RuntimeError):
+    pass
+
+
+class ProjectLocks:
+    """One non-blocking lock per project (keyed by resolved root) plus the running operation's name."""
+
+    def __init__(self):
+        self._guard = threading.Lock()
+        self._locks: dict[str, threading.Lock] = {}
+        self._ops: dict[str, str] = {}
+
+    @staticmethod
+    def _key(root) -> str:
+        return str(Path(root).resolve())
+
+    def acquire(self, root, op: str) -> None:
+        """Take the project's lock or raise ProjectBusy naming the operation that holds it."""
+        key = self._key(root)
+        with self._guard:
+            lock = self._locks.setdefault(key, threading.Lock())
+            if not lock.acquire(blocking=False):
+                raise ProjectBusy(S.PROJECT_BUSY.format(op=self._ops.get(key, "?")))
+            self._ops[key] = op
+
+    def release(self, root) -> None:
+        key = self._key(root)
+        with self._guard:
+            self._ops.pop(key, None)
+            lock = self._locks.get(key)
+            if lock is not None and lock.locked():
+                lock.release()
+
+    def busy(self, root) -> str | None:
+        with self._guard:
+            return self._ops.get(self._key(root))
+
+    @contextmanager
+    def hold(self, root, op: str):
+        self.acquire(root, op)
+        try:
+            yield
+        finally:
+            self.release(root)
+
+
+# ---------- install ----------
+
+def check_install_target(target) -> Path:
+    """Install target must be an existing absolute folder; it is never created from the UI."""
+    text = (target or "").strip()
+    if not text:
+        raise ValueError(S.INSTALL_NO_TARGET)
+    path = Path(text)
+    if not path.is_absolute():
+        raise ValueError(S.TARGET_NOT_ABSOLUTE)
+    if not path.is_dir():
+        raise ValueError(S.TARGET_NOT_FOUND.format(path=path))
+    return path
+
+
+# ---------- pack ----------
+
+def counter_label(label: str, text: str, key: str) -> str:
+    n, limit = len(text or ""), modrules.LIMITS[key]
+    return f"{label} · {n}/{limit}" + (" ⚠" if n > limit else "")
+
+
+def portrait_preview(path: Path, scale: int = 6) -> Image.Image:
+    """What the mod will show: make_portrait() result, upscaled nearest-neighbour."""
+    from omnivoice.portrait import make_portrait
+    img = Image.open(io.BytesIO(make_portrait(Path(path).read_bytes()))).convert("RGBA")
+    side = 32 * scale
+    return img.resize((side, side), Image.NEAREST)
+
+
+# ---------- errors ----------
+
+def error_text(e: BaseException) -> str:
+    problems = getattr(e, "problems", None)
+    if problems:
+        return "\n".join(str(p) for p in problems)
+    return str(e).strip() or S.ERR_UNKNOWN

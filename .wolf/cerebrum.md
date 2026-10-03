@@ -9,11 +9,14 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- omnivoice (tools/omnivoice): piper fine-tune `--ckpt_path` restores base loop state; irina base is epoch 4139 → `--epochs` is ADDITIONAL epochs; Lightning ckpt `epoch=N` is 0-based.
+- `uv sync --extra X` removes other extras — always `uv sync --all-extras`. sherpa-onnx wheel needs `sherpa-onnx-core` or it loads System32 onnxruntime 1.17 and crashes.
 
 - **Project:** OmniChat
 - **Description:** Fabric мод для Minecraft, добавляющий голосовую озвучку чата (TTS) с пространственным звуком и визуальные облачка сообщений над головами игроков.
 
 ## Do-Not-Repeat
+- [2026-10-03] Haiku implementers ignored trailer/.wolf staging rules — use sonnet+ for implementer subagents.
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->

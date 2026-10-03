@@ -1,20 +1,22 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T13:43:43.060Z
-> Files: 18 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T17:15:52.192Z
+> Files: 43 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
-- `patch.py` — Never throws') (~247 tok)
-- `Repro.java` — Reproduces the preview crash outside the game: same natives, same config as TtsEngine. (~422 tok)
+- `edit1.py` — ProjectError: rep, atomic_write_text, mark_saved, mark_fresh + 5 more (~2079 tok)
+- `fix1.py` — rd, wr, pack_project, boom (~2065 tok)
+- `gen_nb.py` — md, code (~1836 tok)
+- `patch_app.py` — rep, runner, locked, runner (~3235 tok)
+- `patch_helpers.py` — ProjectBusy: rep, flags_text, code_label, flags_text + 9 more (~2340 tok)
+- `patch.py` — test_dataset_zip_missing_wav_raises (~478 tok)
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
 
 
 ## ./
 
-- `new_block.txt` — Never throws: IO problems give INCOMPATIBLE with the reason. (~1116 tok)
-- `new_tests.txt` (~647 tok)
 
 ## .claude/
 
@@ -378,12 +380,20 @@
 
 ## .superpowers/model-repair/
 
-- `design.md` — In-game model check & repair — approved design (~916 tok)
-- `part-b-report.md` — Part B report — in-game model check & repair UI (~1674 tok)
-- `rules.md` — Rules for implementers (~468 tok)
 
 ## .superpowers/sdd/2026-10-03-pixel-hud-ui/
 
+
+## .superpowers/sdd/2026-10-04-omnivoice/
+
+- `final-fix-brief.md` — Final fix wave — omnivoice (branch feat/omnivoice, base dbc6a97) (~1621 tok)
+- `final-fix-report.md` — Final fix wave: report (~3020 tok)
+- `task-1-report.md` — Task 1: Package scaffold, CLI skeleton, mod rules — Report (~2236 tok)
+- `task-13-report.md` — Task 13 report: Gradio UI with HUD theme (~2693 tok)
+- `task-2-report.md` — Task 2 Report: Language Presets, Project File, and Init (~1538 tok)
+- `task-3-report.md` — Task 3: Text Normalization — Report (~1930 tok)
+- `task-7-report.md` — Task 7: Dataset Quality Check — Implementation Report (~1072 tok)
+- `task-8-report.md` — Task 8 report (~308 tok)
 
 ## docs/superpowers/plans/
 
@@ -528,35 +538,68 @@
 
 ## src/client/java/org/mamoru/omnichat/client/tts/
 
-- `ModelRepair.java` — Checks a sherpa (VITS) model's ONNX metadata and repairs the missing espeak entries in place. (~2344 tok)
-- `OnnxMetadata.java` — Reads {@code metadata_props} of an ONNX model by walking the top-level fields of the (~2418 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/
 
-- `ModelHealthCache.java` — Background {@link ModelRepair#check} results per installed model, re-checked when the model's .onnx (~1302 tok)
-- `ModelHealthView.java` — Pure mapping from a model's health to what the Voice tab shows. {@code null} health = check pending. (~1272 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/screen/
 
-- `OmnichatScreen.java` — The OmniChat HUD: header, tabs, active tab, hint footer, inside an adaptive panel. (~1784 tok)
-- `VoiceTab.java` — Health of an installed model (null while its check is pending, and for other states). (~5604 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/widget/
 
+
+## src/main/java/org/mamoru/omnichat/util/
+
+- `ModelScanner.java` — Single source of truth for what a model directory contains: its type, which (~1619 tok)
 
 ## src/main/java/org/mamoru/omnichat/voice/
 
 
 ## src/test/java/org/mamoru/omnichat/client/tts/
 
-- `ModelRepairManualTest.java` — Manual check on a copy of the real glados model; enable with -Dmodelrepair.manual=true. (~453 tok)
-- `ModelRepairTest.java` — Class: ModelRepairTest (~1904 tok)
-- `OnnxMetadataTest.java` — ModelProto with ir_version (varint field 1), a large "graph" (field 7) and metadata_props (field 14) (~829 tok)
 
 ## src/test/java/org/mamoru/omnichat/client/ui/
 
-- `ModelHealthCacheTest.java` — Class: ModelHealthCacheTest (~1047 tok)
-- `ModelHealthViewTest.java` — Class: ModelHealthViewTest (~1583 tok)
+
+## src/test/java/org/mamoru/omnichat/util/
+
+- `ModelScannerTest.java` — Class: ModelScannerTest (~242 tok)
 
 ## src/test/java/org/mamoru/omnichat/voice/
 
+
+## tools/omnivoice/omnivoice/
+
+- `checker.py` — class: check_project (~1015 tok)
+- `cli.py` — API router (~1260 tok)
+- `espeak.py` — ensure_espeak_data (~373 tok)
+- `languages.py` — Declares BASE_CHECKPOINTS (~217 tok)
+- `modrules.py` — Limits the OmniChat mod enforces. Keep in sync with: (~825 tok)
+- `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~336 tok)
+- `pack.py` — PackError: folder_name, pack_voice, pack_project (~1251 tok)
+- `paths.py` — cache_dir (~108 tok)
+- `portrait.py` — make_portrait (~234 tok)
+- `project.py` — ProjectError: create, load, save, mark (~907 tok)
+- `textnorm.py` — normalize_text, replace_letter_digit, replace_number (~2354 tok)
+- `transcriber.py` — run, transcribe_project (~722 tok)
+
+## tools/omnivoice/omnivoice/ui/
+
+- `app.py` — Gradio front end over the omnivoice core, in the OmniChat HUD style. (~7354 tok)
+- `helpers.py` — Pure helpers behind the web UI. No gradio import here, so they are testable without the ui extra. (~4252 tok)
+- `strings.py` — Every user-visible UI string (Russian). UPPER_CASE str constants only. (~1651 tok)
+- `theme.py` — OmniChat HUD look: near-black background, teal 1 px frames, corner brackets, square corners. (~2202 tok)
+
+## tools/omnivoice/tests/
+
+- `test_checker.py` — wav, test_report, test_unspeakable, test_missing_audio (~1060 tok)
+- `test_install.py` — test_install_and_overwrite, test_locked_target_keeps_old_and_says_busy, fake, test_default_targets (~907 tok)
+- `test_modrules.py` — test_onnx_problem_matches_mod, test_validate_voice_folder, test_validate_voice_folder_reports_each_p (~849 tok)
+- `test_onnxmeta.py` — test_piper_metadata_exact_keys, test_tokens_from_config_edge_cases, test_write_metadata_replaces_exi (~379 tok)
+- `test_pack.py` — espeak_dir, test_pack_own_export, test_pack_replaces_existing_but_keeps_unrelated, test_pack_foreign (~915 tok)
+- `test_portrait.py` — test_any_image_becomes_valid_portrait (~98 tok)
+- `test_project.py` — test_create_load_roundtrip, test_create_with_named_base, test_unknown_language_is_rejected, test_unk (~610 tok)
+- `test_textnorm.py` — Original tests (must keep passing) (~1217 tok)
+- `test_ui_helpers.py` — Pure UI helpers: no gradio needed, so these run in the plain test environment too. (~2325 tok)
+- `test_ui.py` — test_build_lists_projects, test_strings_have_no_empty_values, test_build_does_not_probe_env, boom (~278 tok)
+- `test_verify.py` — test_verify_real_model, test_crash_is_reported_not_raised, test_native_crash_code_unsigned, test_tim (~783 tok)

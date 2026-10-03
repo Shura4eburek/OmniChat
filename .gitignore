@@ -42,3 +42,8 @@ libs/*.tar.bz2
 
 # Game/launcher logs written to the repo root
 /logs/
+
+# Python tools
+tools/omnivoice/.venv/
+**/__pycache__/
+tools/omnivoice/.pytest_cache/

@@ -1,0 +1,26 @@
+[project]
+name = "omnivoice"
+version = "0.1.0"
+description = "Train and package TTS voices for the OmniChat Minecraft mod"
+requires-python = ">=3.11.4"
+dependencies = [
+  "typer>=0.12", "onnx>=1.16", "sherpa-onnx>=1.12", "sherpa-onnx-core>=1.12", "pillow>=10", "numpy>=1.26",
+  "soundfile>=0.12", "soxr>=0.3", "num2words>=0.5.13", "tomli-w>=1.0", "iso639-lang>=2.2",
+]
+
+[project.optional-dependencies]
+prep = ["faster-whisper>=1.0", "silero-vad>=5.1", "demucs>=4.0", "pyloudnorm>=0.1.1"]
+ui = ["gradio>=6,<7", "tensorboard>=2.16"]
+
+[project.scripts]
+omnivoice = "omnivoice.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8", "gradio>=6,<7", "tensorboard>=2.16"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

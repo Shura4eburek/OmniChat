@@ -92,7 +92,9 @@ public final class ModelScanner {
             return models;
         }
         try (Stream<Path> dirs = Files.list(modelsDir)) {
+            // Dot-prefixed dirs are temporary (omnivoice ".<name>.installing", ".<name>.old-*"), never models.
             dirs.filter(Files::isDirectory)
+                    .filter(dir -> !dir.getFileName().toString().startsWith("."))
                     .sorted()
                     .filter(ModelScanner::isUsableModelDir)
                     .forEach(dir -> models.add(dir.getFileName().toString()));

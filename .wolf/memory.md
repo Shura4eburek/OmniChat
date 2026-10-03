@@ -248,3 +248,139 @@
 | 16:55 | Session end: 81 writes across 52 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 88 reads | ~65717 tok |
 | 16:55 | Session end: 81 writes across 52 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 88 reads | ~65717 tok |
 | 16:56 | Session end: 81 writes across 52 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 88 reads | ~65717 tok |
+| 18:27 | Created .superpowers/sdd/2026-10-04-omnivoice/task-1-report.md | — | ~1740 |
+| 18:28 | Session end: 99 writes across 67 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 94 reads | ~109456 tok |
+| 18:29 | Session end: 99 writes across 67 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 96 reads | ~111088 tok |
+| 18:29 | Edited tools/omnivoice/omnivoice/modrules.py | modified validate_voice_folder() | ~420 |
+| 18:29 | Edited tools/omnivoice/tests/test_modrules.py | modified test_validate_voice_folder_reports_each_problem() | ~494 |
+| 18:30 | Edited .superpowers/sdd/2026-10-04-omnivoice/task-1-report.md | added error handling | ~717 |
+| 18:30 | Session end: 102 writes across 67 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 98 reads | ~112770 tok |
+| 18:31 | Created tools/omnivoice/tests/test_project.py | — | ~363 |
+| 18:31 | Created tools/omnivoice/omnivoice/languages.py | — | ~217 |
+| 18:31 | Created tools/omnivoice/omnivoice/paths.py | — | ~108 |
+| 18:31 | Session end: 105 writes across 70 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 100 reads | ~114283 tok |
+| 18:31 | Created tools/omnivoice/omnivoice/project.py | — | ~727 |
+| 18:31 | Edited tools/omnivoice/omnivoice/cli.py | added 2 import(s) | ~32 |
+| 18:31 | Edited tools/omnivoice/omnivoice/cli.py | modified main() | ~201 |
+| 18:32 | Task 2 (omnivoice): Language presets, project file, init command; created languages.py, paths.py, project.py; added init command to cli.py; TDD RED→GREEN (4 tests); commit ed1efe1 | tools/omnivoice/omnivoice/**, tests/test_project.py | DONE | ~1800 |
+| 18:32 | Created .superpowers/sdd/2026-10-04-omnivoice/task-2-report.md | — | ~1349 |
+| 18:33 | Session end: 109 writes across 71 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 101 reads | ~116688 tok |
+| 18:33 | Created tools/omnivoice/tests/test_textnorm.py | — | ~226 |
+| 18:33 | Session end: 110 writes across 72 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 104 reads | ~118178 tok |
+| 18:33 | Created tools/omnivoice/omnivoice/textnorm.py | — | ~265 |
+| 18:34 | Created .superpowers/sdd/2026-10-04-omnivoice/task-3-report.md | — | ~1044 |
+| 18:34 | Edited tools/omnivoice/omnivoice/project.py | modified ProjectError() | ~59 |
+| 18:34 | Edited tools/omnivoice/omnivoice/project.py | ValueError() → ProjectError() | ~262 |
+| 18:34 | Session end: 114 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 105 reads | ~120609 tok |
+| 18:35 | Edited tools/omnivoice/omnivoice/project.py | modified load() | ~211 |
+| 18:35 | Edited tools/omnivoice/omnivoice/cli.py | 4→4 lines | ~36 |
+| 18:35 | Edited tools/omnivoice/omnivoice/cli.py | modified _load() | ~218 |
+| 18:35 | Edited tools/omnivoice/tests/test_project.py | 6→6 lines | ~56 |
+| 18:35 | Edited tools/omnivoice/tests/test_project.py | modified test_unknown_language_is_rejected() | ~292 |
+| 18:35 | Session end: 119 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 107 reads | ~122078 tok |
+| 18:36 | Edited .superpowers/sdd/2026-10-04-omnivoice/task-2-report.md | modified fix() | ~327 |
+| 18:36 | Edited tools/omnivoice/omnivoice/textnorm.py | modified normalize_text() | ~971 |
+| 18:36 | Edited tools/omnivoice/tests/test_textnorm.py | modified test_digits_become_words() | ~796 |
+| 18:36 | Session end: 122 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 108 reads | ~124686 tok |
+| 18:36 | Edited tools/omnivoice/omnivoice/textnorm.py | 2→2 lines | ~53 |
+| 18:37 | Edited tools/omnivoice/omnivoice/textnorm.py | modified replace_number() | ~291 |
+| 18:37 | Edited tools/omnivoice/omnivoice/textnorm.py | modified match() | ~354 |
+| 18:37 | Session end: 125 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 110 reads | ~126580 tok |
+| 18:37 | Edited tools/omnivoice/tests/test_textnorm.py | modified test_negative_number_at_boundary() | ~42 |
+| 18:37 | Edited tools/omnivoice/omnivoice/textnorm.py | 2→3 lines | ~69 |
+| 18:37 | Edited tools/omnivoice/omnivoice/textnorm.py | modified replace_number() | ~318 |
+| 18:38 | Edited .superpowers/sdd/2026-10-04-omnivoice/task-3-report.md | modified fix() | ~372 |
+| 18:38 | Session end: 129 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 111 reads | ~128386 tok |
+| 18:38 | Session end: 129 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 113 reads | ~128386 tok |
+| 18:39 | Session end: 129 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 113 reads | ~128386 tok |
+| 18:39 | Edited tools/omnivoice/tests/test_textnorm.py | modified test_arabic_characters_flagged() | ~465 |
+| 18:40 | Edited tools/omnivoice/omnivoice/textnorm.py | 10→10 lines | ~128 |
+| 18:40 | Edited tools/omnivoice/omnivoice/textnorm.py | modified replace_number() | ~1645 |
+| 18:40 | Session end: 132 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 113 reads | ~131365 tok |
+| 18:41 | Session end: 132 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 113 reads | ~132592 tok |
+| 18:41 | Created tools/omnivoice/omnivoice/textnorm.py | — | ~2208 |
+| 18:42 | Edited tools/omnivoice/omnivoice/textnorm.py | 6→9 lines | ~157 |
+| 18:42 | Edited tools/omnivoice/omnivoice/textnorm.py | modified replace_letter_digit() | ~126 |
+| 18:42 | Session end: 135 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 114 reads | ~135416 tok |
+| 18:42 | Edited .superpowers/sdd/2026-10-04-omnivoice/task-3-report.md | modified fix() | ~686 |
+| 18:43 | Session end: 136 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 115 reads | ~136151 tok |
+| 18:43 | Session end: 136 writes across 74 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 116 reads | ~136151 tok |
+
+## Session: 2026-10-03 18:45
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:47 | Created tools/omnivoice/tests/test_checker.py | — | ~344 |
+| 18:47 | Session end: 1 writes across 1 files (test_checker.py) | 13 reads | ~2217 tok |
+| 18:47 | Created tools/omnivoice/omnivoice/checker.py | — | ~571 |
+| 18:47 | Edited tools/omnivoice/omnivoice/cli.py | added 1 import(s) | ~76 |
+| 18:47 | Edited tools/omnivoice/omnivoice/cli.py | modified transcribe_cmd() | ~366 |
+| 18:48 | Created .superpowers/sdd/2026-10-04-omnivoice/task-7-report.md | — | ~671 |
+| 18:49 | Session end: 5 writes across 4 files (test_checker.py, checker.py, cli.py, task-7-report.md) | 13 reads | ~3949 tok |
+| 18:50 | Session end: 5 writes across 4 files (test_checker.py, checker.py, cli.py, task-7-report.md) | 15 reads | ~4578 tok |
+| 18:51 | Edited tools/omnivoice/omnivoice/checker.py | modified _default_phonemizer() | ~1015 |
+| 18:52 | Edited tools/omnivoice/tests/test_checker.py | modified wav() | ~1060 |
+| 18:53 | Edited .superpowers/sdd/2026-10-04-omnivoice/task-7-report.md | modified fix() | ~514 |
+| 18:53 | Session end: 8 writes across 4 files (test_checker.py, checker.py, cli.py, task-7-report.md) | 19 reads | ~9022 tok |
+| 18:54 | Session end: 8 writes across 4 files (test_checker.py, checker.py, cli.py, task-7-report.md) | 20 reads | ~9022 tok |
+| 18:55 | Created tools/omnivoice/omnivoice/onnxmeta.py | — | ~336 |
+| 18:55 | Created tools/omnivoice/omnivoice/espeak.py | — | ~373 |
+| 18:55 | Created tools/omnivoice/omnivoice/portrait.py | — | ~234 |
+| 18:55 | Created tools/omnivoice/omnivoice/pack.py | — | ~1251 |
+| 18:55 | Created tools/omnivoice/tests/test_onnxmeta.py | — | ~379 |
+| 18:55 | Created tools/omnivoice/tests/test_portrait.py | — | ~98 |
+| 18:55 | Created tools/omnivoice/tests/test_pack.py | — | ~915 |
+| 18:56 | Created .superpowers/sdd/2026-10-04-omnivoice/task-8-report.md | — | ~328 |
+| 18:56 | Session end: 16 writes across 12 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 21 reads | ~12960 tok |
+| 18:58 | Session end: 16 writes across 12 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 23 reads | ~13268 tok |
+| 18:59 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/fix1.py | — | ~2065 |
+| 18:59 | Session end: 17 writes across 13 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 23 reads | ~15333 tok |
+| 19:01 | Session end: 17 writes across 13 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 25 reads | ~15333 tok |
+| 19:02 | Created tools/omnivoice/tests/test_verify.py | — | ~783 |
+| 19:02 | Created tools/omnivoice/tests/test_install.py | — | ~907 |
+| 19:04 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 25 reads | ~17023 tok |
+| 19:05 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 27 reads | ~17023 tok |
+| 19:06 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 27 reads | ~17023 tok |
+| 19:07 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 28 reads | ~17023 tok |
+| 19:09 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 28 reads | ~17023 tok |
+| 19:11 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 28 reads | ~17023 tok |
+| 19:12 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 28 reads | ~17023 tok |
+| 19:13 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 28 reads | ~17023 tok |
+| 19:15 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 31 reads | ~17023 tok |
+| 19:16 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 32 reads | ~17023 tok |
+| 19:17 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 32 reads | ~17023 tok |
+| 19:19 | Session end: 19 writes across 15 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 34 reads | ~17023 tok |
+| 19:20 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/gen_nb.py | — | ~1836 |
+| 19:20 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/patch.py | — | ~478 |
+| 19:21 | Session end: 21 writes across 17 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 34 reads | ~19337 tok |
+| 19:22 | Session end: 21 writes across 17 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 35 reads | ~19337 tok |
+| 19:25 | Created tools/omnivoice/tests/test_ui.py | — | ~278 |
+| 19:25 | Created tools/omnivoice/tests/test_ui_helpers.py | — | ~2325 |
+| 19:25 | Created tools/omnivoice/omnivoice/ui/strings.py | — | ~1150 |
+| 19:26 | Created tools/omnivoice/omnivoice/ui/helpers.py | — | ~3123 |
+| 19:27 | Created tools/omnivoice/omnivoice/ui/theme.py | — | ~2202 |
+| 19:28 | Created tools/omnivoice/omnivoice/ui/app.py | — | ~7354 |
+| 19:34 | Created .superpowers/sdd/2026-10-04-omnivoice/task-13-report.md | — | ~2872 |
+| 19:34 | Session end: 28 writes across 24 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 40 reads | ~41540 tok |
+| 19:37 | Session end: 28 writes across 24 files (test_checker.py, checker.py, cli.py, task-7-report.md, onnxmeta.py) | 41 reads | ~41540 tok |
+| 19:38 | Edited tools/omnivoice/omnivoice/ui/strings.py | expanded (+7 lines) | ~117 |
+| 19:38 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/patch_helpers.py | — | ~2340 |
+| 19:40 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/patch_app.py | — | ~3235 |
+
+## Session: 2026-10-03 19:40
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:59 | Created .superpowers/sdd/2026-10-04-omnivoice/final-fix-brief.md | — | ~1730 |
+| 19:59 | Session end: 1 writes across 1 files (final-fix-brief.md) | 10 reads | ~1853 tok |
+| 20:02 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/edit1.py | — | ~2079 |
+| 20:05 | Created tools/omnivoice/omnivoice/transcriber.py | — | ~722 |
+| 20:06 | Edited tools/omnivoice/omnivoice/ui/strings.py | inline fix | ~8 |
+| 20:06 | Edited tools/omnivoice/omnivoice/ui/helpers.py | inline fix | ~25 |
+| 20:06 | Edited tools/omnivoice/omnivoice/ui/helpers.py | added 1 import(s) | ~21 |
+| 20:07 | Edited src/main/java/org/mamoru/omnichat/util/ModelScanner.java | 2→4 lines | ~72 |
+| 20:07 | Created src/test/java/org/mamoru/omnichat/util/ModelScannerTest.java | — | ~242 |
+| 20:15 | Created .superpowers/sdd/2026-10-04-omnivoice/final-fix-report.md | — | ~3221 |
+| 20:16 | Session end: 9 writes across 8 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 12 reads | ~13215 tok |
+| 20:20 | omnivoice SDD: tasks 5–14 + final review & fix wave done (232 py tests, gradle ok), branch feat/omnivoice | tools/omnivoice/** | ready to merge; Docker smoke pending | ~ |
+| 20:20 | Session end: 9 writes across 8 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 12 reads | ~13215 tok |
