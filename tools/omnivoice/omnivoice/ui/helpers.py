@@ -183,6 +183,8 @@ def env_badge(env) -> str:
         gpu = S.GPU_PREFIX + env.gpu_name + ("" if env.gpu else S.GPU_DOCKER_NO)
     else:
         gpu = S.NO_GPU
+    if getattr(env, "backend", None) == "wsl":
+        return f"{gpu} · {S.WSL_OK}"
     return f"{gpu} · {S.DOCKER_OK if env.docker else S.DOCKER_NO}"
 
 
@@ -219,7 +221,7 @@ class EnvProbe:
 
 
 class TrainRunner:
-    """One background training run per project; Stop = `docker stop <container>`."""
+    """One background training run per project; Stop = train.stop_training (docker stop / pkill in WSL)."""
 
     def __init__(self, train_fn=None, run=subprocess.run, max_lines: int = 400):
         self._train = train_fn or self._default_train
@@ -231,7 +233,7 @@ class TrainRunner:
         self.code: int | None = None
         self.epoch: int | None = None
         self.target: int | None = None
-        self._name: str | None = None
+        self._p = None
         self._stop = threading.Event()
         self._prepared = None
         self._last_pct = -1
@@ -276,11 +278,10 @@ class TrainRunner:
     def start(self, p, epochs: int, resume: bool, batch, env, target: int | None = None,
               on_prepared=None) -> None:
         """on_prepared() runs once: after the dataset csv is written, or when the run ends earlier."""
-        from omnivoice.train import container_name
         with self._lock:
             if self.running:
                 raise RuntimeError(S.TRAIN_BUSY)
-            self._name = container_name(p)
+            self._p = p
             self.status, self.code, self.epoch, self.target = "running", None, None, target
             self._lines.clear()
             self._stop.clear()
@@ -305,13 +306,14 @@ class TrainRunner:
             self.status = "done" if code == 0 else "failed"
 
     def stop(self, timeout: int = 60) -> None:
-        if not self.running or not self._name:
+        if not self.running or self._p is None:
             return
         self.status = "stopped"
         self._stop.set()  # covers the download / image-build phase, before any container exists
         self._line(S.TRAIN_STOPPING)
         try:
-            self._run(["docker", "stop", self._name], capture_output=True, timeout=timeout)
+            from omnivoice import train
+            train.stop_training(self._p, run=self._run, timeout=timeout)
         except (OSError, subprocess.SubprocessError) as e:
             self._line(str(e))
 

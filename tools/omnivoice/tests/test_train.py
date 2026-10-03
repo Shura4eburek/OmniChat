@@ -16,7 +16,7 @@ _REAL_CLEAN = train._clean_base
 
 @pytest.fixture(autouse=True)
 def _no_ckpt_clean(monkeypatch):
-    monkeypatch.setattr(train, "_clean_base", lambda ckpt, run: ckpt)
+    monkeypatch.setattr(train, "_clean_base", lambda ckpt, run, be=None: ckpt)
 
 def test_clean_base_runs_cleaner_once(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
@@ -72,9 +72,9 @@ def test_empty_dataset_is_an_error(tmp_path):
     with pytest.raises(train.TrainError, match="фраз"):
         train.train_project(p, env=env, run=Fake({}))
 
-def test_no_docker_message(tmp_path):
+def test_no_env_message(tmp_path):
     p = Project.create(tmp_path / "p", name="p", language="ru")
-    with pytest.raises(train.TrainError, match="Docker не найден"):
+    with pytest.raises(train.TrainError, match=r"Нет среды обучения — нажми «Установить зависимости» \(omnivoice setup\)"):
         train.train_project(p, env=train.Env(False, False, None, None), run=Fake({}))
 
 def test_export_without_checkpoint(tmp_path):
@@ -321,7 +321,7 @@ def test_export_builds_missing_image(tmp_path):
     last = p.train_dir / "lightning_logs/version_0/checkpoints/last.ckpt"; last.parent.mkdir(parents=True); last.write_bytes(b"x")
     fake = Fake({"image inspect": (1, "")})
     train.export_project(p, run=fake)
-    joined = [" ".join(c) for c in fake.calls]
+    joined = [" ".join(c) for c in fake.calls if c[0] != "wsl"]  # the WSL probe comes first and isn't ready
     assert joined[0] == "docker info" and any(j.startswith("docker build") for j in joined)
     assert "export_onnx" in joined[-1]
 
@@ -333,3 +333,180 @@ def test_cli_build_needs_no_project(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     r = CliRunner().invoke(app, ["train", "--build"])
     assert r.exit_code == 0 and called == [1]
+
+
+# ---------------- WSL backend ----------------
+from omnivoice import wslenv
+
+WSL_PY = ["wsl", "-d", "omnivoice", "-u", "root", "--", "/opt/omnivoice/venv/bin/python"]
+ENV_WSL = train.Env(False, True, "RTX", 12000, backend="wsl")
+
+
+class WslFake:
+    """Simulates wsl.exe (UTF-16 own output, UTF-8 inside the distro), host nvidia-smi and docker."""
+    def __init__(self, ready=True, wsl_gpu=True, docker=True, docker_gpu=True, host_gpu=True):
+        self.ready, self.wsl_gpu, self.docker, self.docker_gpu, self.host_gpu = ready, wsl_gpu, docker, docker_gpu, host_gpu
+        self.calls = []
+
+    def __call__(self, cmd, **kw):
+        self.calls.append(cmd)
+        j = " ".join(cmd)
+        def r(code, out=""):
+            return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
+        if cmd[:2] == ["wsl", "--status"]: return r(0, "Default Version: 2".encode("utf-16-le"))
+        if cmd[:2] == ["wsl", "--version"]: return r(0, "WSL version: 2.3.26.0\n".encode("utf-16-le"))
+        if cmd[:3] == ["wsl", "-l", "-q"]: return r(0, "Ubuntu-24.04\nomnivoice\n".encode("utf-16-le"))
+        if "cat /opt/omnivoice/READY" in j: return r(0, wslenv.ENV_VERSION.encode() if self.ready else b"old")
+        if cmd[0] == "wsl" and "nvidia-smi" in j: return r(0 if self.wsl_gpu else 1)
+        if cmd[0] == "nvidia-smi": return r(0, "NVIDIA GeForce RTX 4070, 12282\n") if self.host_gpu else r(1)
+        if j == "docker info": return r(0 if self.docker else 1)
+        if cmd[:2] == ["docker", "run"] and "nvidia-smi" in j: return r(0 if self.docker_gpu else 1)
+        return r(0)
+
+
+def test_detect_env_prefers_ready_wsl_with_gpu():
+    fake = WslFake()
+    env = train.detect_env(fake)
+    assert env.backend == "wsl" and env.gpu and env.gpu_name == "NVIDIA GeForce RTX 4070" and env.vram_mib == 12282
+    assert not any(c[0] == "docker" for c in fake.calls)  # the slow docker probe is skipped
+
+
+@pytest.mark.parametrize("kw", [dict(ready=False), dict(wsl_gpu=False)])
+def test_detect_env_falls_back_to_docker(kw):
+    env = train.detect_env(WslFake(**kw))
+    assert env.backend == "docker" and env.docker and env.gpu
+
+
+@pytest.mark.parametrize("kw", [dict(ready=False, docker=False), dict(ready=False, docker_gpu=False),
+                                dict(wsl_gpu=False, docker=False)])
+def test_detect_env_no_backend(kw, tmp_path):
+    env = train.detect_env(WslFake(**kw))
+    assert env.backend is None and train.backend_for(env) is None
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    with pytest.raises(train.TrainError, match="Нет среды обучения — нажми «Установить зависимости»"):
+        train.train_project(p, env=env, run=Fake({}))
+
+
+def test_backend_for_legacy_env():
+    assert train.backend_for(train.Env(True, True, "RTX", 12000)) == "docker"
+    assert train.backend_for(train.Env(True, False, None, None)) is None
+    assert train.backend_for(ENV_WSL) == "wsl"
+
+
+def test_wsl_fit_command_exact(tmp_path):
+    p = Project.create(tmp_path / "glados", name="glados", language="ru")
+    r = wslenv.wsl_path(p.root.resolve())
+    cmd = train.WSL.fit(p, "/mnt/c/cache/checkpoints/a/b.ckpt", 24, 3000, resume=False)
+    assert cmd == WSL_PY + ["-m", "piper.train", "fit",
+        "--data.voice_name", "glados", "--data.csv_path", f"{r}/train/train.csv",
+        "--data.audio_dir", f"{r}/segments/", "--model.sample_rate", "22050", "--data.espeak_voice", "ru",
+        "--data.cache_dir", f"{r}/train/cache/", "--data.config_path", f"{r}/train/config.json",
+        "--data.batch_size", "24", "--trainer.max_epochs", "3000", "--trainer.default_root_dir", f"{r}/train/",
+        "--ckpt_path", "/mnt/c/cache/checkpoints/a/b.ckpt"]
+    assert r.startswith("/mnt/")
+
+
+def test_wsl_fit_resumes_from_last_ckpt(tmp_path):
+    p = Project.create(tmp_path / "g", name="g", language="ru")
+    last = p.train_dir / "lightning_logs/version_0/checkpoints/last.ckpt"; last.parent.mkdir(parents=True); last.write_bytes(b"x")
+    cmd = train.WSL.fit(p, "/mnt/c/base.ckpt", 16, 10, resume=True)
+    assert cmd[-1] == wslenv.wsl_path(last.resolve())
+    assert cmd[-1].endswith("/train/lightning_logs/version_0/checkpoints/last.ckpt")
+
+
+def test_wsl_clean_command_exact(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    ckpt = tmp_path / "checkpoints/ru/x/epoch=4139-step=1.ckpt"; ckpt.parent.mkdir(parents=True); ckpt.write_bytes(b"x")
+    calls = []
+    def run(cmd, **kw):
+        calls.append(cmd); (ckpt.parent / "epoch=4139-step=1.clean.ckpt").write_bytes(b"y")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    out = _REAL_CLEAN(ckpt, run, train.WSL)
+    assert out.name == "epoch=4139-step=1.clean.ckpt"
+    assert calls == [WSL_PY + ["/opt/omnivoice/clean_ckpt.py", wslenv.wsl_path(ckpt.resolve()),
+                               wslenv.wsl_path(out.resolve())]]
+
+
+def test_wsl_export_command_exact(tmp_path):
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    ck = tmp_path / "elsewhere" / "m.ckpt"; ck.parent.mkdir(); ck.write_bytes(b"x")
+    assert train.WSL.export(p, ck) == WSL_PY + [
+        "-m", "piper.train.export_onnx", "--checkpoint", wslenv.wsl_path(ck.resolve()),
+        "--output-file", wslenv.wsl_path((p.export_dir / "model.onnx").resolve())]
+
+
+def test_wsl_export_project_uses_wsl_when_ready(tmp_path):
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    last = p.train_dir / "lightning_logs/version_0/checkpoints/last.ckpt"; last.parent.mkdir(parents=True); last.write_bytes(b"x")
+    fake = WslFake(docker=False)
+    assert train.export_project(p, run=fake) == p.export_dir / "model.onnx"
+    assert fake.calls[-1][:len(WSL_PY)] == WSL_PY and "piper.train.export_onnx" in fake.calls[-1]
+    assert not any(c[0] == "docker" for c in fake.calls)
+
+
+def test_wsl_train_project_end_to_end(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    fake = Fake({})
+    assert train.train_project(p, env=ENV_WSL, run=fake) == 0 and p.steps["train"] is True
+    fit = fake.calls[-1]
+    assert fit[:len(WSL_PY)] == WSL_PY
+    assert fit[fit.index("--ckpt_path") + 1] == wslenv.wsl_path((tmp_path / "cache/checkpoints/a/b.ckpt").resolve())
+    assert not any(c[0] == "docker" for c in fake.calls)  # no image build, no `docker rm`
+
+
+def test_wsl_oom_retry(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    fake, lines = OomFake(ok_at=6), []
+    assert train.train_project(p, env=ENV_WSL, run=fake, batch=24, on_line=lines.append) == 0
+    assert fake.batches == [24, 12, 6] and "Не хватило видеопамяти — уменьшаю батч до 12 и продолжаю" in lines
+    assert all(c[0] == "wsl" for c in fake.calls)
+
+
+def test_wsl_unmappable_project_path_is_russian(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    def boom(x):
+        raise wslenv.WslError("Путь недоступен из WSL")
+    monkeypatch.setattr(wslenv, "wsl_path", boom)
+    with pytest.raises(train.TrainError, match="недоступен из WSL"):
+        train.train_project(p, env=ENV_WSL, run=Fake({}))
+
+
+def test_stop_commands():
+    class P: name = "glados"
+    assert train.WSL.stop(P()) == ["wsl", "-d", "omnivoice", "-u", "root", "--", "pkill", "-f", "piper.train"]
+    assert train.DOCKER.stop(P()) == ["docker", "stop", "omnivoice-train-glados"]
+
+
+def test_stop_training_uses_active_backend(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    stops = []
+    def run(cmd, **kw):
+        stops.append(cmd); return subprocess.CompletedProcess(cmd, 0)
+    train.stop_training(p, run=run)   # nothing running: the legacy docker stop (a no-op)
+    seen = []
+    class Stopper(Fake):
+        def __call__(self, cmd, **kw):
+            if "piper.train" in " ".join(cmd):
+                train.stop_training(p, run=run)   # the UI Stop while the fit runs
+                seen.append(1)
+            return super().__call__(cmd, **kw)
+    train.train_project(p, env=ENV_WSL, run=Stopper({}))
+    assert seen == [1]
+    assert stops == [train.DOCKER.stop(p), wslenv.wsl_cmd("pkill", "-f", "piper.train")]
+    train.stop_training(p, run=run)   # finished: forgotten again
+    assert stops[-1] == train.DOCKER.stop(p)
+
+
+def test_stream_ctrl_c_runs_backend_stop(monkeypatch):
+    def lines_then_ctrl_c():
+        yield "epoch 1\n"
+        raise KeyboardInterrupt
+    class Proc:
+        def __init__(self, *a, **k): self.stdout = lines_then_ctrl_c()
+        def wait(self, timeout=None): return 0
+    monkeypatch.setattr(train.subprocess, "Popen", Proc)
+    ran, lines = [], []
+    monkeypatch.setattr(train.subprocess, "run", lambda cmd, **kw: ran.append(cmd))
+    stop = wslenv.wsl_cmd("pkill", "-f", "piper.train")
+    assert train._stream(["x"], lines.append, stop) == 130
+    assert ran == [stop] and lines == ["epoch 1", "Обучение остановлено — продолжить: omnivoice train"]

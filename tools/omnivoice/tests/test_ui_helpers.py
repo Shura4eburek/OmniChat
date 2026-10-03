@@ -350,3 +350,26 @@ def test_apply_edits_turns_line_breaks_into_spaces():
     segs = [Segment("a", "", 2.0)]
     assert h.apply_edits(segs, [["a", "раз\rдва\r\nтри", 2.0, "", False]]) == 1
     assert segs[0].text == "раз два три"
+
+
+def test_train_runner_stop_on_wsl_runs_pkill(monkeypatch):
+    from omnivoice import train, wslenv
+    monkeypatch.setitem(train._ACTIVE, "omnivoice-train-glados", "wsl")  # train_project chose WSL
+    gate, calls = threading.Event(), []
+    def slow(p, epochs, resume, on_line, batch, env, should_stop):
+        gate.wait(5); return 130
+    def fake_run(cmd, **kw):
+        calls.append(cmd); gate.set()
+        class R: returncode = 0
+        return R()
+    r = h.TrainRunner(train_fn=slow, run=fake_run)
+    r.start(_P(), 1, True, None, None)
+    r.stop()
+    r.join(5)
+    assert calls == [wslenv.wsl_cmd("pkill", "-f", "piper.train")] and r.status == "stopped"
+
+
+def test_env_badge_shows_wsl_backend():
+    from omnivoice.train import Env
+    badge = h.env_badge(Env(False, True, "RTX 4070", 12000, backend="wsl"))
+    assert "RTX 4070" in badge and S.WSL_OK in badge and S.DOCKER_NO not in badge

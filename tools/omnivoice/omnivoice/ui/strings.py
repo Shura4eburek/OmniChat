@@ -9,6 +9,7 @@ NO_GPU = "нет GPU"
 GPU_PREFIX = "GPU: "
 DOCKER_OK = "Docker ✓"
 DOCKER_NO = "Docker ✗"
+WSL_OK = "WSL ✓"
 GPU_DOCKER_NO = " (Docker её не видит)"
 
 # Sidebar

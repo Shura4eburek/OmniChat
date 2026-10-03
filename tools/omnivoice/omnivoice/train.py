@@ -1,14 +1,21 @@
+"""Fine-tuning piper in one of two backends: the own WSL2 distro «omnivoice» (preferred, see wslenv)
+or a Docker image (fallback). The training loop (OOM retry, relative epochs, target check, Stop) is
+backend-agnostic; a backend only builds command lines (see DockerBackend / WslBackend)."""
 from __future__ import annotations
+import os
 import re
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from omnivoice import checkpoints, dataset
+from omnivoice import checkpoints, dataset, wslenv
 from omnivoice.paths import cache_dir
 
 IMAGE = "omnivoice-train:0.1"
 DOCKER_DIR = Path(__file__).resolve().parent / "piper_compat"
+VENV_PY = f"{wslenv.ROOT}/venv/bin/python"
+CLEAN_SCRIPT = "/opt/omnivoice/clean_ckpt.py"  # same path in the Docker image and in the WSL distro
+NO_ENV = "Нет среды обучения — нажми «Установить зависимости» (omnivoice setup)"
 
 class TrainError(Exception):
     pass
@@ -16,15 +23,26 @@ class TrainError(Exception):
 @dataclass
 class Env:
     docker: bool
-    gpu: bool
+    gpu: bool  # the chosen backend sees an NVIDIA GPU (for "docker": `docker run --gpus all` works)
     gpu_name: str | None
     vram_mib: int | None
+    backend: str | None = None  # "wsl" | "docker" | None (no usable training environment)
+
+def _docker_ok(run) -> bool:
+    try:
+        return run(["docker", "info"], capture_output=True, text=True, timeout=20).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+def _wsl_ready(run) -> wslenv.EnvStatus | None:
+    try:
+        return wslenv.status(run)
+    except Exception:  # a broken WSL must never hide the Docker fallback
+        return None
 
 def detect_env(run=subprocess.run) -> Env:
-    try:
-        docker = run(["docker", "info"], capture_output=True, text=True, timeout=20).returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        docker = False
+    """WSL distro ready + GPU → "wsl"; else Docker with a GPU → "docker"; else backend None.
+    gpu_name / vram_mib come from the host nvidia-smi (batch size) whatever the backend."""
     name = vram = None
     try:
         r = run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
@@ -34,16 +52,19 @@ def detect_env(run=subprocess.run) -> Env:
             name, vram = n.strip(), int(float(v))
     except (FileNotFoundError, subprocess.TimeoutExpired):
         name = vram = None
-    gpu = False
-    if docker and name:
-        try:
-            have = run(["docker", "image", "inspect", IMAGE], capture_output=True, timeout=20).returncode == 0
-            gpu = run(["docker", "run", "--rm", "--gpus", "all",
-                       IMAGE if have else "nvidia/cuda:12.6.0-base-ubuntu22.04", "nvidia-smi"],
-                      capture_output=True, text=True, timeout=120).returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            gpu = False
-    return Env(docker, gpu, name, vram)
+    st = _wsl_ready(run)
+    if st and st.ready and st.gpu:  # status() already ran WSL.gpu_ok
+        return Env(False, True, name, vram, "wsl")  # the slow Docker probe isn't needed
+    docker = _docker_ok(run)
+    gpu = docker and name is not None and DOCKER.gpu_ok(run)
+    return Env(docker, gpu, name, vram, "docker" if gpu else None)
+
+def backend_for(env: Env) -> str | None:
+    if env.backend in BACKENDS:
+        return env.backend
+    if env.backend is None and env.docker and env.gpu:
+        return "docker"  # an Env built without a backend (older callers): Docker was the only one
+    return None
 
 def batch_size_for(vram_mib: int | None) -> int:
     if vram_mib is None: return 16
@@ -99,17 +120,110 @@ def export_command(p, ckpt_container_path: str, extra_mount: Path | None = None)
             "python3", "-m", "piper.train.export_onnx", "--checkpoint", ckpt_container_path,
             "--output-file", "/work/export/model.onnx"]
 
-def _stream(cmd: list[str], on_line, name: str | None = None) -> int:
+
+class DockerBackend:
+    name = "docker"
+
+    def gpu_ok(self, run) -> bool:
+        try:
+            have = run(["docker", "image", "inspect", IMAGE], capture_output=True, timeout=20).returncode == 0
+            return run(["docker", "run", "--rm", "--gpus", "all",
+                        IMAGE if have else "nvidia/cuda:12.6.0-base-ubuntu22.04", "nvidia-smi"],
+                       capture_output=True, text=True, timeout=120).returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+
+    def prepare(self, run) -> None:
+        _ensure_image(run)
+
+    def base_ckpt(self, ckpt: Path) -> str:
+        return "/ckpt/" + ckpt.resolve().relative_to((cache_dir() / "checkpoints").resolve()).as_posix()
+
+    def fit(self, p, ckpt: str, batch: int, max_epochs: int, resume: bool) -> list[str]:
+        return fit_command(p, ckpt, batch, max_epochs, resume)
+
+    def clean(self, src: Path, dst: Path) -> list[str]:
+        root = (cache_dir() / "checkpoints").resolve()
+        rel, rel_dst = (x.resolve().relative_to(root).as_posix() for x in (src, dst))
+        return ["docker", "run", "--rm", "-v", f"{root}:/ckpt", IMAGE,
+                "python3", CLEAN_SCRIPT, f"/ckpt/{rel}", f"/ckpt/{rel_dst}"]
+
+    def export(self, p, ckpt: Path) -> list[str]:
+        try:
+            return export_command(p, _container(p, ckpt))
+        except ValueError:  # outside the project: mount its folder
+            return export_command(p, "/ckptin/" + Path(ckpt).name, Path(ckpt).resolve().parent)
+
+    def before_fit(self, p) -> list[str] | None:
+        return ["docker", "rm", "-f", container_name(p)]  # a container left by a crashed run
+
+    def stop(self, p) -> list[str]:
+        return ["docker", "stop", container_name(p)]
+
+
+def _wp(path) -> str:
+    try:
+        return wslenv.wsl_path(Path(path).resolve())
+    except wslenv.WslError as e:
+        raise TrainError(str(e)) from e
+
+
+class WslBackend:
+    """Runs inside the «omnivoice» distro; Windows files are reached through /mnt/<drive>/…"""
+    name = "wsl"
+
+    def gpu_ok(self, run) -> bool:
+        return wslenv.gpu_ok(run)
+
+    def prepare(self, run) -> None:
+        pass  # provisioned by `omnivoice setup` (wslenv.ensure_ready)
+
+    def base_ckpt(self, ckpt: Path) -> str:
+        return _wp(ckpt)
+
+    def fit(self, p, ckpt: str, batch: int, max_epochs: int, resume: bool) -> list[str]:
+        last = last_checkpoint(p) if resume else None
+        args = fit_args(p, _wp(last) if last else ckpt, batch, max_epochs, _wp(p.root))
+        return wslenv.wsl_cmd(VENV_PY, *args[1:])  # fit_args starts with the Docker image's python3
+
+    def clean(self, src: Path, dst: Path) -> list[str]:
+        return wslenv.wsl_cmd(VENV_PY, CLEAN_SCRIPT, _wp(src), _wp(dst))
+
+    def export(self, p, ckpt: Path) -> list[str]:
+        return wslenv.wsl_cmd(VENV_PY, "-m", "piper.train.export_onnx", "--checkpoint", _wp(ckpt),
+                              "--output-file", _wp(p.export_dir / "model.onnx"))
+
+    def before_fit(self, p) -> list[str] | None:
+        return None
+
+    def stop(self, p) -> list[str]:
+        return wslenv.wsl_cmd("pkill", "-f", "piper.train")
+
+
+DOCKER, WSL = DockerBackend(), WslBackend()
+BACKENDS = {b.name: b for b in (DOCKER, WSL)}
+_ACTIVE: dict[str, str] = {}  # container_name(p) → backend of the run in progress (for stop_training)
+
+
+def stop_training(p, run=subprocess.run, timeout: int = 60):
+    """Stop p's training in whichever backend runs it (the UI Stop button). Before a backend is
+    chosen nothing has been launched; the legacy `docker stop` is then a harmless no-op."""
+    be = BACKENDS[_ACTIVE.get(container_name(p), "docker")]
+    return run(be.stop(p), capture_output=True, timeout=timeout)
+
+
+def _stream(cmd: list[str], on_line, stop_cmd: list[str] | None = None) -> int:
+    # WSL_UTF8: wsl.exe's own messages in UTF-8 too (the training output itself is UTF-8 anyway)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                            encoding="utf-8", errors="replace")
+                            encoding="utf-8", errors="replace", env={**os.environ, "WSL_UTF8": "1"})
     try:
         for line in proc.stdout:
             if on_line: on_line(line.rstrip())
         return proc.wait()
     except KeyboardInterrupt:
-        if name:
+        if stop_cmd:
             try:
-                subprocess.run(["docker", "stop", name], capture_output=True, timeout=120)
+                subprocess.run(stop_cmd, capture_output=True, timeout=120)
             except (OSError, subprocess.SubprocessError):
                 pass
         try:
@@ -123,17 +237,12 @@ def _ensure_image(run) -> None:
     if run(["docker", "image", "inspect", IMAGE], capture_output=True).returncode != 0:
         build_image(run)
 
-def _clean_base(ckpt: Path, run) -> Path:
+def _clean_base(ckpt: Path, run, be=None) -> Path:
     """Old rhasspy checkpoints carry hparams newer Lightning rejects; make a cleaned sibling once."""
     clean = ckpt.with_name(ckpt.stem + ".clean.ckpt")
     if clean.is_file():
         return clean
-    root = (cache_dir() / "checkpoints").resolve()
-    rel = ckpt.resolve().relative_to(root).as_posix()
-    rel_clean = clean.resolve().relative_to(root).as_posix()
-    r = run(["docker", "run", "--rm", "-v", f"{root}:/ckpt", IMAGE,
-             "python3", "/opt/omnivoice/clean_ckpt.py", f"/ckpt/{rel}", f"/ckpt/{rel_clean}"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = run((be or DOCKER).clean(ckpt, clean), capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0 or not clean.is_file():
         tail = (r.stderr or "")[-300:]
         raise TrainError(f"Не удалось подготовить базовую модель: {tail}")
@@ -151,9 +260,9 @@ def newest_epoch(p) -> int | None:
     return max(epochs) if epochs else None
 
 
-def _run_fit(cmd, run, on_line, name) -> int:
+def _run_fit(cmd, run, on_line, stop_cmd) -> int:
     if run is subprocess.run:
-        return _stream(cmd, on_line, name)
+        return _stream(cmd, on_line, stop_cmd)
     r = run(cmd)  # injected runner (tests): replay its stdout as log lines
     for line in (getattr(r, "stdout", "") or "").splitlines():
         on_line(line)
@@ -163,13 +272,14 @@ def _run_fit(cmd, run, on_line, name) -> int:
 def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run, env: Env | None = None,
                   on_line=None, batch: int | None = None, progress=None, should_stop=None) -> int:
     """should_stop: optional callable polled between the preparation steps (dataset csv, checkpoint
-    download, image build); True aborts with STOPPED before any container is launched."""
+    download, image build); True aborts with STOPPED before any training process is launched."""
     stop = should_stop or (lambda: False)
     env = env or detect_env(run)
-    if not env.docker:
-        raise TrainError("Docker не найден. Установи Docker Desktop или используй Colab: omnivoice train --colab")
-    if not env.gpu:
-        raise TrainError("Docker не видит видеокарту NVIDIA. Используй Colab: omnivoice train --colab")
+    name = backend_for(env)
+    if name is None:
+        why = " (Docker не видит видеокарту NVIDIA)" if env.docker and not env.gpu else ""
+        raise TrainError(f"{NO_ENV}{why} или обучай в Colab: omnivoice train --colab")
+    be = BACKENDS[name]
     if dataset.piper_csv(p, p.train_dir / "train.csv") == 0:
         raise TrainError("Нет ни одной фразы с текстом для обучения")
     target = base_epoch(p) + epochs
@@ -186,13 +296,21 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
         raise TrainError(str(e)) from e
     if stop():
         return STOPPED
-    _ensure_image(run)
+    be.prepare(run)
     if stop():
         return STOPPED
-    ckpt = _clean_base(ckpt, run)
-    base_ckpt = "/ckpt/" + ckpt.resolve().relative_to((cache_dir() / "checkpoints").resolve()).as_posix()
+    ckpt = _clean_base(ckpt, run, be)
+    base_ckpt = be.base_ckpt(ckpt)
     bs = batch or batch_size_for(env.vram_mib)
-    name = container_name(p)
+    key = container_name(p)
+    _ACTIVE[key] = be.name
+    try:
+        return _fit_loop(p, be, run, on_line, stop, base_ckpt, bs, target, resume)
+    finally:
+        _ACTIVE.pop(key, None)
+
+
+def _fit_loop(p, be, run, on_line, stop, base_ckpt: str, bs: int, target: int, resume: bool) -> int:
     started = time.time()
     while True:
         oom = False
@@ -201,12 +319,14 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
             if any(m in line for m in _OOM_MARKERS):
                 oom = True
             if on_line: on_line(line)
-        cmd = fit_command(p, base_ckpt, bs, target, resume)
-        try:
-            run(["docker", "rm", "-f", name], capture_output=True)
-        except Exception:
-            pass
-        code = _run_fit(cmd, run, handle, name)
+        cmd = be.fit(p, base_ckpt, bs, target, resume)
+        pre = be.before_fit(p)
+        if pre:
+            try:
+                run(pre, capture_output=True)
+            except Exception:
+                pass
+        code = _run_fit(cmd, run, handle, be.stop(p))
         if code in (0, STOPPED) or not oom:
             break
         if stop():
@@ -227,18 +347,16 @@ def export_project(p, ckpt: Path | None = None, run=subprocess.run) -> Path:
     ckpt = ckpt or last_checkpoint(p)
     if ckpt is None:
         raise TrainError("Нет чекпойнтов — сначала обучи модель")
-    try:
-        docker = run(["docker", "info"], capture_output=True, text=True, timeout=20).returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        docker = False
-    if not docker:
-        raise TrainError("Docker не найден или не запущен — экспорт в ONNX идёт в Docker. "
-                         "Запусти Docker Desktop или экспортируй в Colab")
-    _ensure_image(run)
-    try:
-        cpath, extra = _container(p, ckpt), None
-    except ValueError:
-        cpath, extra = "/ckptin/" + Path(ckpt).name, Path(ckpt).resolve().parent
-    if run(export_command(p, cpath, extra)).returncode != 0:
+    st = _wsl_ready(run)  # export needs no GPU: a ready distro is enough
+    if st and st.ready:
+        be = WSL
+    elif _docker_ok(run):
+        be = DOCKER
+    else:
+        raise TrainError("Нет среды для экспорта в ONNX — нажми «Установить зависимости» (omnivoice setup), "
+                         "запусти Docker Desktop или экспортируй в Colab")
+    be.prepare(run)
+    p.export_dir.mkdir(parents=True, exist_ok=True)
+    if run(be.export(p, Path(ckpt))).returncode != 0:
         raise TrainError("Экспорт в ONNX не удался")
     return p.export_dir / "model.onnx"

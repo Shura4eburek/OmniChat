@@ -203,7 +203,7 @@ def train_cmd(project: Path = typer.Option(Path("."), "--project", "-p"),
               no_resume: bool = typer.Option(False, "--no-resume", help="Не продолжать с последнего чекпойнта"),
               build: bool = typer.Option(False, "--build", help="Только собрать Docker-образ"),
               colab_: bool = typer.Option(False, "--colab", help="Подготовить zip для Colab")):
-    """Дообучить голос (Docker с GPU) или подготовить zip для Colab."""
+    """Дообучить голос (WSL или Docker с GPU) или подготовить zip для Colab."""
     from omnivoice import train as tr
     if build:  # the image doesn't depend on a project
         try:
