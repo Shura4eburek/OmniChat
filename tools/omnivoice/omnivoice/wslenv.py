@@ -35,6 +35,7 @@ READY_FILE = f"{ROOT}/READY"
 SETUP_FILES = ("wsl_setup.sh", "constraints.txt", "torch_shim.py", "clean_ckpt.py")
 TIMEOUT = 60
 ERROR_CANCELLED = 1223  # UAC prompt declined
+START_FAILED = 9009  # Start-Process failed for another reason (elevated_command)
 REBOOT_MSG = ("WSL установлен — нужна перезагрузка Windows. Перезагрузи компьютер и снова нажми "
               "«Установить зависимости»")
 
@@ -103,8 +104,14 @@ def _wsl_version(rc: int | None, out: str) -> tuple[int, ...] | None:
 
 
 def distros(run: Run = subprocess.run) -> list[str]:
+    """Registered distros. Raises WslError when the list can't be read (never guesses an empty list)."""
     rc, out = _run(run, ["wsl", "-l", "-q"])
-    return [l.strip() for l in out.splitlines() if l.strip()] if rc == 0 else []
+    if rc != 0 and "WSL_E_DEFAULT_DISTRO_NOT_FOUND" in out:
+        return []  # WSL works, there are simply no distros yet
+    if rc != 0:
+        detail = out.strip() or ("wsl.exe не отвечает" if rc is None else f"код {rc}")
+        raise WslError(f"Не удалось получить список дистрибутивов WSL: {detail}")
+    return [l.strip() for l in out.splitlines() if l.strip()]
 
 
 def gpu_ok(run: Run = subprocess.run) -> bool:
@@ -116,7 +123,10 @@ def status(run: Run = subprocess.run) -> EnvStatus:
     wsl = _wsl_installed(*_run(run, ["wsl", "--status"]))
     ver = _wsl_version(*_run(run, ["wsl", "--version"])) if wsl else None
     version_ok = ver is not None and ver >= (2, 0, 0)
-    distro = wsl and DISTRO in distros(run)
+    try:
+        distro = wsl and DISTRO in distros(run)
+    except WslError:
+        distro = False  # read-only report; import_distro re-checks and refuses to act on a failed listing
     ready, gpu = False, None
     if distro:
         rc, out = _run(run, wsl_cmd("cat", READY_FILE))
@@ -139,7 +149,9 @@ def elevated_command(wsl_args: list[str]) -> list[str]:
     """Run `wsl <args>` as administrator (one UAC prompt); exit code 1223 if the prompt was declined."""
     arglist = ",".join("'" + a.replace("'", "''") + "'" for a in wsl_args)
     script = (f"try {{ $p = Start-Process wsl -ArgumentList {arglist} -Verb RunAs -Wait -PassThru; "
-              f"exit $p.ExitCode }} catch {{ exit {ERROR_CANCELLED} }}")
+              f"exit $p.ExitCode }} catch {{ $e = $_.Exception; while ($e) {{ "
+              f"if ($e.NativeErrorCode -eq {ERROR_CANCELLED}) {{ exit {ERROR_CANCELLED} }}; $e = $e.InnerException }}; "
+              f"[Console]::Error.WriteLine($_.Exception.Message); exit {START_FAILED} }}")
     return ["powershell", "-NoProfile", "-Command", script]
 
 
@@ -149,9 +161,13 @@ def ensure_wsl(run: Run = subprocess.run) -> str | None:
     if st.wsl and st.wsl_version_ok:
         return None
     args = ["--update"] if st.wsl else ["--install", "--no-distribution"]
-    rc, _ = _run(run, elevated_command(args), timeout=None)
+    rc, out = _run(run, elevated_command(args), timeout=None)
     if rc == ERROR_CANCELLED:
         raise WslError("Установка WSL отменена: подтверди запрос администратора (UAC) и повтори")
+    if rc is None or rc == START_FAILED:
+        raise WslError("Не удалось запустить установку WSL от имени администратора"
+                       + (f": {out.strip()}" if out.strip() else "")
+                       + f". Открой PowerShell от администратора и выполни «wsl {' '.join(args)}»")
     after = status(run)
     if after.wsl and after.wsl_version_ok:
         return None
@@ -180,9 +196,14 @@ def import_distro(tar: Path, run: Run = subprocess.run) -> None:
         return
     location = cache_dir() / "wsl" / DISTRO
     location.mkdir(parents=True, exist_ok=True)
-    stale = location / "ext4.vhdx"  # left by an interrupted import of our own distro
+    # distros() above succeeded without «omnivoice», so a vhdx here is left by an interrupted import
+    stale = location / "ext4.vhdx"
     if stale.exists():
-        stale.unlink()
+        try:
+            stale.unlink()
+        except OSError as e:
+            raise WslError(f"Не удалось удалить старый диск omnivoice: {stale} ({e}). "
+                           f"Выполни «wsl --shutdown» и повтори") from e
     rc, out = _run(run, ["wsl", "--import", DISTRO, str(location), str(tar), "--version", "2"], timeout=None)
     if rc != 0:
         raise WslError(f"Не удалось создать среду WSL «{DISTRO}»: {_hint(out)}")

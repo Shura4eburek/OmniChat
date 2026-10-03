@@ -415,3 +415,93 @@ def test_ensure_ready_reboot_needed(monkeypatch):
     monkeypatch.setattr(wslenv, "ensure_wsl", lambda run=None: "Нужна перезагрузка")
     with pytest.raises(wslenv.RebootRequired, match="перезагрузка"):
         wslenv.ensure_ready(lambda l: None, run=Fake(MISSING))
+
+
+# --- fix round 1 ----------------------------------------------------------------------------------
+
+NO_DISTROS = u16("Windows Subsystem for Linux has no installed distributions.\n"
+                 "Error code: Wsl/WSL_E_DEFAULT_DISTRO_NOT_FOUND\n")
+
+
+def test_distros_empty_when_none_installed():
+    assert wslenv.distros(run=Fake({"-l -q": (0xFFFFFFFF, NO_DISTROS)})) == []
+
+
+@pytest.mark.parametrize("res", [(1, u16("Error code: Wsl/Service/E_UNEXPECTED\n")),
+                                 subprocess.TimeoutExpired("wsl", 60)])
+def test_distros_failure_raises(res):
+    with pytest.raises(wslenv.WslError, match="список дистрибутивов"):
+        wslenv.distros(run=Fake({"-l -q": res}))
+
+
+def test_status_survives_listing_failure():
+    t = healthy(); t["-l -q"] = subprocess.TimeoutExpired("wsl", 60)
+    st = wslenv.status(run=Fake(t))
+    assert st.wsl and not st.distro and not st.ready
+
+
+def test_import_listing_failure_keeps_vhdx(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    vhdx = tmp_path / "wsl" / "omnivoice" / "ext4.vhdx"; vhdx.parent.mkdir(parents=True); vhdx.write_bytes(b"disk")
+    fake = Fake({"-l -q": subprocess.TimeoutExpired("wsl", 60)})
+    with pytest.raises(wslenv.WslError):
+        wslenv.import_distro(tmp_path / "u.tar.gz", run=fake)
+    assert vhdx.read_bytes() == b"disk" and not any("--import" in c for c in fake.joined())
+
+
+def test_import_removes_stale_vhdx_when_not_registered(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    vhdx = tmp_path / "wsl" / "omnivoice" / "ext4.vhdx"; vhdx.parent.mkdir(parents=True); vhdx.write_bytes(b"old")
+    wslenv.import_distro(tmp_path / "u.tar.gz", run=Fake({"-l -q": (0, LIST_NO_OMNI)}))
+    assert not vhdx.exists()
+
+
+def test_import_locked_vhdx_is_russian(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    vhdx = tmp_path / "wsl" / "omnivoice" / "ext4.vhdx"; vhdx.parent.mkdir(parents=True); vhdx.write_bytes(b"x")
+    real_unlink = type(vhdx).unlink
+    def locked(self, *a, **k):
+        if self.name == "ext4.vhdx":
+            raise PermissionError(32, "used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(type(vhdx), "unlink", locked)
+    fake = Fake({"-l -q": (0, LIST_NO_OMNI)})
+    with pytest.raises(wslenv.WslError, match="Не удалось удалить старый диск omnivoice"):
+        wslenv.import_distro(tmp_path / "u.tar.gz", run=fake)
+    assert not any("--import" in c for c in fake.joined())
+
+
+def test_elevated_command_distinguishes_uac_cancel():
+    script = wslenv.elevated_command(["--install"])[3]
+    assert "NativeErrorCode -eq 1223" in script and f"exit {wslenv.START_FAILED}" in script
+
+
+def test_ensure_wsl_start_failure_is_not_uac_message():
+    with pytest.raises(wslenv.WslError) as e:
+        wslenv.ensure_wsl(run=Seq(MISSING, MISSING, wslenv.START_FAILED))
+    assert "отменена" not in str(e.value) and "администратора" in str(e.value)
+
+
+def test_setup_script_stamps_and_venv_check():
+    sh = (COMPAT / "wsl_setup.sh").read_text(encoding="utf-8")
+    assert '"$VENV/bin/pip"' in sh and "python3 -m venv --clear" in sh
+    assert "piper.train.vits.monotonic_align" in sh and "уже собрано" in sh
+    assert sh.count("sha256sum") >= 1 and "DEPS_STAMP" in sh and "PIPER_STAMP" in sh
+
+
+def test_download_unknown_length_truncated_fails_sha(tmp_path, monkeypatch):
+    class NoLen(Resp):
+        def __init__(self):
+            super().__init__(b"trunc"); self.headers = {}
+    monkeypatch.setattr(download.urllib.request, "urlopen", lambda req, timeout=None: NoLen())
+    with pytest.raises(download.DownloadError, match="контрольная сумма"):
+        download.fetch("https://x/f", tmp_path / "f", sha256=hashlib.sha256(b"truncated-full").hexdigest())
+    assert not (tmp_path / "f").exists() and not (tmp_path / "f.part").exists()
+
+
+def test_download_unknown_length_without_sha_is_accepted(tmp_path, monkeypatch):
+    class NoLen(Resp):
+        def __init__(self):
+            super().__init__(b"data"); self.headers = {}
+    monkeypatch.setattr(download.urllib.request, "urlopen", lambda req, timeout=None: NoLen())
+    assert download.fetch("https://x/f", tmp_path / "f").read_bytes() == b"data"
