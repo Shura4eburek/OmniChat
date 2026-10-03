@@ -39,3 +39,6 @@ libs/*.tar.bz2
 
 # brainstorming companion mockups
 .superpowers/
+
+# Game/launcher logs written to the repo root
+/logs/
