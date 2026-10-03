@@ -127,3 +127,66 @@
 | 01:11 | Created docs/superpowers/specs/2026-10-03-pixel-hud-ui-design.md | — | ~2196 |
 | 01:20 | Created docs/superpowers/plans/2026-10-03-pixel-hud-ui.md | — | ~32506 |
 | 01:25 | pixel HUD UI: brainstorm (teal tactical HUD, voice.json+portrait, own widgets), spec + 11-task plan committed; issues #48-#58 + epic #59; implementation planned for 2026-10-04 | docs/superpowers/** | ok | ~120k |
+| 14:58 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/task-1-report.md | — | ~863 |
+| 14:59 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/implementer-rules.md | — | ~750 |
+| 14:59 | Session end: 5 writes across 4 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md) | 8 reads | ~4156 tok |
+| 15:00 | Created src/test/java/org/mamoru/omnichat/voice/VoiceMetaReaderTest.java | — | ~892 |
+| 15:00 | Created src/main/java/org/mamoru/omnichat/voice/VoiceMeta.java | — | ~138 |
+| 15:00 | Created src/main/java/org/mamoru/omnichat/voice/VoiceMetaReader.java | — | ~1136 |
+| 15:05 | Task 2: VoiceMetaReader TDD (RED→GREEN); voice.json+portrait.png read, UTF-8, PNG validation, field truncation; 7 tests pass, full build ok; commit 7296652 | src/main/java/org/mamoru/omnichat/voice/**, src/test/java/org/mamoru/omnichat/voice/**, task-2-report.md | DONE | ~1500 |
+| 15:01 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/task-2-report.md | — | ~977 |
+| 15:02 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/reviewer-rules.md | — | ~692 |
+| 15:02 | Session end: 10 writes across 9 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 11 reads | ~8968 tok |
+| 15:03 | Session end: 10 writes across 9 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 15 reads | ~10533 tok |
+| 15:04 | Session end: 10 writes across 9 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 16 reads | ~10533 tok |
+| 15:04 | Created .claude/worktrees/agent-a5f05e2556fe62f09/src/test/java/org/mamoru/omnichat/client/ui/PortraitGeneratorTest.java | — | ~268 |
+| 15:04 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/src/test/java/org/mamoru/omnichat/client/ui/HudLayoutTest.java | — | ~493 |
+| 15:04 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/src/test/java/org/mamoru/omnichat/client/ui/HudTextTest.java | — | ~308 |
+| 15:05 | Created .claude/worktrees/agent-a30431228bce4c831/src/test/java/org/mamoru/omnichat/client/tts/WaveformMeterTest.java | — | ~239 |
+| 15:05 | Created .claude/worktrees/agent-a30431228bce4c831/src/test/java/org/mamoru/omnichat/client/tts/PreviewTicketsTest.java | — | ~102 |
+| 15:05 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/src/client/java/org/mamoru/omnichat/client/ui/HudLayout.java | — | ~598 |
+| 15:05 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/src/client/java/org/mamoru/omnichat/client/ui/HudText.java | — | ~548 |
+| 15:05 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/src/client/java/org/mamoru/omnichat/client/ui/HudTheme.java | — | ~606 |
+| 15:05 | Session end: 18 writes across 17 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 18 reads | ~13923 tok |
+| 15:05 | Created .claude/worktrees/agent-a5f05e2556fe62f09/src/client/java/org/mamoru/omnichat/client/ui/PortraitGenerator.java | — | ~489 |
+| 15:05 | Created .claude/worktrees/agent-a30431228bce4c831/src/client/java/org/mamoru/omnichat/client/tts/WaveformMeter.java | — | ~327 |
+| 15:05 | Created .claude/worktrees/agent-a30431228bce4c831/src/client/java/org/mamoru/omnichat/client/tts/PreviewTickets.java | — | ~120 |
+| 15:05 | Created .claude/worktrees/agent-a30431228bce4c831/src/client/java/org/mamoru/omnichat/client/tts/VoicePreview.java | — | ~916 |
+| 15:05 | Edited .claude/worktrees/agent-a5f05e2556fe62f09/build.gradle | 3→7 lines | ~92 |
+| 15:06 | Edited .claude/worktrees/agent-a5f05e2556fe62f09/build.gradle | modified named() | ~32 |
+| 15:06 | Edited .claude/worktrees/agent-a0fb35b7f9ddae92e/build.gradle | expanded (+8 lines) | ~165 |
+| 15:06 | Edited .claude/worktrees/agent-a5f05e2556fe62f09/build.gradle | 3→4 lines | ~66 |
+| 15:06 | Session end: 26 writes across 21 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 23 reads | ~16288 tok |
+| 15:06 | Edited .claude/worktrees/agent-a0fb35b7f9ddae92e/build.gradle | 4→5 lines | ~63 |
+| 15:06 | Session end: 27 writes across 21 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 24 reads | ~16356 tok |
+| 15:08 | Created .claude/worktrees/agent-a0fb35b7f9ddae92e/.superpowers/sdd/2026-10-03-pixel-hud-ui/task-6-report.md | — | ~1383 |
+| 15:08 | Session end: 28 writes across 22 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 34 reads | ~17838 tok |
+| 15:09 | Session end: 28 writes across 22 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 34 reads | ~17838 tok |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/PortraitTextures.java | — | ~714 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/HudButton.java | — | ~535 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/HudToggle.java | — | ~668 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/HudSlider.java | — | ~640 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/TabBar.java | — | ~781 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/VoiceTile.java | — | ~1127 |
+| 15:12 | Created src/client/java/org/mamoru/omnichat/client/ui/widget/StatusLine.java | — | ~195 |
+| 15:13 | Session end: 35 writes across 29 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 35 reads | ~22830 tok |
+| 15:14 | Session end: 35 writes across 29 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 37 reads | ~22830 tok |
+| 15:15 | Created src/client/java/org/mamoru/omnichat/client/ui/screen/HudTab.java | — | ~162 |
+| 15:15 | Created src/client/java/org/mamoru/omnichat/client/ui/screen/OmnichatScreen.java | — | ~1255 |
+| 15:15 | Created src/client/java/org/mamoru/omnichat/client/ui/screen/AudioTab.java | — | ~824 |
+| 15:15 | Created src/client/java/org/mamoru/omnichat/client/ui/screen/BubblesTab.java | — | ~570 |
+| 15:16 | Created src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java | — | ~2881 |
+| 15:28 | Edited src/client/java/org/mamoru/omnichat/client/ui/screen/VoiceTab.java | 1→2 lines | ~43 |
+| 15:30 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/task-9-report.md | — | ~1234 |
+| 15:30 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 42 reads | ~30295 tok |
+| 15:32 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 45 reads | ~30295 tok |
+| 15:37 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 52 reads | ~30295 tok |
+| 15:37 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 53 reads | ~30295 tok |
+| 15:38 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 53 reads | ~30295 tok |
+| 15:40 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 58 reads | ~30295 tok |
+| 15:41 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 60 reads | ~30295 tok |
+| 15:46 | Session end: 42 writes across 35 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 64 reads | ~30295 tok |
+| 15:51 | Created .superpowers/sdd/2026-10-03-pixel-hud-ui/final-fix-report.md | — | ~1744 |
+| 15:52 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 65 reads | ~32163 tok |
+| 15:53 | pixel HUD UI implemented via SDD (tasks 1-11 + final fixes), branch feat/pixel-hud-ui, build+smoke green | src/**, docs, scripts | ok | ~2M subagent |
+| 15:53 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 66 reads | ~33798 tok |

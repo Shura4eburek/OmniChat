@@ -4,8 +4,10 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.ui.HudTheme;
+import org.mamoru.omnichat.client.ui.HudToast;
+import org.mamoru.omnichat.client.ui.VoiceCatalog;
 import org.mamoru.omnichat.network.ModelDownloadRequestC2SPayload;
 import org.mamoru.omnichat.network.ModelDownloadStatusS2CPayload;
 import org.mamoru.omnichat.network.ModelFileChunkS2CPayload;
@@ -60,6 +62,7 @@ public class ModelDownloadManager {
     // All fields below are guarded by this
     // modelName -> state, in request order (current download first)
     private final Map<String, Download> downloads = new LinkedHashMap<>();
+    private final Map<String, String> failures = new java.util.HashMap<>();
     private final ArrayDeque<String> queuedRequests = new ArrayDeque<>();
     private Download current;
     private long lastRequestSentAt;
@@ -88,6 +91,7 @@ public class ModelDownloadManager {
             LOGGER.error("Not downloading model '{}': invalid name", modelName);
             return;
         }
+        failures.remove(modelName);
         Path partDir = getDownloadsDir().resolve(modelDir.getFileName() + ".part");
         downloads.put(modelName, new Download(modelName, modelDir, partDir));
         queuedRequests.add(modelName);
@@ -269,6 +273,8 @@ public class ModelDownloadManager {
         }
 
         LOGGER.info("Model '{}' installed ({} files, {} bytes)", d.modelName, d.seenFiles.size(), d.bytesWritten);
+        VoiceCatalog.invalidateLocal(d.modelName);
+        HudToast.show(Text.translatable("omnichat.toast.downloaded"), Text.literal(d.modelName), HudTheme.OK);
         Consumer<String> callback = onDownloadComplete;
         if (callback != null) {
             try {
@@ -323,11 +329,9 @@ public class ModelDownloadManager {
         diskExecutor.execute(() -> cleanup(d));
 
         LOGGER.warn("Download of model '{}' failed: {}", d.modelName, reason);
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal("[OmniChat] Model '" + d.modelName + "' download failed: " + reason)
-                    .formatted(Formatting.RED), false);
-        }
+        failures.put(d.modelName, reason);
+        HudToast.show(Text.translatable("omnichat.toast.download_failed"),
+                Text.literal(d.modelName + ": " + reason), HudTheme.ERROR);
         sendNextRequest();
     }
 
@@ -337,8 +341,14 @@ public class ModelDownloadManager {
             diskExecutor.execute(() -> cleanup(d));
         }
         downloads.clear();
+        failures.clear();
         queuedRequests.clear();
         current = null;
+    }
+
+    /** Last failure reason per model since its last request (shown on the voice card). */
+    public synchronized Map<String, String> getFailures() {
+        return Map.copyOf(failures);
     }
 
     // ---- file helpers ----

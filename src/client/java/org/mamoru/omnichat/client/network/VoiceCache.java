@@ -1,15 +1,15 @@
 package org.mamoru.omnichat.client.network;
 
 import org.mamoru.omnichat.network.VoiceChoice;
+import org.mamoru.omnichat.voice.VoiceMeta;
 
 import java.util.*;
 
 public class VoiceCache {
     private static final VoiceCache INSTANCE = new VoiceCache();
 
-    private List<String> serverModels = Collections.emptyList();
+    private volatile List<VoiceMeta> catalog = List.of();
     private final Map<UUID, VoiceChoice> voiceMap = new HashMap<>();
-    private boolean connectedToOmnichatServer = false;
 
     private VoiceCache() {}
 
@@ -17,13 +17,16 @@ public class VoiceCache {
         return INSTANCE;
     }
 
-    public void setServerModels(List<String> models) {
-        this.serverModels = List.copyOf(models);
-        this.connectedToOmnichatServer = true;
+    public void setCatalog(List<VoiceMeta> voices) {
+        this.catalog = List.copyOf(voices);
+    }
+
+    public List<VoiceMeta> getCatalog() {
+        return catalog;
     }
 
     public List<String> getServerModels() {
-        return serverModels;
+        return catalog.stream().map(VoiceMeta::model).toList();
     }
 
     public void setVoiceMap(Map<UUID, VoiceChoice> voices) {
@@ -43,13 +46,8 @@ public class VoiceCache {
         return voiceMap.get(playerUuid);
     }
 
-    public boolean isConnectedToOmnichatServer() {
-        return connectedToOmnichatServer;
-    }
-
     public void clear() {
-        serverModels = Collections.emptyList();
+        catalog = List.of();
         voiceMap.clear();
-        connectedToOmnichatServer = false;
     }
 }

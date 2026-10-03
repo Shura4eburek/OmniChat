@@ -6,7 +6,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
-import org.mamoru.omnichat.client.screen.OmnichatSettingsScreen;
+import org.mamoru.omnichat.client.ui.screen.OmnichatScreen;
 
 public class OmnichatKeybinds {
     private static final KeyBinding.Category OMNICHAT_CATEGORY =
@@ -24,7 +24,7 @@ public class OmnichatKeybinds {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (settingsKey.wasPressed()) {
-                client.setScreen(new OmnichatSettingsScreen(null));
+                client.setScreen(new OmnichatScreen(null));
             }
         });
     }

@@ -5,19 +5,14 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.text.Text;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
+import org.mamoru.omnichat.client.ui.HudText;
+import org.mamoru.omnichat.client.ui.HudTheme;
 
 import java.util.Map;
 
 public class DownloadProgressHud implements HudRenderCallback {
-    private static final int BAR_WIDTH = 160;
-    private static final int BAR_HEIGHT = 10;
-    private static final int PADDING = 4;
-    private static final int BG_COLOR = 0xAA000000;
-    private static final int BAR_BG_COLOR = 0xFF333333;
-    private static final int BAR_FILL_COLOR = 0xFF55FF55;
-    private static final int TEXT_COLOR = 0xFFFFFFFF;
-
     public static void register() {
         HudRenderCallback.EVENT.register(new DownloadProgressHud());
     }
@@ -26,42 +21,23 @@ public class DownloadProgressHud implements HudRenderCallback {
     public void onHudRender(DrawContext context, RenderTickCounter tickCounter) {
         Map<String, Float> downloads = ModelDownloadManager.getInstance().getActiveDownloads();
         if (downloads.isEmpty()) return;
-
         MinecraftClient client = MinecraftClient.getInstance();
-        TextRenderer textRenderer = client.textRenderer;
-        int screenWidth = client.getWindow().getScaledWidth();
-
-        int x = screenWidth - BAR_WIDTH - PADDING * 2 - 4;
-        int y = 4;
-
-        for (Map.Entry<String, Float> entry : downloads.entrySet()) {
-            String modelName = entry.getKey();
-            // -1 = request still waiting in the local or server queue
-            boolean waiting = entry.getValue() < 0;
-            float progress = waiting ? 0f : entry.getValue();
-            int percent = (int) (progress * 100);
-
-            String label = modelName + (waiting ? " - waiting" : " - " + percent + "%");
-            int totalHeight = textRenderer.fontHeight + 2 + BAR_HEIGHT + PADDING * 2;
-
-            // Background
-            context.fill(x, y, x + BAR_WIDTH + PADDING * 2, y + totalHeight, BG_COLOR);
-
-            // Label
-            context.drawText(textRenderer, label, x + PADDING, y + PADDING, TEXT_COLOR, true);
-
-            // Bar background
-            int barX = x + PADDING;
-            int barY = y + PADDING + textRenderer.fontHeight + 2;
-            context.fill(barX, barY, barX + BAR_WIDTH, barY + BAR_HEIGHT, BAR_BG_COLOR);
-
-            // Bar fill
-            int fillWidth = (int) (BAR_WIDTH * progress);
-            if (fillWidth > 0) {
-                context.fill(barX, barY, barX + fillWidth, barY + BAR_HEIGHT, BAR_FILL_COLOR);
-            }
-
-            y += totalHeight + 2;
+        TextRenderer tr = client.textRenderer;
+        int w = 150, rowH = 18;
+        int x = context.getScaledWindowWidth() - w - 6, y = 6;
+        int h = downloads.size() * rowH + 4;
+        context.fill(x, y, x + w, y + h, HudTheme.BG);
+        HudTheme.frame(context, x, y, w, h, HudTheme.ACCENT_DIM);
+        int ry = y + 3;
+        for (Map.Entry<String, Float> e : downloads.entrySet()) {
+            float p = e.getValue();
+            String name = HudText.ellipsize(e.getKey(), 90, tr::getWidth);
+            String pct = p < 0 ? Text.translatable("omnichat.hud.queued").getString() : Math.round(p * 100) + "%";
+            context.drawText(tr, name, x + 5, ry, HudTheme.TEXT, false);
+            context.drawText(tr, pct, x + w - 5 - tr.getWidth(pct), ry, p < 0 ? HudTheme.MUTED : HudTheme.WARN, false);
+            context.fill(x + 5, ry + 11, x + w - 5, ry + 13, 0xFF2A2430);
+            if (p > 0) context.fill(x + 5, ry + 11, x + 5 + (int) ((w - 10) * p), ry + 13, HudTheme.ACCENT);
+            ry += rowH;
         }
     }
 }

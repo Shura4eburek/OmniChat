@@ -1,14 +1,21 @@
 package org.mamoru.omnichat.server;
 
+import org.mamoru.omnichat.network.VoiceCatalogS2CPayload;
 import org.mamoru.omnichat.network.VoiceChoice;
 import org.mamoru.omnichat.util.ModelScanner;
+import org.mamoru.omnichat.voice.VoiceMeta;
+import org.mamoru.omnichat.voice.VoiceMetaReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 public class VoiceRegistry {
+    private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
     private final Path modelsDir;
     private final VoiceStorage storage;
     // Immutable snapshot, swapped whole by refreshModels() (e.g. from /omnichat reload)
@@ -20,8 +27,25 @@ public class VoiceRegistry {
         refreshModels();
     }
 
+    // Immutable snapshot, swapped whole by refreshModels() together with availableModels
+    private volatile List<VoiceMeta> catalog = List.of();
+
     public void refreshModels() {
-        this.availableModels = List.copyOf(ModelScanner.scanModels(modelsDir));
+        List<String> models = List.copyOf(ModelScanner.scanModels(modelsDir));
+        if (models.size() > VoiceCatalogS2CPayload.MAX_ENTRIES) {
+            LOGGER.warn("{} voice models installed, only the first {} are offered to clients",
+                    models.size(), VoiceCatalogS2CPayload.MAX_ENTRIES);
+        }
+        List<VoiceMeta> metas = new ArrayList<>(models.size());
+        for (String model : models) {
+            metas.add(VoiceMetaReader.read(modelsDir.resolve(model), model));
+        }
+        this.availableModels = models;
+        this.catalog = List.copyOf(metas);
+    }
+
+    public List<VoiceMeta> getCatalog() {
+        return catalog;
     }
 
     public List<String> getAvailableModels() {

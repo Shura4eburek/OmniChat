@@ -7,10 +7,12 @@ import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.chat.ChatBubbleManager;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.ui.HudTheme;
+import org.mamoru.omnichat.client.ui.HudToast;
+import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.mamoru.omnichat.network.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +30,7 @@ public class ClientNetworkHandler {
 
     public static void registerHandlers() {
         ClientPlayNetworking.registerGlobalReceiver(ProtocolVersionPayload.ID, ClientNetworkHandler::onProtocolVersion);
-        receive(ModelListS2CPayload.ID, ClientNetworkHandler::onModelList);
+        receive(VoiceCatalogS2CPayload.ID, ClientNetworkHandler::onCatalog);
         receive(VoiceInfoS2CPayload.ID, ClientNetworkHandler::onVoiceInfo);
         receive(VoiceMapS2CPayload.ID, ClientNetworkHandler::onVoiceMap);
         receive(ModelFileChunkS2CPayload.ID, ClientNetworkHandler::onModelFileChunk);
@@ -60,6 +62,11 @@ public class ClientNetworkHandler {
     /** True when OmniChat may send {@code id} to the current server (handshake passed, channel known). */
     public static boolean canSend(CustomPayload.Id<?> id) {
         return serverProtocol == ServerProtocol.COMPATIBLE && ClientPlayNetworking.canSend(id);
+    }
+
+    /** True when connected to a server whose OmniChat protocol doesn't match ours. */
+    public static boolean isIncompatible() {
+        return serverProtocol == ServerProtocol.INCOMPATIBLE;
     }
 
     /** Registers a receiver that drops payloads unless the handshake succeeded. */
@@ -100,17 +107,17 @@ public class ClientNetworkHandler {
         serverProtocol = ServerProtocol.INCOMPATIBLE;
         LOGGER.warn("OmniChat version mismatch with this server ({}): voice sync, model downloads and "
                 + "typing indicators are disabled", reason);
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal("[OmniChat] This server runs a different OmniChat version; "
-                    + "voice sync and model downloads are disabled here.").formatted(Formatting.YELLOW), false);
-        }
+        HudToast.show(Text.translatable("omnichat.toast.incompatible"),
+                Text.translatable("omnichat.toast.incompatible.desc"), HudTheme.WARN);
     }
 
-    private static void onModelList(ModelListS2CPayload payload, ClientPlayNetworking.Context context) {
-        VoiceCache.getInstance().setServerModels(payload.models());
-        LOGGER.info("Received server model list: {}", payload.models());
-        syncVoiceSelection(payload.models());
+    private static void onCatalog(VoiceCatalogS2CPayload payload, ClientPlayNetworking.Context context) {
+        VoiceCache.getInstance().setCatalog(payload.voices());
+        // Portraits may have changed with the catalog; textures are rebuilt on demand
+        MinecraftClient.getInstance().execute(PortraitTextures::clear);
+        List<String> models = VoiceCache.getInstance().getServerModels();
+        LOGGER.info("Received server model list: {}", models);
+        syncVoiceSelection(models);
     }
 
     /** Tells the server which voice this client has configured, so others hear the right one. */
