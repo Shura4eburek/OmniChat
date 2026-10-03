@@ -120,11 +120,6 @@ def test_toggle_dropped():
         h.toggle_dropped(segs, "nope")
 
 
-def test_parse_epoch():
-    assert h.parse_epoch("Epoch 1840: 100%|##| 12/12 [00:03<00:00]") == 1840
-    assert h.parse_epoch("some other line") is None
-
-
 def test_counter_label():
     assert h.counter_label("Имя", "abc", "name") == "Имя · 3/32"
     assert h.counter_label("Имя", "x" * 40, "name").endswith("40/32 ⚠")
@@ -201,7 +196,7 @@ def test_train_runner_streams_lines_and_epoch():
     r.join(5)
     assert seen == {"epochs": 5, "resume": True, "batch": 8}
     assert r.epoch == 8 and r.status == "done"
-    assert "Epoch 8" in r.log_text()
+    assert "Эпоха 7/?" in r.log_text()
 
 
 def test_train_runner_error_and_busy():
@@ -584,3 +579,113 @@ def test_data_dir_hint_has_single_colon(tmp_path):
     from omnivoice.ui import helpers
     out = helpers.data_dir_html(tmp_path, "config")
     assert "::" not in out and tmp_path.drive in out
+
+
+# ---------- training section: clean log, train.log, checkpoints, disk ----------
+from types import SimpleNamespace as _NS
+
+_BAR = "█" * 10
+
+
+def _epoch(n, mos):
+    return [f"Epoch {n}: 100%|{_BAR}| 3/3 [00:01<00:00, 1.70it/s, v_num=1]",
+            "\x1b[A", "Validation: |          | 0/? [00:00<?, ?it/s]\x1b[A",
+            f"Validation DataLoader 0: 100%|{_BAR}| 1/1 [00:00<00:00, 12.01it/s]",
+            f"Epoch {n}: 100%|{_BAR}| 3/3 [00:03<00:00, 0.27it/s, v_num=1, val_mos={mos}]"]
+
+
+def test_train_runner_clean_log_raw_file_and_status(tmp_path):
+    p = _NS(name="glados", train_dir=tmp_path / "train")
+    t = [0.0]
+    def fake_train(p, epochs, resume, on_line, batch, env, should_stop):
+        on_line("/x/torch/jit/_script.py:1491: FutureWarning: deprecated")
+        for n, mos in ((4140, "2.360"), (4141, "2.410")):
+            for line in _epoch(n, mos):
+                on_line(line)
+            t[0] += 30
+        return 0
+    r = h.TrainRunner(train_fn=fake_train, clock=lambda: t[0])
+    r.start(p, epochs=10, resume=True, batch=8, env=None, target=4149, offset=4139)
+    r.join(5)
+    r.metrics = {4140: {"val_mel": 0.39}}
+    log = r.log_text().splitlines()
+    assert log[0] == S.TRAIN_STARTED.format(epochs=10, batch=8)
+    assert "Эпоха 1/10 · качество (MOS) 2.36 · mel 0.39 · 1.7 ит/с" in log
+    assert "Эпоха 2/10 · качество (MOS) 2.41 · 1.7 ит/с" in log
+    assert log[-1] == S.TRAIN_DONE and "Warning" not in r.log_text()
+    raw = (p.train_dir / "train.log").read_text(encoding="utf-8")
+    assert "FutureWarning" in raw and "val_mos=2.410" in raw and "\x1b[A" in raw
+    assert r.log_path == p.train_dir / "train.log"
+
+
+def test_train_runner_status_has_time_per_epoch_and_eta():
+    gate = threading.Event()
+    t = [0.0]
+    def slow(p, epochs, resume, on_line, batch, env, should_stop):
+        for n in (4140, 4141, 4142):
+            for line in _epoch(n, "2.0"):
+                on_line(line)
+            t[0] += 30
+        gate.wait(5)
+        return 0
+    r = h.TrainRunner(train_fn=slow, clock=lambda: t[0])
+    r.start(_P(), epochs=10, resume=True, batch=None, env=None, target=4149, offset=4139)
+    for _ in range(100):
+        if "осталось" in r.status_text():
+            break
+        threading.Event().wait(0.02)
+    s = r.status_text()
+    gate.set(); r.join(5)
+    assert s == S.TRAIN_RUNNING.format(epoch=3, target=10) + S.TRAIN_TIMING.format(per="30 с", eta="3 мин 30 с")
+
+
+def test_train_runner_reports_new_checkpoints(tmp_path):
+    p = _NS(name="glados", train_dir=tmp_path / "train")
+    d = p.train_dir / "lightning_logs" / "version_0" / "checkpoints"
+    d.mkdir(parents=True)
+    (d / "epoch=4140-val_mel=0.6000.ckpt").write_bytes(b"x")  # from an earlier run: not reported
+    gate = threading.Event()
+    r = h.TrainRunner(train_fn=lambda *a, **k: gate.wait(5) and 0)
+    r.start(p, epochs=10, resume=True, batch=None, env=None, target=4149, offset=4139)
+    (d / "epoch=4204-val_mel=0.3482.ckpt").write_bytes(b"x")
+    (d / "epoch=4204-val_mos=2.3630.ckpt").write_bytes(b"x")
+    (d / "last.ckpt").write_bytes(b"x")
+    r.poll_checkpoints(); r.poll_checkpoints()
+    gate.set(); r.join(5)
+    saved = [l for l in r.log_text().splitlines() if l.startswith("Сохранён")]
+    assert saved == [S.CKPT_SAVED.format(what="эпоха 65 · MOS 2.36 · mel 0.348")]
+
+
+def test_train_runner_stopped_does_not_count_the_broken_epoch():
+    gate = threading.Event()
+    def slow(p, epochs, resume, on_line, batch, env, should_stop):
+        on_line(f"Epoch 5: 40%|{_BAR[:4]}      | 2/5 [00:01<00:01, 1.70it/s, v_num=1]")
+        gate.wait(5)
+        return 137
+    r = h.TrainRunner(train_fn=slow, run=lambda *a, **k: gate.set())
+    r.start(_P(), 10, True, None, None, target=9, offset=0)
+    r.stop(); r.join(5)
+    assert "Эпоха" not in r.log_text() and r.log_text().splitlines()[-1] == S.TRAIN_STOPPED
+
+
+def test_ckpt_choices_labels_and_best_first(tmp_path):
+    rows = [_NS(path=tmp_path / "a.ckpt", epoch=4140, mos=3.98, mel=0.68, best_mos=True, best_mel=False,
+                last=False, old_last=False),
+            _NS(path=tmp_path / "last.ckpt", epoch=4211, mos=2.24, mel=None, best_mos=False, best_mel=False,
+                last=True, old_last=False),
+            _NS(path=tmp_path / "b.ckpt", epoch=4204, mos=None, mel=0.3482, best_mos=False, best_mel=True,
+                last=False, old_last=False)]
+    choices, value = h.ckpt_choices(rows, offset=4139)
+    assert choices == [
+        ("эпоха 1 · MOS 3.98 · mel 0.680 · " + S.CKPT_BEST_MOS, str(tmp_path / "a.ckpt")),
+        ("эпоха 72 · MOS 2.24 · " + S.CKPT_LAST, str(tmp_path / "last.ckpt")),
+        ("эпоха 65 · mel 0.348 · " + S.CKPT_BEST_MEL, str(tmp_path / "b.ckpt")),
+    ]
+    assert value == str(tmp_path / "a.ckpt")
+    assert h.ckpt_choices([], 0) == ([], None)
+
+
+def test_disk_html():
+    out = h.disk_html(train_bytes=19 << 30, n_ckpt=24, extra_bytes=15 << 30, n_extra=21)
+    assert "19,0 ГБ" in out and "24" in out and "15,0 ГБ" in out
+    assert S.DISK_NOTHING_EXTRA in h.disk_html(1 << 30, 3, 0, 0)

@@ -21,6 +21,7 @@ import gradio as gr
 
 from omnivoice import (checker, colab, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
                        transcriber, verify)
+from omnivoice.datadir import human_size, size_of
 from omnivoice.fsutil import TargetBusy
 from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError
@@ -28,7 +29,8 @@ from omnivoice.ui import strings as S
 from omnivoice.ui import theme
 from omnivoice.ui.helpers import (COLUMNS, NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  copy_uploads, counter_label, data_dir_html, env_badge, error_text,
+                                  ckpt_choices, copy_uploads, counter_label, data_dir_html, disk_html, env_badge,
+                                  error_text,
                                   last_epoch_target,
                                   list_projects, needs_setup, list_raw_files, portrait_preview, report_html,
                                   segments_rows, stats_line, steps_bar_html, toggle_dropped)
@@ -41,7 +43,7 @@ warnings.filterwarnings("ignore", message="Cannot display Styler object in inter
 USER_ERRORS = (ProjectError, train.TrainError, PackError, TargetBusy, RuntimeError, ValueError, OSError)
 PACK_FIELDS = (("name", S.F_NAME), ("description", S.F_DESCRIPTION), ("gender", S.F_GENDER),
                ("sample", S.F_SAMPLE))
-PREVIEW_SLOTS = 4
+PREVIEW_SLOTS = 5  # piper synthesises 5 validation phrases per epoch
 
 # Clicking a chip in the steps bar selects that section (event delegation survives re-renders).
 STEPS_JS = """
@@ -52,10 +54,10 @@ element.addEventListener('click', (e) => {
 """
 
 
-def msg_html(text: str = "", error: bool = False) -> str:
+def msg_html(text: str = "", error: bool = False, muted: bool = False) -> str:
     if not text:
         return ""
-    cls = "section-msg err" if error else "section-msg"
+    cls = "section-msg err" if error else ("section-msg muted" if muted else "section-msg")
     return f'<div class="{cls}">{html.escape(text).replace(chr(10), "<br>")}</div>'
 
 
@@ -251,19 +253,33 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                             stop_btn = gr.Button(S.TRAIN_STOP, variant="stop")
                             resume_btn = gr.Button(S.TRAIN_RESUME)
                         train_status = gr.HTML(f'<div class="train-status">{S.TRAIN_IDLE}</div>')
-                        loss_plot = gr.LinePlot(x="step", y="loss", label=S.LOSS, height=220,
-                                                x_title=S.LOSS_STEP, y_title=S.LOSS_VALUE)
+                        with gr.Row(equal_height=True):
+                            mos_plot = gr.LinePlot(x="epoch", y="mos", label=S.CHART_MOS, height=200,
+                                                   x_title=S.CHART_EPOCH, y_title="MOS")
+                            mel_plot = gr.LinePlot(x="epoch", y="mel", label=S.CHART_MEL, height=200,
+                                                   x_title=S.CHART_EPOCH, y_title="mel")
+                        chart_note = gr.HTML()
                         train_log = gr.Textbox(label=S.TRAIN_LOG, lines=10, max_lines=10, interactive=False,
                                                autoscroll=True)
+                        log_note = gr.HTML()
+                        gr.HTML(f'<div class="sub-head">{S.CHECKPOINTS}</div>')
                         with gr.Row(equal_height=True):
-                            ckpt_dd = gr.Dropdown([], label=S.CHECKPOINTS, scale=3, filterable=False)
+                            ckpt_dd = gr.Dropdown([], label=S.CHECKPOINTS, show_label=False, scale=3,
+                                                  filterable=False)
                             refresh_btn = gr.Button(S.REFRESH, scale=1)
+                        gr.HTML(msg_html(S.CKPT_HINT, muted=True))
                         export_btn = gr.Button(S.EXPORT, variant="primary")
-                        preview_dd = gr.Dropdown([], label=S.PREVIEW_STEP, filterable=False)
-                        with gr.Row():
+                        gr.HTML(f'<div class="sub-head">{S.LISTEN}</div>' + msg_html(S.LISTEN_HINT, muted=True))
+                        listen_head = gr.HTML()
+                        with gr.Row(elem_classes="listen-row"):
                             preview_players = [gr.Audio(label=S.PREVIEW.format(n=i + 1), type="filepath",
-                                                        interactive=False, visible=False)
+                                                        interactive=False, visible=False, min_width=150)
                                                for i in range(PREVIEW_SLOTS)]
+                        gr.HTML(f'<div class="sub-head">{S.DISK}</div>')
+                        disk_info = gr.HTML()
+                        with gr.Row(equal_height=True):
+                            prune_ok = gr.Checkbox(label=S.PRUNE_CONFIRM, value=False, scale=1)
+                            prune_btn = gr.Button(S.PRUNE, variant="stop", scale=2)
                         train_msg = gr.HTML()
 
                     with gr.Column(visible=sec0 == S.SEC_PACK, elem_classes="hud-section") as g_pack:
@@ -385,24 +401,20 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         steps.click(on_chip, None, section)
 
         section_msgs = [audio_msg, phrases_msg, train_msg, pack_msg, install_msg]
-        refresh_outputs = [steps, raw_df, stats, table, selected, player, check_out, train_status, train_log,
-                           ckpt_dd, preview_dd, packed, sample_audio, license_tb, *fields.values(),
-                           portrait_in, portrait_out, colab_file, *section_msgs, *preview_players]
+        refresh_outputs = [steps, raw_df, stats, table, selected, player, check_out, train_log,
+                           packed, sample_audio, license_tb, *fields.values(),
+                           portrait_in, portrait_out, colab_file, *section_msgs]
 
         def refresh_all(name, sec, flagged):
+            """The training panel (status, charts, checkpoints, players) is refreshed by train_open."""
             p = try_load(name)
             st, rows = table_update(p, flagged, tolerant=True)
             d = p.display if p else {}
             r = runners.get(name)
-            cps = previews.list_checkpoints(p) if p else []
             return [steps_html(p, sec), list_raw_files(p.raw_dir) if p else [], st, rows, None, None,
-                    msg_html(S.CHECK_EMPTY),
-                    f'<div class="train-status">{html.escape(r.status_text() if r else S.TRAIN_IDLE)}</div>',
-                    r.log_text() if r else "", gr.update(choices=ckpt_choices(cps), value=None),
-                    gr.update(choices=[], value=None), None, None, d.get("license", "")] + [
+                    msg_html(S.CHECK_EMPTY), r.log_text() if r else "", None, None, d.get("license", "")] + [
                 gr.update(value=d.get(k, ""), label=counter_label(lbl, d.get(k, ""), k)) for k, lbl in PACK_FIELDS] + [
-                None, None, gr.update(value=None, visible=False)] + [""] * len(section_msgs) + [
-                gr.update(value=None, visible=False)] * PREVIEW_SLOTS
+                None, None, gr.update(value=None, visible=False)] + [""] * len(section_msgs)
 
         project_dd.change(refresh_all, [project_dd, section, only_flagged], refresh_outputs)
 
@@ -514,10 +526,6 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         check_btn.click(on_check, [project_dd, section], [check_out, steps])
 
         # ---------------- train ----------------
-        def ckpt_choices(cps):
-            return [((S.CHECKPOINT_LAST if c.metric is None else S.CHECKPOINT_ITEM).format(epoch=c.epoch)
-                     + (f" · {c.metric}={c.value:.3f}" if c.metric else ""), str(c.path)) for c in cps]
-
         def start_training(name, n_epochs, n_batch, resume):
             if not name:
                 raise ProjectError(S.NO_PROJECT_SELECTED)
@@ -549,51 +557,141 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         stop_btn.click(on_stop, project_dd, [train_msg, train_status])
 
+        def status_html(name, p=None, metrics=None):
+            r = runners.get(name)
+            if r is not None and r.status != "idle":
+                return f'<div class="train-status">{html.escape(r.status_text())}</div>'
+            done = max(metrics) - train.base_epoch(p) if p and metrics else 0
+            text = S.TRAIN_IDLE_DONE.format(n=done) if done > 0 else S.TRAIN_IDLE
+            return f'<div class="train-status">{html.escape(text)}</div>'
+
         def on_train_tick(name):
             r = runners.get(name)
             if r is None:
                 return gr.skip(), gr.skip()
+            if r.running:
+                r.poll_checkpoints()
             return f'<div class="train-status">{html.escape(r.status_text())}</div>', r.log_text()
 
-        train_timer.tick(on_train_tick, project_dd, [train_status, train_log])
+        train_timer.tick(on_train_tick, project_dd, [train_status, train_log], show_progress="hidden")
 
-        def loss_frame(name, sec):
-            import pandas as pd
-            r = runners.get(name)
-            if sec != S.SEC_TRAIN and not (r and r.running):
-                return gr.skip()  # nobody is looking and nothing changes: don't re-read tensorboard logs
+        def read_metrics(p) -> dict:
             try:
-                p = try_load(name)
-                series = previews.loss_series(p) if p else []
-            except Exception:  # tensorboard missing / log being written: just keep the old chart
-                return gr.skip()
-            return pd.DataFrame(series, columns=["step", "loss"])
+                return previews.epoch_metrics(p)
+            except Exception:  # tensorboard missing / a file being rewritten: show what we can
+                log.debug("events unreadable:\n%s", traceback.format_exc())
+                return {}
 
-        loss_timer.tick(loss_frame, [project_dd, section], loss_plot)
-        demo.load(loss_frame, [project_dd, section], loss_plot)
-        project_dd.change(loss_frame, [project_dd, section], loss_plot)
-        section.change(loss_frame, [project_dd, section], loss_plot)
+        def players(p, ckpt, rows):
+            """listen_head + one update per player for the checkpoint `ckpt` (a path string)."""
+            row = next((r for r in rows if str(r.path) == ckpt), None)
+            items, epoch = [], None
+            if p is not None and row is not None:
+                try:
+                    epoch, items = previews.listen(p, row.epoch)
+                except Exception:
+                    log.warning("listen failed:\n%s", traceback.format_exc())
+            if not items:
+                head = msg_html(S.LISTEN_NONE, muted=True) if row is not None else ""
+            else:
+                off = train.base_epoch(p)
+                text = (S.LISTEN_EPOCH if epoch == row.epoch else S.LISTEN_NEAREST).format(epoch=epoch - off)
+                head = f'<div class="listen-head">{html.escape(text)}</div>'
+            ups = [gr.update(value=str(items[i][1]), label=f"{i + 1}. {items[i][0]}", visible=True)
+                   if i < len(items) else gr.update(value=None, visible=False) for i in range(PREVIEW_SLOTS)]
+            return [head] + ups
 
-        @guarded(3)
-        def on_refresh(name, progress=gr.Progress()):
+        train_panel_outputs = [train_status, mos_plot, mel_plot, chart_note, log_note, ckpt_dd, disk_info,
+                               listen_head, *preview_players]
+
+        def train_panel(name, sec, current, force=False):
+            """Status, charts, checkpoints, disk and players of the training section. Skipped while the
+            section is hidden and nothing trains; the players are only redrawn when the selection moves."""
+            import pandas as pd
+            n = len(train_panel_outputs)
+            r = runners.get(name)
+            if not force and sec != S.SEC_TRAIN and not (r and r.running):
+                return [gr.skip()] * n
+            p = try_load(name)
+            if p is None:
+                return [gr.skip()] * n
+            metrics = read_metrics(p)
+            if r is not None:
+                r.metrics = metrics
+            off = train.base_epoch(p)
+            mos = pd.DataFrame([(e, v) for e, v in previews.loss_series(p, "val_mos", off, metrics)],
+                               columns=["epoch", "mos"])
+            mel = pd.DataFrame([(e, v) for e, v in previews.loss_series(p, "val_mel", off, metrics)],
+                               columns=["epoch", "mel"])
+            rows = previews.rank_checkpoints(p, metrics)
+            choices, best = ckpt_choices(rows, off)
+            paths = [c[1] for c in choices]
+            value = current if current in paths else best
+            keep, drop = previews.prune_plan(p) if rows else ([], [])
+            disk = disk_html(size_of(p.train_dir), len(keep) + len(drop),
+                             sum(f.stat().st_size for f in drop if f.exists()), len(drop))
+            raw_log = p.train_dir / "train.log"
+            note = msg_html(S.TRAIN_LOG_FILE.format(path=raw_log), muted=True) if raw_log.exists() else ""
+            listen = players(p, value, rows) if (value != current or force) else [gr.skip()] * (PREVIEW_SLOTS + 1)
+            return [status_html(name, p, metrics), mos, mel,
+                    "" if len(mos) or len(mel) else msg_html(S.CHART_EMPTY, muted=True), note,
+                    gr.update(choices=choices, value=value) if choices else gr.update(choices=[], value=None),
+                    disk if choices or len(mos) else "", *listen]
+
+        def quiet(fn):
+            """Timers / section switches: an unexpected error is logged, never toasted every few seconds."""
+            @functools.wraps(fn)
+            def wrapper(*args):
+                try:
+                    return fn(*args)
+                except Exception:
+                    log.error("training panel refresh failed:\n%s", traceback.format_exc())
+                    return [gr.skip()] * len(train_panel_outputs)
+            return wrapper
+
+        on_train_open = quiet(lambda name, sec, cur: train_panel(name, sec, cur, force=sec == S.SEC_TRAIN))
+        loss_timer.tick(quiet(train_panel), [project_dd, section, ckpt_dd], train_panel_outputs,
+                        show_progress="hidden")
+        demo.load(on_train_open, [project_dd, section, ckpt_dd], train_panel_outputs)
+        section.change(on_train_open, [project_dd, section, ckpt_dd], train_panel_outputs)
+        # a new project: drop the old selection so the new project's best checkpoint is preselected
+        project_dd.change(quiet(lambda name, sec: train_panel(name, sec, None, force=True)), [project_dd, section],
+                          train_panel_outputs)
+
+        @guarded(len(train_panel_outputs) + 1)
+        def on_refresh(name, sec, current, progress=gr.Progress()):
             p = load(name)
             progress(0, desc=S.REFRESHING)
-            cps = previews.list_checkpoints(p)
-            found = previews.extract_previews(p)
-            steps_list = [str(s) for s in sorted(found, reverse=True)]
-            return (msg_html("" if cps else S.NO_CHECKPOINTS),
-                    gr.update(choices=ckpt_choices(cps), value=str(cps[0].path) if cps else None),
-                    gr.update(choices=steps_list, value=steps_list[0] if steps_list else None))
+            out = train_panel(name, sec, current, force=True)
+            return [msg_html("" if previews.list_checkpoints(p) else S.NO_CHECKPOINTS, muted=True)] + out
 
-        refresh_btn.click(on_refresh, project_dd, [train_msg, ckpt_dd, preview_dd])
+        refresh_btn.click(on_refresh, [project_dd, section, ckpt_dd], [train_msg] + train_panel_outputs)
 
-        def on_preview(name, step):
-            p = try_load(name)
-            files = sorted((p.train_dir / "previews" / str(step)).glob("*.wav")) if p and step else []
-            return [gr.update(value=str(files[i]), visible=True) if i < len(files) else gr.update(value=None, visible=False)
-                    for i in range(PREVIEW_SLOTS)]
+        @guarded(PREVIEW_SLOTS + 2)
+        def on_listen(name, ckpt, progress=gr.Progress()):
+            p = load(name)
+            progress(0, desc=S.LISTENING)
+            return [""] + players(p, ckpt, previews.rank_checkpoints(p, read_metrics(p)))
 
-        preview_dd.change(on_preview, [project_dd, preview_dd], preview_players)
+        ckpt_dd.input(on_listen, [project_dd, ckpt_dd], [train_msg, listen_head, *preview_players])
+
+        @guarded(len(train_panel_outputs) + 2)
+        def on_prune(name, sec, current, confirmed):
+            r = runners.get(name)
+            if r is not None and r.running:
+                raise ValueError(S.PRUNE_BUSY)
+            if not confirmed:
+                raise ValueError(S.PRUNE_NEED_CONFIRM)
+            with locked(name, S.OP_PRUNE) as p:
+                if previews.recently_written(p):
+                    raise ValueError(S.PRUNE_RECENT)
+                _keep, drop = previews.prune_plan(p)
+                n, freed = previews.delete_checkpoints(drop)
+            out = train_panel(name, sec, current, force=True)
+            return [msg_html(S.PRUNED.format(n=n, size=human_size(freed))), False] + out
+
+        prune_btn.click(on_prune, [project_dd, section, ckpt_dd, prune_ok],
+                        [train_msg, prune_ok] + train_panel_outputs)
 
         @guarded(1)
         def on_export(name, ckpt, progress=gr.Progress()):

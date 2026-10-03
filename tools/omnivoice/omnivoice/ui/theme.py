@@ -184,6 +184,13 @@ button.lg, button.md, button.sm {{ letter-spacing:1px; text-transform:uppercase;
 
 /* train */
 .train-status {{ font-family:'Silkscreen', 'JetBrains Mono', monospace; color:var(--ac); letter-spacing:1px; }}
+.sub-head {{ font-family:'Silkscreen', 'JetBrains Mono', monospace; color:var(--ac); letter-spacing:2px; font-size:12px;
+            text-transform:uppercase; border-bottom:1px solid var(--acd); padding:10px 0 4px; margin-top:6px; }}
+.listen-head {{ color:{TEXT}; font-size:13px; }}
+.disk-line {{ font-family:'JetBrains Mono', monospace; color:{TEXT}; font-size:13px; }}
+.section-msg.muted {{ color:var(--muted); font-size:12px; }}
+.listen-row {{ flex-wrap:wrap !important; gap:8px !important; }}
+.listen-row > div {{ flex:1 1 150px !important; }}
 .portrait img {{ image-rendering: pixelated; }}
 .section-msg {{ min-height:1.2em; }}
 .section-msg.err, .section-msg .err {{ color:var(--bad); }}

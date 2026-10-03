@@ -94,3 +94,52 @@ def test_slice_message_says_whether_text_was_recognised(monkeypatch, tmp_path):
     assert ui_app.slice_message(3, True) == S.SLICED_TEXT.format(n=3)
     assert ui_app.slice_message(3, False) == S.SLICED_NO_TEXT.format(n=3)
     assert ui_app.slice_message(0, True) == S.SLICED_NONE
+
+
+def _handler(demo, name):
+    return next(f.fn for f in demo.fns.values() if getattr(f.fn, "__name__", "") == name)
+
+
+def test_training_panel_fills_charts_checkpoints_players_and_prunes(tmp_path):
+    pytest.importorskip("tensorboard")
+    import os, time
+    from omnivoice import previews
+    from omnivoice.ui import strings as S
+    from tests.test_previews import ckpts, piper_events
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    logs = p.train_dir / "lightning_logs"
+    piper_events(logs / "version_0", [4140, 4141, 4142], mos={4140: 3.98, 4141: 3.5, 4142: 2.2},
+                 mel={4140: 0.68, 4141: 0.6, 4142: 0.55})
+    d = ckpts(p, "version_0", ["epoch=4140-val_mos=3.9800.ckpt", "epoch=4141-val_mos=3.5000.ckpt",
+                               "epoch=4142-val_mel=0.5500.ckpt", "last.ckpt"])
+    old = time.time() - 600
+    for f in list(d.iterdir()) + list(logs.rglob("events*")):
+        os.utime(f, (old, old))
+    demo = build(tmp_path)
+    out = _handler(demo, "on_refresh")("Arthas", S.SEC_TRAIN, None)
+    msg, status, mos, mel, chart_note, log_note, dd, disk, head, *players = out
+    assert list(mos["epoch"]) == [1, 2, 3] and list(mel["epoch"]) == [1, 2, 3]
+    assert dd["value"] == str(d / "epoch=4140-val_mos=3.9800.ckpt")
+    assert S.CKPT_BEST_MOS in dd["choices"][0][0] and dd["choices"][0][0].startswith("эпоха 1 · MOS 3.98")
+    assert "Эпоха 1" in head and players[0]["visible"] and players[0]["label"].startswith("1. Твоя душа")
+    assert S.TRAIN_IDLE_DONE.format(n=3) in status and "Лишних: 1" in disk
+    # listening to another checkpoint
+    _m, head2, *pl2 = _handler(demo, "on_listen")("Arthas", str(d / "epoch=4142-val_mel=0.5500.ckpt"))
+    assert "Эпоха 3" in head2 and pl2[4]["visible"]
+    # pruning: needs the checkbox, then keeps best MOS + best mel + last.ckpt
+    refused = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, False)
+    assert S.PRUNE_NEED_CONFIRM in refused[0] and (d / "epoch=4141-val_mos=3.5000.ckpt").exists()
+    done = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, True)
+    assert "Удалено чекпойнтов: 1" in done[0] and done[1] is False
+    assert sorted(f.name for f in d.iterdir()) == ["epoch=4140-val_mos=3.9800.ckpt", "epoch=4142-val_mel=0.5500.ckpt",
+                                                   "last.ckpt"]
+    previews._INDEX.clear()
+
+
+def test_prune_refused_while_files_are_fresh(tmp_path):
+    from omnivoice.ui import strings as S
+    from tests.test_previews import ckpts
+    p = Project.create(tmp_path / "g", name="g", language="ru")
+    d = ckpts(p, "version_0", ["epoch=1-val_mos=2.0000.ckpt", "epoch=2-val_mos=1.0000.ckpt", "last.ckpt"])
+    out = _handler(build(tmp_path), "on_prune")("g", S.SEC_TRAIN, None, True)
+    assert S.PRUNE_RECENT in out[0] and len(list(d.iterdir())) == 3
