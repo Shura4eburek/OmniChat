@@ -12,27 +12,31 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.mamoru.omnichat.client.ui.HudLayout;
 import org.mamoru.omnichat.client.ui.HudTheme;
+import org.mamoru.omnichat.client.ui.ModelHealthView;
 import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.mamoru.omnichat.client.ui.VoiceCatalog;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/** Portrait tile. LMB/Enter selects, RMB previews. Badge: ✓ active, ↓ remote, % downloading, ! failed. */
+/** Portrait tile. LMB/Enter selects, RMB previews. Badge: ✓ active, ↓ remote, % downloading, ! failed,
+ * ⚠ installed model needs a fix, ! installed model is incompatible. */
 public class VoiceTile extends ClickableWidget {
     private final VoiceCatalog.Entry entry;
     // Latest catalog entry for this model: download progress changes without a rebuild
     private final Supplier<VoiceCatalog.Entry> live;
     private final boolean selected, activeVoice;
+    private final ModelHealthView.Badge problem;
     private final Consumer<String> onSelect, onPreview;
 
     public VoiceTile(int x, int y, VoiceCatalog.Entry entry, Supplier<VoiceCatalog.Entry> live, boolean selected,
-                     boolean activeVoice, Consumer<String> onSelect, Consumer<String> onPreview) {
+                     boolean activeVoice, ModelHealthView.Badge problem, Consumer<String> onSelect, Consumer<String> onPreview) {
         super(x, y, HudLayout.TILE, HudLayout.TILE, Text.literal(entry.meta().name()));
         this.entry = entry;
         this.live = live;
         this.selected = selected;
         this.activeVoice = activeVoice;
+        this.problem = problem;
         this.onSelect = onSelect;
         this.onPreview = onPreview;
     }
@@ -70,6 +74,8 @@ public class VoiceTile extends ClickableWidget {
             case REMOTE -> { text = "↓"; color = HudTheme.WARN; }
             case FAILED -> { text = "!"; color = HudTheme.ERROR; }
             default -> {
+                if (problem == ModelHealthView.Badge.WARN) { text = "⚠"; color = HudTheme.WARN; break; }
+                if (problem == ModelHealthView.Badge.ERROR) { text = "!"; color = HudTheme.ERROR; break; }
                 if (!activeVoice) return;
                 text = "✓";
                 color = HudTheme.ACCENT;

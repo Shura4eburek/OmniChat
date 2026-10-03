@@ -1,5 +1,6 @@
 package org.mamoru.omnichat.client.ui.screen;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Drawable;
 import net.minecraft.client.gui.DrawContext;
@@ -46,6 +47,11 @@ public class OmnichatScreen extends Screen {
 
     public <T extends Element & Drawable & Selectable> T add(T widget) {
         return addDrawableChild(widget);
+    }
+
+    /** Render thread: rebuilds the open HUD screen, unless a slider is being dragged (tabs re-check on tick). */
+    public static void rebuildIfOpen() {
+        if (MinecraftClient.getInstance().currentScreen instanceof OmnichatScreen s && !s.isDragging()) s.rebuild();
     }
 
     /** Re-creates all widgets, keeping keyboard focus on the same voice tile (or the same slot). */

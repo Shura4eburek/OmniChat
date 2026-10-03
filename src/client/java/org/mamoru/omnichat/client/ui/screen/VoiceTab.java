@@ -11,6 +11,7 @@ import org.mamoru.omnichat.client.config.OmnichatConfig;
 import org.mamoru.omnichat.client.network.ClientNetworkHandler;
 import org.mamoru.omnichat.client.network.ModelDownloadManager;
 import org.mamoru.omnichat.client.network.VoiceCache;
+import org.mamoru.omnichat.client.tts.ModelRepair;
 import org.mamoru.omnichat.client.tts.SpeakerCounts;
 import org.mamoru.omnichat.client.tts.VoicePreview;
 import org.mamoru.omnichat.client.ui.*;
@@ -20,17 +21,32 @@ import org.mamoru.omnichat.client.ui.widget.StatusLine;
 import org.mamoru.omnichat.client.ui.widget.VoiceTile;
 import org.mamoru.omnichat.network.VoiceSelectionC2SPayload;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class VoiceTab implements HudTab {
+    private static final Logger LOGGER = LoggerFactory.getLogger("OmniChat");
     private static String selected;
     private static int scrollRow;
+    // Language picked in the repair slider, per model (survives rebuilds); models being repaired right now
+    private static final Map<String, String> PICKED_VOICE = new ConcurrentHashMap<>();
+    private static final Set<String> REPAIRING = ConcurrentHashMap.newKeySet();
 
     private OmnichatScreen screen;
     // entries: what the widgets were built from; live: latest catalog, refreshed in tick() for progress
     private List<VoiceCatalog.Entry> entries = List.of();
     private List<VoiceCatalog.Entry> live = List.of();
+    // What the widgets were built from, including model health (a finished check must rebuild the tab)
+    private List<String> builtSignature = List.of();
     private HudLayout.Rect gridRect;
     private int maxScrollRow;
     private int ticks;
@@ -41,6 +57,7 @@ public class VoiceTab implements HudTab {
         OmnichatConfig config = OmnichatClient.getConfig();
         entries = VoiceCatalog.current();
         live = entries;
+        builtSignature = signature(entries);
         selected = VoiceCatalog.selectOrFallback(entries, selected, config.getModelPath());
         gridRect = null;
         if (entries.isEmpty()) return;
@@ -64,7 +81,8 @@ public class VoiceTab implements HudTab {
             int y = g.y() + row * (HudLayout.TILE + HudLayout.TILE_GAP);
             boolean active = e.meta().model().equals(config.getModelPath());
             String model = e.meta().model();
-            screen.add(new VoiceTile(x, y, e, () -> liveEntry(model, e), model.equals(selected), active,
+            ModelHealthView.Badge badge = ModelHealthView.badge(e.state(), health(e));
+            screen.add(new VoiceTile(x, y, e, () -> liveEntry(model, e), model.equals(selected), active, badge,
                     this::select, this::preview));
         }
         if (!pending.isEmpty()) {
@@ -90,6 +108,7 @@ public class VoiceTab implements HudTab {
                         screen.rebuild();
                     }));
             case INSTALLED -> {
+                if (addRepairControls(sel, d.x(), bottom, d.w())) return;
                 int speakers = SpeakerCounts.get(sel.meta().model(), () -> MinecraftClient.getInstance().execute(screen::rebuild));
                 if (speakers > 1 && sel.meta().model().equals(config.getModelPath())) {
                     screen.add(new HudSlider(d.x(), bottom - 16, d.w(), Text.translatable("omnichat.ui.voice.speaker"),
@@ -102,6 +121,86 @@ public class VoiceTab implements HudTab {
             default -> {
             }
         }
+    }
+
+    /** Health of an installed model (null while its check is pending, and for other states). */
+    private static ModelRepair.Health health(VoiceCatalog.Entry e) {
+        return e.state() == VoiceCatalog.State.INSTALLED ? ModelHealthCache.INSTANCE.get(e.meta().model()) : null;
+    }
+
+    private static List<String> signature(List<VoiceCatalog.Entry> list) {
+        List<String> sig = new ArrayList<>(VoiceCatalog.signature(list));
+        for (VoiceCatalog.Entry e : list) {
+            sig.add(ModelHealthView.token(health(e)) + (REPAIRING.contains(e.meta().model()) ? "+" : ""));
+        }
+        return sig;
+    }
+
+    /** Fix button (and language picker) for a fixable model; true if the model has a known problem. */
+    private boolean addRepairControls(VoiceCatalog.Entry sel, int x, int bottom, int w) {
+        ModelRepair.Health h = health(sel);
+        if (h == null || h.status() == ModelRepair.Status.OK) return false;
+        String model = sel.meta().model();
+        HudButton button;
+        switch (ModelHealthView.fixMode(h)) {
+            case BUTTON -> {
+                String voice = ModelHealthView.autoVoice(h);
+                button = new HudButton(x, bottom - 18, w, 16,
+                        Text.translatable("omnichat.ui.voice.repair_auto", voice), () -> repair(sel, voice));
+            }
+            case PICKER -> {
+                List<String> voices = h.voices();
+                int start = ModelHealthView.initialVoiceIndex(voices, PICKED_VOICE.get(model), sel.meta().language());
+                PICKED_VOICE.put(model, voices.get(start));
+                screen.add(new HudSlider(x, bottom - 34, w, Text.translatable("omnichat.ui.voice.repair_language"),
+                        0, voices.size() - 1, start, 1, v -> Text.literal(voices.get((int) v)),
+                        v -> PICKED_VOICE.put(model, voices.get((int) v))));
+                button = new HudButton(x, bottom - 18, w, 16, Text.translatable("omnichat.ui.voice.repair"),
+                        () -> repair(sel, PICKED_VOICE.getOrDefault(model, voices.get(start))));
+            }
+            default -> {
+                return true;
+            }
+        }
+        if (REPAIRING.contains(model)) {
+            button.setMessage(Text.translatable("omnichat.ui.voice.repairing"));
+            button.active = false;
+        }
+        screen.add(button);
+        return true;
+    }
+
+    /** Repairs off the render thread, then drops everything that cached the broken model. */
+    private void repair(VoiceCatalog.Entry e, String voice) {
+        String model = e.meta().model();
+        Path dir = OmnichatConfig.resolveModelDir(model);
+        if (dir == null || !REPAIRING.add(model)) return;
+        VoicePreview.stop();
+        boolean onServer = e.onServer();
+        screen.rebuild();
+        Thread t = new Thread(() -> {
+            try {
+                ModelRepair.apply(dir, voice);
+                ModelRepair.Health after = ModelRepair.check(dir);
+                if (after.status() != ModelRepair.Status.OK) throw new IOException(after.problem());
+                LOGGER.info("Repaired model '{}' (espeak voice '{}')", model, voice);
+                HudToast.show(Text.translatable("omnichat.toast.repaired"),
+                        onServer ? Text.translatable("omnichat.toast.repaired.server") : null, HudTheme.OK);
+            } catch (IOException | RuntimeException ex) {
+                String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                LOGGER.warn("Failed to repair model '{}': {}", model, reason);
+                HudToast.show(Text.translatable("omnichat.toast.repair_failed"), Text.literal(reason), HudTheme.ERROR);
+            } finally {
+                ModelHealthCache.INSTANCE.invalidate(model);
+                VoiceCatalog.invalidateLocal(model);
+                // Evicts a cached engine of this model; rebuilds TTS if it is the configured voice not running yet
+                OmnichatClient.getTts().onModelDownloaded(model);
+                REPAIRING.remove(model);
+                MinecraftClient.getInstance().execute(OmnichatScreen::rebuildIfOpen);
+            }
+        }, "OmniChat-Model-Repair");
+        t.setDaemon(true);
+        t.start();
     }
 
     private VoiceCatalog.Entry liveEntry(String model, VoiceCatalog.Entry fallback) {
@@ -123,7 +222,7 @@ public class VoiceTab implements HudTab {
         selected = model;
         VoiceCatalog.Entry e = selectedEntry();
         OmnichatConfig config = OmnichatClient.getConfig();
-        if (e != null && e.state() == VoiceCatalog.State.INSTALLED && !model.equals(config.getModelPath())) {
+        if (e != null && ModelHealthView.canActivate(e.state(), health(e)) && !model.equals(config.getModelPath())) {
             config.setModelPath(model);
             config.setSpeakerId(0);
             config.save();
@@ -143,7 +242,7 @@ public class VoiceTab implements HudTab {
     private void preview(String model) {
         selected = model;
         VoiceCatalog.Entry e = selectedEntry();
-        if (e != null && e.state() == VoiceCatalog.State.INSTALLED) {
+        if (e != null && ModelHealthView.canActivate(e.state(), health(e))) {
             String sample = e.meta().sample().isBlank()
                     ? Text.translatable("omnichat.ui.voice.default_sample").getString() : e.meta().sample();
             VoicePreview.play(model, sample);
@@ -157,7 +256,7 @@ public class VoiceTab implements HudTab {
         // widgets, but never mid-drag (a rebuild would drop the slider being dragged)
         if (++ticks % 10 == 0) {
             live = VoiceCatalog.current();
-            if (!screen.isDragging() && !VoiceCatalog.signature(live).equals(VoiceCatalog.signature(entries))) {
+            if (!screen.isDragging() && !signature(live).equals(builtSignature)) {
                 screen.rebuild();
             }
         }
@@ -219,9 +318,9 @@ public class VoiceTab implements HudTab {
             ctx.drawText(tr, line, d.x(), y, HudTheme.TEXT, false);
             y += 10;
         }
-        Text hint = e.state() == VoiceCatalog.State.INSTALLED
-                ? Text.translatable("omnichat.ui.voice.preview_hint")
-                : Text.translatable("omnichat.ui.voice.preview_remote");
+        Text hint = e.state() != VoiceCatalog.State.INSTALLED ? Text.translatable("omnichat.ui.voice.preview_remote")
+                : ModelHealthView.canActivate(e.state(), health(e)) ? Text.translatable("omnichat.ui.voice.preview_hint")
+                : Text.empty();
         ctx.drawText(tr, hint, d.x(), y + 2, HudTheme.MUTED, false);
 
         OmnichatConfig config = OmnichatClient.getConfig();
@@ -245,6 +344,15 @@ public class VoiceTab implements HudTab {
                 color = HudTheme.ERROR;
             }
             default -> {
+                ModelRepair.Health h = health(e);
+                String key = ModelHealthView.statusKey(h);
+                if (key != null) {
+                    left = Text.translatable(key, h.problem());
+                    boolean fixable = h.status() == ModelRepair.Status.FIXABLE;
+                    right = Text.literal(fixable ? "⚠" : "!");
+                    color = fixable ? HudTheme.WARN : HudTheme.ERROR;
+                    break;
+                }
                 left = e.onServer() ? Text.translatable("omnichat.ui.voice.installed") : Text.translatable("omnichat.ui.voice.local_only");
                 boolean active = e.meta().model().equals(config.getModelPath());
                 right = active ? Text.translatable("omnichat.ui.voice.active") : Text.empty();

@@ -17,7 +17,9 @@ import org.mamoru.omnichat.client.screen.DownloadProgressHud;
 import org.mamoru.omnichat.client.tts.SpatialAudioPlayer;
 import org.mamoru.omnichat.client.tts.TtsPlaybackWorker;
 import org.mamoru.omnichat.client.tts.TtsService;
+import org.mamoru.omnichat.client.ui.ModelHealthCache;
 import org.mamoru.omnichat.client.ui.PortraitTextures;
+import org.mamoru.omnichat.client.ui.screen.OmnichatScreen;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +55,9 @@ public class OmnichatClient implements ClientModInitializer {
         // Runs on whatever thread saved the model; the worker evicts on its own thread
         ModelDownloadManager.getInstance().setOnDownloadComplete(modelName -> tts.onModelDownloaded(modelName));
 
+        // A finished model check redraws the Voice tab's badges/status
+        ModelHealthCache.INSTANCE.setListener(model -> MinecraftClient.getInstance().execute(OmnichatScreen::rebuildIfOpen));
+
         // Clean up on disconnect
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             VoiceCache.getInstance().clear();
@@ -60,6 +65,7 @@ public class OmnichatClient implements ClientModInitializer {
             ChatBubbleManager.getInstance().clear();
             tts.onDisconnect();
             client.execute(PortraitTextures::clear);
+            ModelHealthCache.INSTANCE.clear();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> tts.shutdown());
 

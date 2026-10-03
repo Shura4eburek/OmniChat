@@ -45,5 +45,14 @@
   "omnichat.toast.tts_fallback": "TTS fallback",
   "omnichat.toast.incompatible": "Different OmniChat version",
   "omnichat.toast.incompatible.desc": "Voice sync and downloads are off on this server",
-  "omnichat.hud.queued": "queued"
+  "omnichat.hud.queued": "queued",
+  "omnichat.ui.voice.needs_fix": "Needs setup: %s",
+  "omnichat.ui.voice.incompatible_model": "Incompatible model: %s",
+  "omnichat.ui.voice.repair_auto": "Fix (language: %s)",
+  "omnichat.ui.voice.repair": "Fix",
+  "omnichat.ui.voice.repairing": "Fixing…",
+  "omnichat.ui.voice.repair_language": "Language",
+  "omnichat.toast.repaired": "Model fixed",
+  "omnichat.toast.repair_failed": "Couldn't fix the model",
+  "omnichat.toast.repaired.server": "Fixed only for you — tell the server owner"
 }
