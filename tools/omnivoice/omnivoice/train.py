@@ -8,7 +8,7 @@ from omnivoice import checkpoints, dataset
 from omnivoice.paths import cache_dir
 
 IMAGE = "omnivoice-train:0.1"
-DOCKER_DIR = Path(__file__).resolve().parents[1] / "docker"
+DOCKER_DIR = Path(__file__).resolve().parent / "piper_compat"
 
 class TrainError(Exception):
     pass

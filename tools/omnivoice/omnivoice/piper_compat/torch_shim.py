@@ -1,4 +1,4 @@
-# Compatibility shims for piper1-gpl v1.8.0 on PyTorch >= 2.6, loaded at interpreter start via torch_load_patch.pth.
+# Compatibility shims for piper1-gpl v1.8.0 on PyTorch >= 2.6, loaded at interpreter start via a .pth file.
 try:
     import functools
     import torch

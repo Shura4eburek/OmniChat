@@ -56,3 +56,10 @@ def test_cli_train_colab_empty_exits_1(tmp_path):
     r = CliRunner().invoke(app, ["train", "--colab", "-p", str(p.root)])
     assert r.exit_code == 1
     assert "фраз" in r.output
+
+def test_notebook_uses_piper_compat():
+    import json
+    from pathlib import Path
+    nb = json.loads((Path(__file__).resolve().parents[1] / "notebooks/omnivoice_colab.ipynb").read_text(encoding="utf-8"))
+    code = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
+    assert "piper_compat.install_shim()" in code and "clean_base_local" in code and "onnxscript" in code
