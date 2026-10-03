@@ -37,5 +37,12 @@
   "omnichat.ui.bubbles.whispers": "Bubble whispers",
   "omnichat.ui.bubbles.emotes": "Bubble /me",
   "omnichat.ui.bubbles.team": "Bubble team chat",
-  "omnichat.ui.bubbles.typing": "Show that I'm typing"
+  "omnichat.ui.bubbles.typing": "Show that I'm typing",
+  "omnichat.toast.downloaded": "Voice downloaded",
+  "omnichat.toast.download_failed": "Download failed",
+  "omnichat.toast.tts_disabled": "TTS disabled",
+  "omnichat.toast.tts_fallback": "TTS fallback",
+  "omnichat.toast.incompatible": "Different OmniChat version",
+  "omnichat.toast.incompatible.desc": "Voice sync and downloads are off on this server",
+  "omnichat.hud.queued": "queued"
 }

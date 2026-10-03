@@ -1,9 +1,10 @@
 package org.mamoru.omnichat.client.tts;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.toast.SystemToast;
 import net.minecraft.text.Text;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.ui.HudTheme;
+import org.mamoru.omnichat.client.ui.HudToast;
 import org.mamoru.omnichat.util.ModelScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +150,7 @@ public class TtsService {
             synchronized (this) {
                 if (gen == generation) loading = false;
             }
-            notifyUser("TTS disabled", "Model '" + model + "' failed to load");
+            notifyUser(Text.translatable("omnichat.toast.tts_disabled"), Text.literal("Model '" + model + "' failed to load"));
             return;
         }
 
@@ -167,7 +168,7 @@ public class TtsService {
         }
         if (!usedModel.equals(model)) {
             LOGGER.warn("Using fallback TTS model '{}' instead of '{}'", usedModel, model);
-            notifyUser("TTS fallback", "Using '" + usedModel + "' instead of '" + model + "'");
+            notifyUser(Text.translatable("omnichat.toast.tts_fallback"), Text.literal("Using '" + usedModel + "' instead of '" + model + "'"));
         } else {
             LOGGER.info("TTS engine ready (model '{}')", usedModel);
         }
@@ -219,11 +220,7 @@ public class TtsService {
         }
     }
 
-    private static void notifyUser(String title, String description) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null) return;
-        client.execute(() -> SystemToast.show(client.getToastManager(),
-                SystemToast.Type.PERIODIC_NOTIFICATION,
-                Text.literal("OmniChat: " + title), Text.literal(description)));
+    private static void notifyUser(Text title, Text description) {
+        HudToast.show(title, description, HudTheme.WARN);
     }
 }

@@ -7,10 +7,11 @@ import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.chat.ChatBubbleManager;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.ui.HudTheme;
+import org.mamoru.omnichat.client.ui.HudToast;
 import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.mamoru.omnichat.network.*;
 import org.slf4j.Logger;
@@ -106,11 +107,8 @@ public class ClientNetworkHandler {
         serverProtocol = ServerProtocol.INCOMPATIBLE;
         LOGGER.warn("OmniChat version mismatch with this server ({}): voice sync, model downloads and "
                 + "typing indicators are disabled", reason);
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal("[OmniChat] This server runs a different OmniChat version; "
-                    + "voice sync and model downloads are disabled here.").formatted(Formatting.YELLOW), false);
-        }
+        HudToast.show(Text.translatable("omnichat.toast.incompatible"),
+                Text.translatable("omnichat.toast.incompatible.desc"), HudTheme.WARN);
     }
 
     private static void onCatalog(VoiceCatalogS2CPayload payload, ClientPlayNetworking.Context context) {

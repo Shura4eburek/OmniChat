@@ -37,5 +37,12 @@
   "omnichat.ui.bubbles.whispers": "Облачка для шёпота",
   "omnichat.ui.bubbles.emotes": "Облачка для /me",
   "omnichat.ui.bubbles.team": "Облачка для командного чата",
-  "omnichat.ui.bubbles.typing": "Показывать, что я печатаю"
+  "omnichat.ui.bubbles.typing": "Показывать, что я печатаю",
+  "omnichat.toast.downloaded": "Голос скачан",
+  "omnichat.toast.download_failed": "Загрузка не удалась",
+  "omnichat.toast.tts_disabled": "Озвучка отключена",
+  "omnichat.toast.tts_fallback": "Запасной голос",
+  "omnichat.toast.incompatible": "Другая версия OmniChat",
+  "omnichat.toast.incompatible.desc": "Синхронизация голосов и загрузки на этом сервере отключены",
+  "omnichat.hud.queued": "в очереди"
 }
