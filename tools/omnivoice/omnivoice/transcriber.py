@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math, os
+from pathlib import Path
 from omnivoice import dataset
 from omnivoice.hints import NEED_PREP
 from omnivoice.segments import Word
@@ -21,6 +22,26 @@ def has_whisper() -> bool:
 def _open(name: str, cuda: bool):
     from faster_whisper import WhisperModel
     return WhisperModel(name, device="cuda" if cuda else "cpu", compute_type="float16" if cuda else "int8")
+
+def register_cuda_dlls() -> list[str]:
+    """Make the cuBLAS/cuDNN DLLs from the nvidia-*-cu12 wheels (prep extra, Windows) findable
+    by CTranslate2: they live in site-packages/nvidia/<lib>/bin, which is not on the DLL path."""
+    import sys
+    if sys.platform != "win32":
+        return []
+    try:
+        import nvidia
+    except ImportError:
+        return []
+    added = []
+    for root in getattr(nvidia, "__path__", []):
+        for bin_dir in sorted(Path(root).glob("*/bin")):
+            if not any(bin_dir.glob("*.dll")):
+                continue
+            os.add_dll_directory(str(bin_dir))
+            os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+            added.append(str(bin_dir))
+    return added
 
 def _cuda_libs_missing() -> str | None:
     """CTranslate2 counts the GPU even when cuBLAS/cuDNN are absent and then fails mid-recognition;
@@ -48,6 +69,8 @@ def load_whisper(model: str | None, log=None):
         cuda = ctranslate2.get_cuda_device_count() > 0
     except Exception:
         cuda = False
+    if cuda:
+        register_cuda_dlls()
     missing = _cuda_libs_missing() if cuda else None
     if missing:
         cuda = False

@@ -9,7 +9,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-prep = ["faster-whisper>=1.0", "silero-vad>=5.1", "demucs>=4.0", "pyloudnorm>=0.1.1"]
+prep = ["faster-whisper>=1.0", "silero-vad>=5.1", "demucs>=4.0", "pyloudnorm>=0.1.1",
+        # CTranslate2 (faster-whisper) needs CUDA 12 cuBLAS + cuDNN 9 to use the GPU on Windows
+        "nvidia-cublas-cu12>=12.4; sys_platform == 'win32'",
+        "nvidia-cudnn-cu12>=9,<10; sys_platform == 'win32'"]
 ui = ["gradio>=6,<7", "tensorboard>=2.16"]
 
 [project.scripts]

@@ -136,3 +136,20 @@ def test_missing_cuda_libraries_mean_cpu_without_trying_gpu(monkeypatch):
     transcriber.load_whisper(None, log=logs.append)
     assert calls == [("medium", "cpu", "int8")]
     assert any("cublas64_12.dll" in m and "CPU" in m for m in logs)
+
+def test_register_cuda_dlls_adds_nvidia_bin_dirs(tmp_path, monkeypatch):
+    import sys, types
+    from omnivoice import transcriber
+    for lib in ("cublas", "cudnn"):
+        (tmp_path / lib / "bin").mkdir(parents=True)
+        (tmp_path / lib / "bin" / f"{lib}.dll").write_bytes(b"")
+    (tmp_path / "empty" / "bin").mkdir(parents=True)  # no dlls → skipped
+    fake = types.ModuleType("nvidia"); fake.__path__ = [str(tmp_path)]
+    monkeypatch.setitem(sys.modules, "nvidia", fake)
+    monkeypatch.setattr(sys, "platform", "win32")
+    added_dirs = []
+    monkeypatch.setattr(transcriber.os, "add_dll_directory", lambda d: added_dirs.append(d), raising=False)
+    monkeypatch.setenv("PATH", "X")
+    added = transcriber.register_cuda_dlls()
+    assert sorted(added) == sorted(str(tmp_path / l / "bin") for l in ("cublas", "cudnn")) == sorted(added_dirs)
+    assert all(d in transcriber.os.environ["PATH"] for d in added)
