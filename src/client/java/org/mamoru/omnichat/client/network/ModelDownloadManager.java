@@ -60,6 +60,7 @@ public class ModelDownloadManager {
     // All fields below are guarded by this
     // modelName -> state, in request order (current download first)
     private final Map<String, Download> downloads = new LinkedHashMap<>();
+    private final Map<String, String> failures = new java.util.HashMap<>();
     private final ArrayDeque<String> queuedRequests = new ArrayDeque<>();
     private Download current;
     private long lastRequestSentAt;
@@ -88,6 +89,7 @@ public class ModelDownloadManager {
             LOGGER.error("Not downloading model '{}': invalid name", modelName);
             return;
         }
+        failures.remove(modelName);
         Path partDir = getDownloadsDir().resolve(modelDir.getFileName() + ".part");
         downloads.put(modelName, new Download(modelName, modelDir, partDir));
         queuedRequests.add(modelName);
@@ -323,6 +325,7 @@ public class ModelDownloadManager {
         diskExecutor.execute(() -> cleanup(d));
 
         LOGGER.warn("Download of model '{}' failed: {}", d.modelName, reason);
+        failures.put(d.modelName, reason);
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null) {
             client.player.sendMessage(Text.literal("[OmniChat] Model '" + d.modelName + "' download failed: " + reason)
@@ -337,8 +340,14 @@ public class ModelDownloadManager {
             diskExecutor.execute(() -> cleanup(d));
         }
         downloads.clear();
+        failures.clear();
         queuedRequests.clear();
         current = null;
+    }
+
+    /** Last failure reason per model since its last request (shown on the voice card). */
+    public synchronized Map<String, String> getFailures() {
+        return Map.copyOf(failures);
     }
 
     // ---- file helpers ----
