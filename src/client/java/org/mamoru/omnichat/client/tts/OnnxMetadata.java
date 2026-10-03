@@ -36,6 +36,95 @@ public final class OnnxMetadata {
     }
 
     /**
+     * Same result as {@link #parse(byte[])} but streams the file: only the few top-level headers and the
+     * metadata payloads are read, the graph is skipped by position (models can be ~80 MB).
+     */
+    public static Map<String, String> parse(java.nio.file.Path file) throws java.io.IOException {
+        Map<String, String> out = new LinkedHashMap<>();
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ)) {
+            long size = ch.size();
+            long[] pos = {0};
+            while (pos[0] < size) {
+                long tag = readVarint(ch, pos, size);
+                if (tag < 0) break;
+                int number = (int) (tag >>> 3), wire = (int) (tag & 7);
+                if (wire == 2) {
+                    long len = readVarint(ch, pos, size);
+                    if (len < 0 || len > size - pos[0]) break;
+                    if (number == METADATA_PROPS) {
+                        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate((int) len);
+                        long at = pos[0];
+                        while (buf.hasRemaining()) {
+                            int n = ch.read(buf, at + buf.position());
+                            if (n < 0) return out;
+                        }
+                        readEntry(buf.array(), 0, (int) len, out);
+                    }
+                    pos[0] += len;
+                } else if (wire == 0) {
+                    if (readVarint(ch, pos, size) < 0) break;
+                } else if (wire == 1 || wire == 5) {
+                    pos[0] += wire == 1 ? 8 : 4;
+                    if (pos[0] > size) break;
+                } else {
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    private static long readVarint(java.nio.channels.FileChannel ch, long[] pos, long size) throws java.io.IOException {
+        java.nio.ByteBuffer one = java.nio.ByteBuffer.allocate(1);
+        long v = 0;
+        for (int shift = 0; shift < 70; shift += 7) {
+            if (pos[0] >= size) return -1;
+            one.clear();
+            if (ch.read(one, pos[0]++) < 1) return -1;
+            int b = one.get(0) & 0xFF;
+            v |= (long) (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) return v;
+        }
+        return -1;
+    }
+
+    /** Copy of the model without the metadata_props entries whose key is in {@code keys}. */
+    public static byte[] removeEntries(byte[] model, java.util.Set<String> keys) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(model.length);
+        Reader r = new Reader(model, 0, model.length);
+        int copiedTo = 0;
+        while (r.hasMore()) {
+            int fieldStart = r.pos;
+            long tag = r.varint();
+            if (tag < 0) break;
+            int number = (int) (tag >>> 3), wire = (int) (tag & 7);
+            if (wire == 2) {
+                long len = r.varint();
+                if (len < 0 || len > r.remaining()) break;
+                int payload = r.pos;
+                r.pos += (int) len;
+                if (number == METADATA_PROPS) {
+                    Map<String, String> e = new LinkedHashMap<>();
+                    readEntry(model, payload, (int) len, e);
+                    if (!e.isEmpty() && keys.contains(e.keySet().iterator().next())) {
+                        out.write(model, copiedTo, fieldStart - copiedTo);
+                        copiedTo = r.pos;
+                    }
+                }
+            } else if (!r.skip(wire)) {
+                break;
+            }
+        }
+        out.write(model, copiedTo, model.length - copiedTo);
+        return out.toByteArray();
+    }
+
+    /** True when the only problem is a missing/blank espeak {@code voice} on a piper model. */
+    public static boolean missingVoiceOnly(Map<String, String> meta) {
+        return meta.containsKey("n_speakers") && vitsProblem(meta) != null;
+    }
+
+    /**
      * The model bytes followed by one metadata_props entry per map entry. Protobuf allows repeated
      * top-level fields anywhere, so appending is a valid way to add metadata without rewriting the graph.
      */

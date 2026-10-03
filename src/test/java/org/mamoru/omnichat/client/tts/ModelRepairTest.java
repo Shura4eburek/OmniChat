@@ -180,4 +180,65 @@ class ModelRepairTest {
         write("m.onnx", model("n_speakers", "1"));
         assertThrows(IOException.class, () -> ModelRepair.apply(dir, " "));
     }
+
+    @Test
+    void blankVoiceIsReplacedWithoutDuplicate() throws IOException {
+        espeak("ru_dict");
+        Path onnx = write("m.onnx", model("n_speakers", "1", "comment", "piper", "voice", "", "has_espeak", ""));
+        assertEquals(ModelRepair.Status.FIXABLE, ModelRepair.check(dir).status());
+        ModelRepair.apply(dir, "ru");
+        byte[] out = Files.readAllBytes(onnx);
+        Map<String, String> meta = OnnxMetadata.parse(out);
+        assertEquals("ru", meta.get("voice"));
+        assertEquals("1", meta.get("has_espeak"));
+        assertEquals(1, count(out, "voice"));
+        assertEquals(1, count(out, "has_espeak"));
+        assertEquals(ModelRepair.Status.OK, ModelRepair.check(dir).status());
+    }
+
+    private static int count(byte[] data, String key) {
+        String s = new String(data, StandardCharsets.ISO_8859_1);
+        int n = 0;
+        for (int i = s.indexOf(key); i >= 0; i = s.indexOf(key, i + 1)) n++;
+        return n;
+    }
+
+    @Test
+    void streamingParseEqualsInMemoryParse() throws IOException {
+        byte[] m = model("n_speakers", "1", "comment", "piper", "voice", "ru");
+        Path p = write("s.onnx", m);
+        assertEquals(OnnxMetadata.parse(m), OnnxMetadata.parse(p));
+        byte[] cut = java.util.Arrays.copyOf(m, m.length - 3);
+        assertEquals(OnnxMetadata.parse(cut), OnnxMetadata.parse(write("c.onnx", cut)));
+    }
+
+    @Test
+    void applyRefusesIncompatibleModel() throws IOException {
+        byte[] b = model("comment", "piper");
+        Path onnx = write("m.onnx", b);
+        assertThrows(IOException.class, () -> ModelRepair.apply(dir, "ru"));
+        assertArrayEquals(b, Files.readAllBytes(onnx));
+        assertFalse(Files.exists(dir.resolve("m.onnx.bak")));
+    }
+
+    @Test
+    void readOnlyTargetGivesFriendlyErrorAndKeepsOriginal() throws IOException {
+        byte[] b = model("n_speakers", "1", "comment", "piper");
+        Path onnx = write("m.onnx", b);
+        assertTrue(onnx.toFile().setReadOnly());
+        try {
+            IOException e = null;
+            try {
+                ModelRepair.apply(dir, "ru");
+            } catch (IOException ex) {
+                e = ex;
+            }
+            org.junit.jupiter.api.Assumptions.assumeTrue(e != null, "platform allows replacing read-only files");
+            assertTrue(e.getMessage().contains("in use or"), e.getMessage());
+            assertArrayEquals(b, Files.readAllBytes(onnx));
+            assertFalse(Files.exists(dir.resolve("m.onnx.tmp")));
+        } finally {
+            onnx.toFile().setWritable(true);
+        }
+    }
 }
