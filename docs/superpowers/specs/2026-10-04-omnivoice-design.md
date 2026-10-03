@@ -46,7 +46,7 @@
                     # display: name/description/gender/sample/license, steps: состояние этапов
   raw/              # исходники (B)
   segments/         # фразы, WAV 22050 Гц моно 16 бит
-  metadata.csv      # LJSpeech: id|text  (+ review.json: confidence, флаги «проверить»/«выкинуть»)
+  metadata.csv      # LJSpeech: id|text (перед обучением конвертируется в формат piper `id.wav|text` без заголовка)  (+ review.json: confidence, флаги «проверить»/«выкинуть»)
   train/            # чекпойнты, логи, previews/<step>/*.wav
   export/<voice>/   # готовая папка мода
 ```
@@ -61,8 +61,8 @@
 | `transcribe` | `segments/` | faster-whisper (GPU: large-v3, CPU: medium), язык проекта; нормализация текста (числа словами `num2words`, удаление непроизносимых символов); фразы с низкой уверенностью получают флаг «проверить» |
 | `import <dir>` | wav + `metadata.csv`/LJSpeech или пары `.wav`+`.txt` | копирует/ресемплирует в `segments/`, пишет `metadata.csv` |
 | `check` | датасет | отчёт: суммарная длительность (предупреждение < 10 мин, рекомендация ≥ 30 мин), фразы вне 1–15 с, клиппинг > 0,1 % сэмплов, пустой текст, строки, которые фонемизатор не обработал; выкинутые фразы не учитываются |
-| `train` | датасет | `--docker` (по умолчанию, `docker run --gpus all`): дообучение piper medium с базового чекпойнта; размер батча под VRAM; чекпойнт каждые N эпох; resume; превью 3 фраз на каждом чекпойнте. `--colab`: собирает `dataset.zip` + инструкцию для ноутбука. `--build`: собирает образ локально |
-| `export [--ckpt]` | чекпойнт | piper-экспорт в ONNX; всегда дописывает метаданные `model_type=vits`, `comment=piper`, `language`, `voice`, `has_espeak=1`, `n_speakers=1`, `sample_rate`, `omnivoice_version`; строит `tokens.txt` из `phoneme_id_map`; копирует `espeak-ng-data` |
+| `train` | датасет | `--docker` (по умолчанию, `docker run --gpus all`): дообучение piper medium с базового чекпойнта; размер батча под VRAM; чекпойнт каждые N эпох; resume; превью: piper сам синтезирует 5 тестовых фраз после каждой валидации и пишет их аудио в TensorBoard-логи; omnivoice достаёт их оттуда (`omnivoice previews`) для прослушивания по шагам. `--colab`: собирает `dataset.zip` + инструкцию для ноутбука. `--build`: собирает образ локально |
+| `export [--ckpt]` | чекпойнт | piper-экспорт в ONNX; всегда дописывает метаданные `model_type=vits`, `comment=piper`, `language` (имя языка ISO 639, как в скрипте sherpa: «Russian»), `voice`, `version=1`, `has_espeak=1`, `n_speakers=1`, `sample_rate`, `omnivoice_version`; строит `tokens.txt` из `phoneme_id_map`; копирует `espeak-ng-data` (официальный архив sherpa-onnx `espeak-ng-data.tar.bz2`, кэшируется) |
 | `pack [--onnx X]` | экспорт или чужая модель | собирает `export/<voice>/`: модель, `tokens.txt`, `espeak-ng-data`, `voice.json`, `portrait.png` (загруженная картинка → 32×32 nearest, ≤ 8 КБ); недостающие метаданные чужой модели дописывает (язык — из её `.onnx.json` `espeak.voice` или `--voice`); проверяет теми же правилами, что мод |
 | `verify` | папка мода | в отдельном процессе грузит модель через sherpa-onnx и синтезирует тестовую фразу на языке модели; сохраняет `sample.wav`; падение процесса → понятная ошибка, а не краш |
 | `install <dir>` | папка мода | копирует в `config/omnichat/models/<voice>` клиента или сервера (путь указывается или ищется в типичных местах) |
@@ -73,7 +73,7 @@
 
 ## Обучение
 
-- Docker-образ `omnivoice-train` (`tools/omnivoice/docker/Dockerfile`): CUDA + piper training (PyTorch Lightning) + `piper-phonemize`; проект монтируется в `/work`.
+- Docker-образ `omnivoice-train` (`tools/omnivoice/docker/Dockerfile`) на базе `pytorch/pytorch:2.14.1-cuda12.6-cudnn9-devel`: piper1-gpl (OHF-Voice, `pip install -e '.[train]'` + `build_monotonic_align.sh`); проект монтируется в `/work`. Тренер: `python3 -m piper.train fit …`, экспорт: `python3 -m piper.train.export_onnx`. Официального образа нет — работоспособность проверяется ручным прогоном.
 - Дообучение базового piper medium (22050 Гц) из `rhasspy/piper-checkpoints` (ru: denis/dmitri/irina/ruslan; en: lessac); базовый чекпойнт скачивается один раз в кэш.
 - Colab: `tools/omnivoice/notebooks/omnivoice_colab.ipynb` — ставит omnivoice из GitHub, принимает `dataset.zip`, обучает на GPU Colab, делает `export` + `pack` + `verify`, отдаёт `voice.zip`.
 
