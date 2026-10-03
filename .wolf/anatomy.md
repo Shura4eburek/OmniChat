@@ -1,16 +1,26 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T17:15:52.192Z
-> Files: 43 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T20:06:15.397Z
+> Files: 33 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
-- `edit1.py` — ProjectError: rep, atomic_write_text, mark_saved, mark_fresh + 5 more (~2079 tok)
-- `fix1.py` — rd, wr, pack_project, boom (~2065 tok)
-- `gen_nb.py` — md, code (~1836 tok)
-- `patch_app.py` — rep, runner, locked, runner (~3235 tok)
-- `patch_helpers.py` — ProjectBusy: rep, flags_text, code_label, flags_text + 9 more (~2340 tok)
-- `patch.py` — test_dataset_zip_missing_wav_raises (~478 tok)
+- `build-window.ps1` (~164 tok)
+- `edit_bat.py` (~1134 tok)
+- `edit_deps.py` — rep, check_all, host_gpu, check_all (~739 tok)
+- `edit_readme.py` — rep (~791 tok)
+- `edit_test_deps.py` — rep, items, items, test_host_gpu_runs_nvidia_smi_on_the_host (~868 tok)
+- `edit_wslenv.py` — rep, ensure_wsl, download_rootfs, install_marker (~2128 tok)
+- `fix_sh.py` — rep (~674 tok)
+- `new_tests.py` — ---------------- WSL backend ---------------- (~2525 tok)
+- `patch_app.py` — rep, build, build, start_probe (~1899 tok)
+- `patch_helpers.py` — rep, steps_bar_html, steps_bar_html, start (~946 tok)
+- `patch_slicer.py` (~266 tok)
+- `patch_tests.py` — rep, test_no_docker_message, test_no_env_message (~342 tok)
+- `patch_train.py` — from: rep, detect_env, detect_env, backend_for + 19 more (~4228 tok)
+- `pull-progress.ps1` — Declares Rx (~275 tok)
+- `setup_helpers.py` — ---------- setup (dependencies) ---------- (~2078 tok)
+- `train-window.ps1` (~171 tok)
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
 
@@ -384,19 +394,17 @@
 ## .superpowers/sdd/2026-10-03-pixel-hud-ui/
 
 
+## .superpowers/sdd/2026-10-04-omnivoice-setup/
+
+- `final-fix-report.md` — omnivoice: final fix wave report (~1230 tok)
+- `task-5-report.md` — Task 5 report: README and live end-to-end (~1713 tok)
+
 ## .superpowers/sdd/2026-10-04-omnivoice/
 
-- `final-fix-brief.md` — Final fix wave — omnivoice (branch feat/omnivoice, base dbc6a97) (~1621 tok)
-- `final-fix-report.md` — Final fix wave: report (~3020 tok)
-- `task-1-report.md` — Task 1: Package scaffold, CLI skeleton, mod rules — Report (~2236 tok)
-- `task-13-report.md` — Task 13 report: Gradio UI with HUD theme (~2693 tok)
-- `task-2-report.md` — Task 2 Report: Language Presets, Project File, and Init (~1538 tok)
-- `task-3-report.md` — Task 3: Text Normalization — Report (~1930 tok)
-- `task-7-report.md` — Task 7: Dataset Quality Check — Implementation Report (~1072 tok)
-- `task-8-report.md` — Task 8 report (~308 tok)
 
 ## docs/superpowers/plans/
 
+- `2026-10-04-omnivoice-setup.md` — omnivoice: one-click dependency setup and WSL training backend (~2302 tok)
 
 ## docs/superpowers/specs/
 
@@ -550,7 +558,6 @@
 
 ## src/main/java/org/mamoru/omnichat/util/
 
-- `ModelScanner.java` — Single source of truth for what a model directory contains: its type, which (~1619 tok)
 
 ## src/main/java/org/mamoru/omnichat/voice/
 
@@ -563,43 +570,38 @@
 
 ## src/test/java/org/mamoru/omnichat/util/
 
-- `ModelScannerTest.java` — Class: ModelScannerTest (~242 tok)
 
 ## src/test/java/org/mamoru/omnichat/voice/
 
 
+## tools/omnivoice/
+
+- `install-omnivoice.bat` (~843 tok)
+
+## tools/omnivoice/docker/
+
+- `Dockerfile` — Docker container definition (~219 tok)
+
 ## tools/omnivoice/omnivoice/
 
-- `checker.py` — class: check_project (~1015 tok)
-- `cli.py` — API router (~1260 tok)
-- `espeak.py` — ensure_espeak_data (~373 tok)
-- `languages.py` — Declares BASE_CHECKPOINTS (~217 tok)
-- `modrules.py` — Limits the OmniChat mod enforces. Keep in sync with: (~825 tok)
-- `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~336 tok)
-- `pack.py` — PackError: folder_name, pack_voice, pack_project (~1251 tok)
-- `paths.py` — cache_dir (~108 tok)
-- `portrait.py` — make_portrait (~234 tok)
-- `project.py` — ProjectError: create, load, save, mark (~907 tok)
-- `textnorm.py` — normalize_text, replace_letter_digit, replace_number (~2354 tok)
-- `transcriber.py` — run, transcribe_project (~722 tok)
+- `cli.py` — API router (~3564 tok)
+- `deps.py` — Windows-side dependencies: prep/ui extras, ffmpeg, and the WSL training environment (via wslenv). (~1936 tok)
+- `download.py` — Resumable downloads: a .part file, HTTP Range resume, one retry, optional pinned sha256, Russian err (~953 tok)
+- `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~434 tok)
+- `train.py` — from: detect_env, batch_size_for, build_image, last_checkpoint + 9 more (~3133 tok)
+- `wslenv.py` — Training environment in an own WSL2 distro «omnivoice»: official Ubuntu 24.04 rootfs + pinned pip pa (~3194 tok)
+
+## tools/omnivoice/omnivoice/piper_compat/
+
+- `__init__.py` — Compatibility layer for training with piper1-gpl v1.8.0 on current PyTorch/Lightning. (~287 tok)
+- `Dockerfile` — Docker container definition (~247 tok)
+- `wsl_setup.sh` — Builds the omnivoice training environment inside the WSL distro "omnivoice" (Ubuntu 24.04). (~696 tok)
 
 ## tools/omnivoice/omnivoice/ui/
 
-- `app.py` — Gradio front end over the omnivoice core, in the OmniChat HUD style. (~7354 tok)
-- `helpers.py` — Pure helpers behind the web UI. No gradio import here, so they are testable without the ui extra. (~4252 tok)
-- `strings.py` — Every user-visible UI string (Russian). UPPER_CASE str constants only. (~1651 tok)
-- `theme.py` — OmniChat HUD look: near-black background, teal 1 px frames, corner brackets, square corners. (~2202 tok)
 
 ## tools/omnivoice/tests/
 
-- `test_checker.py` — wav, test_report, test_unspeakable, test_missing_audio (~1060 tok)
-- `test_install.py` — test_install_and_overwrite, test_locked_target_keeps_old_and_says_busy, fake, test_default_targets (~907 tok)
-- `test_modrules.py` — test_onnx_problem_matches_mod, test_validate_voice_folder, test_validate_voice_folder_reports_each_p (~849 tok)
-- `test_onnxmeta.py` — test_piper_metadata_exact_keys, test_tokens_from_config_edge_cases, test_write_metadata_replaces_exi (~379 tok)
-- `test_pack.py` — espeak_dir, test_pack_own_export, test_pack_replaces_existing_but_keeps_unrelated, test_pack_foreign (~915 tok)
-- `test_portrait.py` — test_any_image_becomes_valid_portrait (~98 tok)
-- `test_project.py` — test_create_load_roundtrip, test_create_with_named_base, test_unknown_language_is_rejected, test_unk (~610 tok)
-- `test_textnorm.py` — Original tests (must keep passing) (~1217 tok)
-- `test_ui_helpers.py` — Pure UI helpers: no gradio needed, so these run in the plain test environment too. (~2325 tok)
-- `test_ui.py` — test_build_lists_projects, test_strings_have_no_empty_values, test_build_does_not_probe_env, boom (~278 tok)
-- `test_verify.py` — test_verify_real_model, test_crash_is_reported_not_raised, test_native_crash_code_unsigned, test_tim (~783 tok)
+- `test_deps.py` — FakePopen: cache, make_zip, test_ffmpeg_path_prefers_path_then_cache, test_extract_only_two_exes_ato (~2474 tok)
+- `test_installer.py` — The Windows installer: CRLF, UTF-8 without BOM, Russian messages, and the key commands (never execut (~630 tok)
+- `test_wslenv.py` — Fake: u16, joined, healthy, test_decode_utf16_and_utf8 + 29 more (~5151 tok)

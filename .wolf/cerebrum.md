@@ -9,6 +9,8 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- omnivoice: install-omnivoice.bat is UTF-8 without BOM + CRLF with `chcp 65001 >nul` on line 2; dry-run via `OMNIVOICE_DRYRUN=1 cmd /c` to verify parsing.
+- omnivoice: no host nvidia-smi => deps.check_all marks WSL/ENV optional; ui needs_setup is False when env.gpu_name is None.
 - omnivoice (tools/omnivoice): piper fine-tune `--ckpt_path` restores base loop state; irina base is epoch 4139 → `--epochs` is ADDITIONAL epochs; Lightning ckpt `epoch=N` is 0-based.
 - `uv sync --extra X` removes other extras — always `uv sync --all-extras`. sherpa-onnx wheel needs `sherpa-onnx-core` or it loads System32 onnxruntime 1.17 and crashes.
 
@@ -16,12 +18,16 @@
 - **Description:** Fabric мод для Minecraft, добавляющий голосовую озвучку чата (TTS) с пространственным звуком и визуальные облачка сообщений над головами игроков.
 
 ## Do-Not-Repeat
+- 2026-10-03: don't bump wslenv.ENV_VERSION for cosmetic wsl_setup.sh edits (e.g. apt cleanup) — it re-provisions every user's distro.
+- 2026-10-03: a long python heredoc with nested ''' and quotes broke Git Bash parsing; write edit scripts to the scratchpad with Write and run them.
 - [2026-10-03] Haiku implementers ignored trailer/.wolf staging rules — use sonnet+ for implementer subagents.
 
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
 ## Decision Log
+
+- [2026-10-03] omnivoice WSL: wsl.exe own output is UTF-16LE (in-distro command output is UTF-8) — use wslenv.decode. Rootfs pin = releases.ubuntu.com/24.04.5 .wsl (gzip tar) sha bb415d82…; in-distro commands via wslenv.wsl_cmd (-u root). Downloads go through omnivoice/download.fetch. core.autocrlf=true → tools/omnivoice/.gitattributes forces LF for *.sh.
 
 <!-- Significant technical decisions with rationale. Why X was chosen over Y. -->
 
@@ -49,3 +55,10 @@
 - [2026-10-04] Do-Not-Repeat: Agent-tool isolation worktrees are created from main/HEAD at spawn time, not from the current feature branch — parallel worktree agents re-added JUnit; cherry-pick their Java files without build.gradle, or tell them to merge the feature branch first.
 - [2026-10-04] Smoke listener options: tutorialStep none, pauseOnLostFocus false (set by scripts/smoke.sh).
 - [2026-10-04] sherpa-onnx piper models MUST have 'voice' (+has_espeak) metadata or generate() throws a native exception that kills the JVM; TtsEngine validates via OnnxMetadata. Local 'glados' model lacks it (fix: add voice=ru with onnx python).
+- [2026-10-04] omnivoice train.py: backends DOCKER/WSL (train.BACKENDS) build commands; one shared _fit_loop. Env.backend "wsl"|"docker"|None; Env without backend + docker+gpu = docker (legacy). UI Stop → train.stop_training(p) which uses train._ACTIVE (set while train_project runs).
+- (2026-10-03) omnivoice CLI: `typer.Exit` subclasses RuntimeError — never `raise typer.Exit` inside a `try/except RuntimeError`; compute an exit code and raise after.
+- (2026-10-03) omnivoice UI: global CSS class `.bad` = red + line-through (phrases table); don't reuse it for other rows (use e.g. `miss`). 1 s gr.Timer ticks need `show_progress="hidden"` or outputs flash a "queue" overlay.
+- (2026-10-03) .bat dry runs: `echo` keeps the previous errorlevel, so guard checks after `%RUN%` commands with `if not defined RUN`.
+
+- [2026-10-03] Git Bash `sed -i` strips CRLF on Windows: edit CRLF files (.bat) with Python in binary mode.
+- [2026-10-03] Python heredoc strings: `` in Windows paths (fmpeg) becomes a form feed - use raw strings for paths.

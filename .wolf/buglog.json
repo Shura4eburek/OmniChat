@@ -613,6 +613,72 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-03T15:51:41.096Z"
+    },
+    {
+      "id": "bug-039",
+      "timestamp": "2026-10-03T18:25:51.367Z",
+      "error_message": "Significant refactor of ",
+      "file": "tools/omnivoice/omnivoice/cli.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 6→10 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T18:25:51.367Z"
+    },
+    {
+      "id": "bug-040",
+      "timestamp": "2026-10-03T22:50:00",
+      "error_message": "[Errno 2] No such file or directory: ...\train\train.csv",
+      "file": "tools/omnivoice/omnivoice/dataset.py",
+      "root_cause": "piper_csv opened train/train.csv without creating train/ (project whose train dir was deleted)",
+      "fix": "piper_csv mkdirs the parent before writing; regression test test_piper_csv_recreates_a_deleted_train_dir",
+      "tags": [
+        "omnivoice",
+        "train",
+        "wsl",
+        "e2e"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T22:50:00"
+    },
+    {
+      "id": "bug-041",
+      "timestamp": "2026-10-03T20:04:46.591Z",
+      "error_message": "Significant refactor of ",
+      "file": "tools/omnivoice/tests/test_installer.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T20:04:46.591Z"
+    },
+    {
+      "id": "bug-042",
+      "timestamp": "2026-10-03T23:10:00",
+      "error_message": "ensure_wsl could loop on reboots (virtualization off) and lose a pending reboot when wsl --status answered right after --install",
+      "file": "tools/omnivoice/omnivoice/wslenv.py",
+      "root_cause": "reboot decided only from a post-install status probe; no memory of a previous elevated install",
+      "fix": "REBOOT_MSG unconditionally after --install or rc 3010; install-attempted marker + boot time -> BIOS/VMP hint on a second failure; VMP keywords in status/install output add the hint",
+      "tags": [
+        "wsl",
+        "reboot",
+        "virtualization",
+        "omnivoice"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T23:10:00"
     }
   ]
 }
