@@ -190,3 +190,8 @@
 | 15:52 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 65 reads | ~32163 tok |
 | 15:53 | pixel HUD UI implemented via SDD (tasks 1-11 + final fixes), branch feat/pixel-hud-ui, build+smoke green | src/**, docs, scripts | ok | ~2M subagent |
 | 15:53 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 66 reads | ~33798 tok |
+| 15:55 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 66 reads | ~33798 tok |
+| 15:58 | Session end: 43 writes across 36 files (build.gradle, SanityTest.java, task-1-report.md, implementer-rules.md, VoiceMetaReaderTest.java) | 66 reads | ~33798 tok |
+| 16:01 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/Repro.java | — | ~422 |
+| 16:03 | Created src/test/java/org/mamoru/omnichat/client/tts/OnnxMetadataTest.java | — | ~829 |
+| 16:03 | Created src/client/java/org/mamoru/omnichat/client/tts/OnnxMetadata.java | — | ~990 |

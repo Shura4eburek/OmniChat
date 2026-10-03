@@ -94,35 +94,19 @@ public class TtsEngine implements ITtsEngine {
     }
 
     /**
-     * Validates that the ONNX model is a VITS TTS model by checking for
-     * 'n_speakers' in the binary metadata. Models without this field crash
-     * the JVM at the native level (not catchable by try/catch).
+     * Refuses models sherpa-onnx would crash on natively (not catchable by try/catch):
+     * no 'n_speakers' metadata, or a piper export without the espeak 'voice' entry.
      */
     private static void validateVitsModel(Path modelPath) {
+        byte[] data;
         try {
-            byte[] data = Files.readAllBytes(modelPath);
-            String marker = "n_speakers";
-            byte[] markerBytes = marker.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-            boolean found = false;
-            for (int i = 0; i <= data.length - markerBytes.length; i++) {
-                boolean match = true;
-                for (int j = 0; j < markerBytes.length; j++) {
-                    if (data[i + j] != markerBytes[j]) {
-                        match = false;
-                        break;
-                    }
-                }
-                if (match) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                throw new RuntimeException("Model " + modelPath.getFileName()
-                        + " is not a compatible VITS model (missing 'n_speakers' metadata)");
-            }
+            data = Files.readAllBytes(modelPath);
         } catch (IOException e) {
             throw new RuntimeException("Failed to read model file: " + modelPath, e);
+        }
+        String problem = OnnxMetadata.vitsProblem(OnnxMetadata.parse(data));
+        if (problem != null) {
+            throw new RuntimeException("Model " + modelPath.getFileName() + " is not a compatible VITS model (" + problem + ")");
         }
     }
 }

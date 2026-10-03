@@ -45,3 +45,4 @@
 - [2026-10-04] Pixel HUD UI implemented on branch feat/pixel-hud-ui (SDD: 11 tasks + final review fix wave). Client UI lives in client/ui (screen/, widget/); Voice tab rebuild trigger = VoiceCatalog.signature (no progress), live progress via Supplier; OmnichatScreen.rebuild preserves focus.
 - [2026-10-04] Do-Not-Repeat: Agent-tool isolation worktrees are created from main/HEAD at spawn time, not from the current feature branch — parallel worktree agents re-added JUnit; cherry-pick their Java files without build.gradle, or tell them to merge the feature branch first.
 - [2026-10-04] Smoke listener options: tutorialStep none, pauseOnLostFocus false (set by scripts/smoke.sh).
+- [2026-10-04] sherpa-onnx piper models MUST have 'voice' (+has_espeak) metadata or generate() throws a native exception that kills the JVM; TtsEngine validates via OnnxMetadata. Local 'glados' model lacks it (fix: add voice=ru with onnx python).

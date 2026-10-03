@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T12:51:45.968Z
-> Files: 36 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T13:03:56.183Z
+> Files: 3 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
+- `Repro.java` — Reproduces the preview crash outside the game: same natives, same config as TtsEngine. (~422 tok)
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
 
@@ -20,36 +21,24 @@
 
 ## .claude/worktrees/agent-a0fb35b7f9ddae92e/
 
-- `build.gradle` (~1451 tok)
 
 ## .claude/worktrees/agent-a0fb35b7f9ddae92e/.superpowers/sdd/2026-10-03-pixel-hud-ui/
 
-- `task-6-report.md` — Task 6: Theme, layout math, text fitting — Report (~1297 tok)
 
 ## .claude/worktrees/agent-a0fb35b7f9ddae92e/src/client/java/org/mamoru/omnichat/client/ui/
 
-- `HudLayout.java` — Pure layout math for OmnichatScreen, in scaled GUI pixels. (~598 tok)
-- `HudText.java` — Pure text fitting; the width function is TextRenderer::getWidth in game, a stub in tests. (~548 tok)
-- `HudTheme.java` — HUD palette and drawing primitives (see spec "Визуальный стиль"). (~606 tok)
 
 ## .claude/worktrees/agent-a0fb35b7f9ddae92e/src/test/java/org/mamoru/omnichat/client/ui/
 
-- `HudLayoutTest.java` — Class: HudLayoutTest (~493 tok)
-- `HudTextTest.java` — Class: HudTextTest (~308 tok)
 
 ## .claude/worktrees/agent-a2cebc5765ab50973/src/main/java/org/mamoru/omnichat/network/
 
 
 ## .claude/worktrees/agent-a30431228bce4c831/src/client/java/org/mamoru/omnichat/client/tts/
 
-- `PreviewTickets.java` — "Latest request wins": a preview finishing after a newer one was requested is dropped. (~120 tok)
-- `VoicePreview.java` — Synthesizes a short sample with a given voice and plays it non-positionally. (~916 tok)
-- `WaveformMeter.java` — RMS levels over PCM by playback time, for the preview oscilloscope. (~327 tok)
 
 ## .claude/worktrees/agent-a30431228bce4c831/src/test/java/org/mamoru/omnichat/client/tts/
 
-- `PreviewTicketsTest.java` — Class: PreviewTicketsTest (~102 tok)
-- `WaveformMeterTest.java` — Class: WaveformMeterTest (~239 tok)
 
 ## .claude/worktrees/agent-a38147cab403ccc2a/
 
@@ -92,15 +81,12 @@
 
 ## .claude/worktrees/agent-a5f05e2556fe62f09/
 
-- `build.gradle` (~1454 tok)
 
 ## .claude/worktrees/agent-a5f05e2556fe62f09/src/client/java/org/mamoru/omnichat/client/ui/
 
-- `PortraitGenerator.java` — Deterministic 16x16 "identicon" for voices without a portrait.png: a mirrored 8x14 mask inside a (~489 tok)
 
 ## .claude/worktrees/agent-a5f05e2556fe62f09/src/test/java/org/mamoru/omnichat/client/ui/
 
-- `PortraitGeneratorTest.java` — Class: PortraitGeneratorTest (~268 tok)
 
 ## .claude/worktrees/agent-a73b32d2d676419b6/src/client/java/org/mamoru/omnichat/client/tts/
 
@@ -389,12 +375,6 @@
 
 ## .superpowers/sdd/2026-10-03-pixel-hud-ui/
 
-- `final-fix-report.md` — Final fix wave — report (~1635 tok)
-- `implementer-rules.md` — Rules for every implementer of this plan (~703 tok)
-- `reviewer-rules.md` — Task reviewer rules (OmniChat pixel HUD UI plan) (~649 tok)
-- `task-1-report.md` — Task 1: Test Infrastructure — Report (~809 tok)
-- `task-2-report.md` — Task 2: Voice metadata model and reader (common code) — DONE (~916 tok)
-- `task-9-report.md` — Task 9 report: OmnichatScreen and the three tabs (~1157 tok)
 
 ## docs/superpowers/plans/
 
@@ -537,32 +517,25 @@
 ## src/client/java/org/mamoru/omnichat/client/
 
 
+## src/client/java/org/mamoru/omnichat/client/tts/
+
+- `OnnxMetadata.java` — Reads {@code metadata_props} of an ONNX model by walking the top-level fields of the (~990 tok)
+
 ## src/client/java/org/mamoru/omnichat/client/ui/
 
-- `PortraitTextures.java` — Uploads voice portraits (from portrait.png or generated) as GUI textures. Render thread only. (~714 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/screen/
 
-- `AudioTab.java` — Lays rows top-to-bottom, wrapping into a second column if the body is too short. (~824 tok)
-- `BubblesTab.java` — BubblesTab: init, render, hints (~570 tok)
-- `HudTab.java` — One tab of OmnichatScreen: adds its widgets in init, draws extra decoration in render. (~162 tok)
-- `OmnichatScreen.java` — The OmniChat HUD: header, tabs, active tab, hint footer, inside an adaptive panel. (~1255 tok)
-- `VoiceTab.java` — VoiceTab: init, tick, mouseScrolled, render (~2910 tok)
 
 ## src/client/java/org/mamoru/omnichat/client/ui/widget/
 
-- `HudButton.java` — HudButton: onClick, keyPressed (~535 tok)
-- `HudSlider.java` — "Label  value  [====|-----]" row with snapping to {@code step}. (~640 tok)
-- `HudToggle.java` — "Label ........ [■ ]" row; click or Enter flips it. (~668 tok)
-- `StatusLine.java` — Divider + "left ........ right" status row. Not focusable, just drawn. (~195 tok)
-- `TabBar.java` — Row of tabs. Left/Right when focused, or 1..9 handled by the screen. (~781 tok)
-- `VoiceTile.java` — Portrait tile. LMB/Enter selects, RMB previews. Badge: ✓ active, ↓ remote, % downloading, ! failed. (~1127 tok)
 
 ## src/main/java/org/mamoru/omnichat/voice/
 
-- `VoiceMeta.java` — Display metadata of a voice model. Strings are never null; {@code portrait} is a validated PNG (~138 tok)
-- `VoiceMetaReader.java` — Reads optional {@code voice.json} and {@code portrait.png} from a model folder. Never throws. (~1136 tok)
+
+## src/test/java/org/mamoru/omnichat/client/tts/
+
+- `OnnxMetadataTest.java` — ModelProto with ir_version (varint field 1), a large "graph" (field 7) and metadata_props (field 14) (~829 tok)
 
 ## src/test/java/org/mamoru/omnichat/voice/
 
-- `VoiceMetaReaderTest.java` — Class: VoiceMetaReaderTest (~892 tok)

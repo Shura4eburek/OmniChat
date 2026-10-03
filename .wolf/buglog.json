@@ -323,6 +323,24 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-03T00:40:00"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-10-04T16:20:00",
+      "error_message": "JVM crash EXCEPTION_UNCAUGHT_CXX_EXCEPTION in sherpa-onnx-jni.dll (OfflineTts.generate) when previewing voice 'glados'",
+      "file": "src/client/java/org/mamoru/omnichat/client/tts/TtsEngine.java",
+      "root_cause": "glados.onnx is a piper export without 'has_espeak'/'voice' metadata; sherpa-onnx throws a native C++ exception on the first sentence, killing the JVM. Old validation only searched the raw bytes for 'n_speakers'.",
+      "fix": "OnnxMetadata parses ModelProto metadata_props; TtsEngine refuses models without n_speakers or piper models without 'voice' (falls back instead of crashing). Repro: standalone sherpa harness crashes on glados, works after adding voice=ru metadata.",
+      "tags": [
+        "sherpa-onnx",
+        "native-crash",
+        "piper",
+        "metadata",
+        "tts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T16:20:00"
     }
   ]
 }
