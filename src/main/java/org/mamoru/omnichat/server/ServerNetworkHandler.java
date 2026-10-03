@@ -212,7 +212,7 @@ public class ServerNetworkHandler {
         // Model list and voice map wait for the client's handshake (onProtocolVersion).
         // A client with OmniChat channels but no handshake channel runs a pre-versioning build.
         if (!ServerPlayNetworking.canSend(player, ProtocolVersionPayload.ID)
-                && ServerPlayNetworking.canSend(player, ModelListS2CPayload.ID)) {
+                && ServerPlayNetworking.canSend(player, VoiceCatalogS2CPayload.ID)) {
             LOGGER.warn("Player {} uses an outdated OmniChat version: OmniChat features disabled for them",
                     player.getName().getString());
             player.sendMessage(Text.literal("[OmniChat] Your OmniChat version doesn't match the server's; "
@@ -228,8 +228,8 @@ public class ServerNetworkHandler {
 
     /** Model list and voice map of everyone online, sent once the handshake succeeds. */
     private void sendInitialState(ServerPlayerEntity player) {
-        if (ServerPlayNetworking.canSend(player, ModelListS2CPayload.ID)) {
-            ServerPlayNetworking.send(player, new ModelListS2CPayload(registry.getAvailableModels()));
+        if (ServerPlayNetworking.canSend(player, VoiceCatalogS2CPayload.ID)) {
+            ServerPlayNetworking.send(player, new VoiceCatalogS2CPayload(registry.getCatalog()));
         }
 
         List<UUID> onlineUuids = new ArrayList<>();
@@ -259,8 +259,8 @@ public class ServerNetworkHandler {
         // Sent even when empty: the client replaces its whole map, dropping voices of removed models
         VoiceMapS2CPayload voices = new VoiceMapS2CPayload(registry.getOnlineVoices(onlineUuids));
         broadcast(voices, null);
-        // Model list last: clients answer it by re-sending their configured voice
-        broadcast(new ModelListS2CPayload(models), null);
+        // Catalog last: clients answer it by re-sending their configured voice
+        broadcast(new VoiceCatalogS2CPayload(registry.getCatalog()), null);
         LOGGER.info("Reloaded OmniChat models: {}", models);
         return models.size();
     }

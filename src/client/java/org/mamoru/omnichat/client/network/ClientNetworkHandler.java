@@ -28,7 +28,7 @@ public class ClientNetworkHandler {
 
     public static void registerHandlers() {
         ClientPlayNetworking.registerGlobalReceiver(ProtocolVersionPayload.ID, ClientNetworkHandler::onProtocolVersion);
-        receive(ModelListS2CPayload.ID, ClientNetworkHandler::onModelList);
+        receive(VoiceCatalogS2CPayload.ID, ClientNetworkHandler::onCatalog);
         receive(VoiceInfoS2CPayload.ID, ClientNetworkHandler::onVoiceInfo);
         receive(VoiceMapS2CPayload.ID, ClientNetworkHandler::onVoiceMap);
         receive(ModelFileChunkS2CPayload.ID, ClientNetworkHandler::onModelFileChunk);
@@ -107,10 +107,11 @@ public class ClientNetworkHandler {
         }
     }
 
-    private static void onModelList(ModelListS2CPayload payload, ClientPlayNetworking.Context context) {
-        VoiceCache.getInstance().setServerModels(payload.models());
-        LOGGER.info("Received server model list: {}", payload.models());
-        syncVoiceSelection(payload.models());
+    private static void onCatalog(VoiceCatalogS2CPayload payload, ClientPlayNetworking.Context context) {
+        VoiceCache.getInstance().setCatalog(payload.voices());
+        List<String> models = VoiceCache.getInstance().getServerModels();
+        LOGGER.info("Received server model list: {}", models);
+        syncVoiceSelection(models);
     }
 
     /** Tells the server which voice this client has configured, so others hear the right one. */

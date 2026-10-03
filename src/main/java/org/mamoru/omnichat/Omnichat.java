@@ -25,7 +25,7 @@ public class Omnichat implements ModInitializer {
         // Register payload types
         // S2C
         PayloadTypeRegistry.playS2C().register(ProtocolVersionPayload.ID, ProtocolVersionPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ModelListS2CPayload.ID, ModelListS2CPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(VoiceCatalogS2CPayload.ID, VoiceCatalogS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(VoiceInfoS2CPayload.ID, VoiceInfoS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(VoiceMapS2CPayload.ID, VoiceMapS2CPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ModelFileChunkS2CPayload.ID, ModelFileChunkS2CPayload.CODEC);
