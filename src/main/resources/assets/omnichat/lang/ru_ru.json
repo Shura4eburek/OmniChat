@@ -54,5 +54,16 @@
   "omnichat.ui.voice.repair_language": "Язык",
   "omnichat.toast.repaired": "Модель исправлена",
   "omnichat.toast.repair_failed": "Не удалось исправить модель",
-  "omnichat.toast.repaired.server": "Исправлено только у тебя — сообщи владельцу сервера"
+  "omnichat.toast.repaired.server": "Исправлено только у тебя — сообщи владельцу сервера",
+  "omnichat.ui.voice.checking": "Проверка модели…",
+  "omnichat.reason.missing_voice": "нет языка озвучки (voice)",
+  "omnichat.reason.not_vits": "это не VITS-модель (нет n_speakers)",
+  "omnichat.reason.read_error": "не удалось прочитать модель",
+  "omnichat.reason.too_large": "модель слишком большая",
+  "omnichat.repair_error.in_use": "Файл модели занят или только для чтения",
+  "omnichat.repair_error.incompatible": "Эту модель нельзя исправить",
+  "omnichat.repair_error.verify": "Модель всё ещё не работает после исправления",
+  "omnichat.repair_error.generic": "Не удалось изменить файл модели",
+  "omnichat.toast.tts_disabled.desc": "Модель '%s' не загрузилась",
+  "omnichat.toast.tts_fallback.desc": "Используется '%s' вместо '%s'"
 }

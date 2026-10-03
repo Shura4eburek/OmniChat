@@ -72,6 +72,7 @@ class ModelRepairTest {
         ModelRepair.Health h = ModelRepair.check(dir);
         assertEquals(ModelRepair.Status.OK, h.status());
         assertEquals("", h.problem());
+        assertEquals(ModelRepair.Reason.NONE, h.reason());
     }
 
     @Test
@@ -83,6 +84,7 @@ class ModelRepairTest {
         assertEquals(ModelRepair.Status.FIXABLE, h.status());
         assertEquals("ru", h.suggestedVoice());
         assertEquals(List.of("en-us", "ru"), h.voices());
+        assertEquals(ModelRepair.Reason.MISSING_VOICE, h.reason());
     }
 
     @Test
@@ -101,11 +103,13 @@ class ModelRepairTest {
         ModelRepair.Health h = ModelRepair.check(dir);
         assertEquals(ModelRepair.Status.INCOMPATIBLE, h.status());
         assertTrue(h.problem().contains("n_speakers"));
+        assertEquals(ModelRepair.Reason.NOT_VITS, h.reason());
     }
 
     @Test
     void incompatibleWhenNoOnnxAndNeverThrows() {
         assertEquals(ModelRepair.Status.INCOMPATIBLE, ModelRepair.check(dir).status());
+        assertEquals(ModelRepair.Reason.READ_ERROR, ModelRepair.check(dir).reason());
     }
 
     @Test
@@ -216,7 +220,8 @@ class ModelRepairTest {
     void applyRefusesIncompatibleModel() throws IOException {
         byte[] b = model("comment", "piper");
         Path onnx = write("m.onnx", b);
-        assertThrows(IOException.class, () -> ModelRepair.apply(dir, "ru"));
+        ModelRepair.RepairException e = assertThrows(ModelRepair.RepairException.class, () -> ModelRepair.apply(dir, "ru"));
+        assertEquals(ModelRepair.Failure.INCOMPATIBLE, e.failure());
         assertArrayEquals(b, Files.readAllBytes(onnx));
         assertFalse(Files.exists(dir.resolve("m.onnx.bak")));
     }
@@ -235,6 +240,7 @@ class ModelRepairTest {
             }
             org.junit.jupiter.api.Assumptions.assumeTrue(e != null, "platform allows replacing read-only files");
             assertTrue(e.getMessage().contains("in use or"), e.getMessage());
+            assertEquals(ModelRepair.Failure.IN_USE, assertInstanceOf(ModelRepair.RepairException.class, e).failure());
             assertArrayEquals(b, Files.readAllBytes(onnx));
             assertFalse(Files.exists(dir.resolve("m.onnx.tmp")));
         } finally {

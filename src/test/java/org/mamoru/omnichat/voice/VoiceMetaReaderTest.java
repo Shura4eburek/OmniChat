@@ -88,4 +88,13 @@ class VoiceMetaReaderTest {
         assertFalse(VoiceMetaReader.isValidPortrait("GIF89a....".getBytes())); // not png
         assertFalse(VoiceMetaReader.isValidPortrait(new byte[0]));
     }
+
+    @Test
+    void folderSizeSkipsRepairLeftovers() throws IOException {
+        Files.write(dir.resolve("model.onnx"), new byte[100]);
+        Files.write(dir.resolve("model.onnx.bak"), new byte[1000]);
+        Files.write(dir.resolve("model.onnx.bak.tmp"), new byte[1000]);
+        Files.write(dir.resolve("model.onnx.tmp"), new byte[1000]);
+        assertEquals(100, VoiceMetaReader.read(dir, "x").sizeBytes());
+    }
 }

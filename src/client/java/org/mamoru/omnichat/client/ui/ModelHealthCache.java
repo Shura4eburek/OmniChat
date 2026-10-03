@@ -13,90 +13,103 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
- * Background {@link ModelRepair#check} results per installed model, keyed by model name and invalidated
- * when the model's .onnx file changes (mtime). {@link #get} never blocks: it returns null while pending.
+ * Background {@link ModelRepair#check} results per installed model, re-checked when the model's .onnx
+ * file changes (mtime, looked at no more than every {@link #RECHECK_NANOS} per model, so the render
+ * thread doesn't stat files every frame). {@link #get} never blocks: it returns null while pending.
+ * The Voice tab notices new results through its periodic rebuild signature, not a callback.
  */
 public final class ModelHealthCache {
+    static final long RECHECK_NANOS = 2_000_000_000L;
+
     public static final ModelHealthCache INSTANCE = new ModelHealthCache(OmnichatConfig::resolveModelDir,
             ModelRepair::check, Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "OmniChat-Model-Check");
                 t.setDaemon(true);
                 return t;
-            }));
+            }), System::nanoTime);
 
-    private record Result(Health health, Path onnx, long mtime) {
+    private static final class Result {
+        final Health health;
+        final Path onnx;
+        final long mtime;
+        volatile long verifiedAt;
+
+        Result(Health health, Path onnx, long mtime, long verifiedAt) {
+            this.health = health;
+            this.onnx = onnx;
+            this.mtime = mtime;
+            this.verifiedAt = verifiedAt;
+        }
     }
 
     private final Function<String, Path> resolver;
     private final Function<Path, Health> checker;
     private final Executor executor;
+    private final LongSupplier clock;
     private final Map<String, Result> results = new ConcurrentHashMap<>();
-    private final Map<String, Long> pending = new ConcurrentHashMap<>();
-    // Bumped by invalidate/clear: a check started before that must not store its (stale) result
-    private final AtomicLong generation = new AtomicLong();
-    private volatile Consumer<String> listener = m -> {
-    };
+    // model -> token of the check in flight; invalidate/clear drop it so a stale check can't store
+    private final Map<String, Object> pending = new ConcurrentHashMap<>();
 
-    ModelHealthCache(Function<String, Path> resolver, Function<Path, Health> checker, Executor executor) {
+    ModelHealthCache(Function<String, Path> resolver, Function<Path, Health> checker, Executor executor, LongSupplier clock) {
         this.resolver = resolver;
         this.checker = checker;
         this.executor = executor;
-    }
-
-    /** Called on the checking thread with the model name whenever a new result is stored. */
-    public void setListener(Consumer<String> listener) {
-        this.listener = listener;
+        this.clock = clock;
     }
 
     /** Cached health, or null while the check is pending (one is started if needed). Any thread. */
     public Health get(String model) {
         Result r = results.get(model);
-        if (r != null && fresh(r)) return r.health();
-        if (r != null) results.remove(model, r);
+        if (r != null) {
+            long now = clock.getAsLong();
+            if (now - r.verifiedAt < RECHECK_NANOS) return r.health;
+            if (r.onnx == null || mtime(r.onnx) == r.mtime) {
+                r.verifiedAt = now;
+                return r.health;
+            }
+            results.remove(model, r);
+        }
         Path dir = resolver.apply(model);
         if (dir == null || !Files.isDirectory(dir)) return null;
-        long gen = generation.get();
-        if (pending.putIfAbsent(model, gen) == null) {
-            executor.execute(() -> run(model, dir, gen));
+        Object token = new Object();
+        if (pending.putIfAbsent(model, token) == null) {
+            executor.execute(() -> run(model, dir, token));
         }
         return null;
     }
 
-    private void run(String model, Path dir, long gen) {
-        boolean stored = false;
+    private void run(String model, Path dir, Object token) {
+        Path onnx = onnxOf(dir);
+        long mtime = mtime(onnx);
+        Health h;
         try {
-            Path onnx = onnxOf(dir);
-            long mtime = mtime(onnx);
-            Health h = checker.apply(dir);
-            if (generation.get() == gen) {
-                results.put(model, new Result(h, onnx, mtime));
-                stored = true;
-            }
-        } finally {
-            pending.remove(model, gen);
+            h = checker.apply(dir);
+        } catch (RuntimeException | Error e) {
+            pending.remove(model, token); // let a later get() retry
+            throw e;
         }
-        if (stored) listener.accept(model);
+        // Store only if this check wasn't invalidated meanwhile (compute is atomic per model)
+        pending.computeIfPresent(model, (m, t) -> {
+            if (t != token) return t;
+            results.put(model, new Result(h, onnx, mtime, clock.getAsLong()));
+            return null;
+        });
     }
 
+    /** The model's files changed: forget its result and any check in flight for it. Other models are kept. */
     public void invalidate(String model) {
-        generation.incrementAndGet();
-        results.remove(model);
         pending.remove(model);
+        results.remove(model);
     }
 
     /** Disconnect: forget everything (the next server may ship other models). */
     public void clear() {
-        generation.incrementAndGet();
-        results.clear();
         pending.clear();
-    }
-
-    private static boolean fresh(Result r) {
-        return r.onnx() == null || mtime(r.onnx()) == r.mtime();
+        results.clear();
     }
 
     private static Path onnxOf(Path dir) {

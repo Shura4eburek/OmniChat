@@ -150,7 +150,7 @@ public class TtsService {
             synchronized (this) {
                 if (gen == generation) loading = false;
             }
-            notifyUser(Text.translatable("omnichat.toast.tts_disabled"), Text.literal("Model '" + model + "' failed to load"));
+            notifyUser(Text.translatable("omnichat.toast.tts_disabled"), Text.translatable("omnichat.toast.tts_disabled.desc", model));
             return;
         }
 
@@ -168,7 +168,7 @@ public class TtsService {
         }
         if (!usedModel.equals(model)) {
             LOGGER.warn("Using fallback TTS model '{}' instead of '{}'", usedModel, model);
-            notifyUser(Text.translatable("omnichat.toast.tts_fallback"), Text.literal("Using '" + usedModel + "' instead of '" + model + "'"));
+            notifyUser(Text.translatable("omnichat.toast.tts_fallback"), Text.translatable("omnichat.toast.tts_fallback.desc", usedModel, model));
         } else {
             LOGGER.info("TTS engine ready (model '{}')", usedModel);
         }

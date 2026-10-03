@@ -54,5 +54,16 @@
   "omnichat.ui.voice.repair_language": "Language",
   "omnichat.toast.repaired": "Model fixed",
   "omnichat.toast.repair_failed": "Couldn't fix the model",
-  "omnichat.toast.repaired.server": "Fixed only for you — tell the server owner"
+  "omnichat.toast.repaired.server": "Fixed only for you — tell the server owner",
+  "omnichat.ui.voice.checking": "Checking the model…",
+  "omnichat.reason.missing_voice": "no speech language (voice)",
+  "omnichat.reason.not_vits": "not a VITS model (no n_speakers)",
+  "omnichat.reason.read_error": "can't read the model",
+  "omnichat.reason.too_large": "model too large",
+  "omnichat.repair_error.in_use": "The model file is in use or read-only",
+  "omnichat.repair_error.incompatible": "This model can't be fixed",
+  "omnichat.repair_error.verify": "The model still doesn't work after the fix",
+  "omnichat.repair_error.generic": "Couldn't change the model file",
+  "omnichat.toast.tts_disabled.desc": "Model '%s' failed to load",
+  "omnichat.toast.tts_fallback.desc": "Using '%s' instead of '%s'"
 }

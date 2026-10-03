@@ -3,6 +3,7 @@ package org.mamoru.omnichat.client.ui;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mamoru.omnichat.client.tts.ModelRepair.Health;
+import org.mamoru.omnichat.client.tts.ModelRepair.Reason;
 import org.mamoru.omnichat.client.tts.ModelRepair.Status;
 
 import java.nio.file.Files;
@@ -11,6 +12,7 @@ import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,18 +22,16 @@ class ModelHealthCacheTest {
 
     final List<Runnable> queued = new ArrayList<>();
     final AtomicInteger checks = new AtomicInteger();
-    final List<String> notified = new ArrayList<>();
+    final AtomicLong clock = new AtomicLong(1_000_000_000L);
 
     ModelHealthCache cache() {
-        ModelHealthCache c = new ModelHealthCache(m -> {
+        return new ModelHealthCache(m -> {
             Path d = root.resolve(m);
             return Files.isDirectory(d) ? d : null;
         }, dir -> {
             checks.incrementAndGet();
-            return new Health(Status.FIXABLE, "p", "ru", List.of());
-        }, queued::add);
-        c.setListener(notified::add);
-        return c;
+            return new Health(Status.FIXABLE, Reason.MISSING_VOICE, "p", "ru", List.of());
+        }, queued::add, clock::get);
     }
 
     void runQueued() {
@@ -46,8 +46,13 @@ class ModelHealthCacheTest {
         return d;
     }
 
+    void bumpMtime(Path d) throws Exception {
+        Path f = d.resolve("m.onnx");
+        Files.setLastModifiedTime(f, FileTime.fromMillis(Files.getLastModifiedTime(f).toMillis() + 5000));
+    }
+
     @Test
-    void pendingThenCachedAndNotified() throws Exception {
+    void pendingThenCached() throws Exception {
         model("a");
         ModelHealthCache c = cache();
         assertNull(c.get("a"));
@@ -55,7 +60,6 @@ class ModelHealthCacheTest {
         assertEquals(1, queued.size(), "one check per model while pending");
         runQueued();
         assertEquals(Status.FIXABLE, c.get("a").status());
-        assertEquals(List.of("a"), notified);
         c.get("a");
         assertTrue(queued.isEmpty());
         assertEquals(1, checks.get());
@@ -69,29 +73,54 @@ class ModelHealthCacheTest {
     }
 
     @Test
-    void changedOnnxMtimeRechecks() throws Exception {
+    void mtimeIsOnlyRecheckedAfterTheInterval() throws Exception {
         Path d = model("a");
         ModelHealthCache c = cache();
         c.get("a");
         runQueued();
-        Files.setLastModifiedTime(d.resolve("m.onnx"), FileTime.fromMillis(Files.getLastModifiedTime(d.resolve("m.onnx")).toMillis() + 5000));
-        assertNull(c.get("a"));
+        bumpMtime(d);
+        assertNotNull(c.get("a"), "within the interval the file isn't looked at");
+        clock.addAndGet(ModelHealthCache.RECHECK_NANOS + 1);
+        assertNull(c.get("a"), "changed file -> re-check");
         runQueued();
         assertNotNull(c.get("a"));
         assertEquals(2, checks.get());
     }
 
     @Test
-    void invalidateAndClearDropResultsAndInFlightChecks() throws Exception {
+    void unchangedFileStaysCachedAfterTheInterval() throws Exception {
         model("a");
         ModelHealthCache c = cache();
         c.get("a");
         runQueued();
-        c.invalidate("a");
-        assertNull(c.get("a"));
-        c.clear(); // the queued check now belongs to an old generation
+        clock.addAndGet(ModelHealthCache.RECHECK_NANOS + 1);
+        assertNotNull(c.get("a"));
+        assertTrue(queued.isEmpty());
+    }
+
+    @Test
+    void invalidateOnlyDropsThatModel() throws Exception {
+        model("a");
+        model("b");
+        ModelHealthCache c = cache();
+        c.get("a");
+        c.get("b");
+        c.invalidate("a"); // a's in-flight check is stale, b's is not
         runQueued();
         assertNull(c.get("a"), "stale in-flight result must not be stored");
+        assertNotNull(c.get("b"), "other models keep their in-flight result");
+        runQueued();
+        assertNotNull(c.get("a"));
+    }
+
+    @Test
+    void clearDropsEverythingInFlight() throws Exception {
+        model("a");
+        ModelHealthCache c = cache();
+        c.get("a");
+        c.clear();
+        runQueued();
+        assertNull(c.get("a"));
         runQueued();
         assertNotNull(c.get("a"));
     }

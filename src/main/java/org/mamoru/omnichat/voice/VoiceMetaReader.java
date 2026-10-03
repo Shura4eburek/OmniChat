@@ -86,9 +86,15 @@ public final class VoiceMetaReader {
         return s.length() > max ? s.substring(0, max) : s;
     }
 
+    /** Model repair backups/temp files aren't part of the model (they'd double the shown size). */
+    private static boolean isRepairLeftover(Path p) {
+        String n = p.getFileName().toString();
+        return n.endsWith(".bak") || n.endsWith(".tmp");
+    }
+
     private static long folderSize(Path dir) {
         try (Stream<Path> files = Files.walk(dir)) {
-            return files.filter(Files::isRegularFile).mapToLong(p -> {
+            return files.filter(Files::isRegularFile).filter(p -> !isRepairLeftover(p)).mapToLong(p -> {
                 try {
                     return Files.size(p);
                 } catch (IOException e) {

@@ -1,6 +1,8 @@
 package org.mamoru.omnichat.client.ui;
 
+import org.mamoru.omnichat.client.tts.ModelRepair;
 import org.mamoru.omnichat.client.tts.ModelRepair.Health;
+import org.mamoru.omnichat.client.tts.ModelRepair.Reason;
 import org.mamoru.omnichat.client.tts.ModelRepair.Status;
 
 import java.util.List;
@@ -17,23 +19,41 @@ public final class ModelHealthView {
     }
 
     public static Badge badge(VoiceCatalog.State state, Health h) {
-        if (state != VoiceCatalog.State.INSTALLED || h == null) return Badge.NONE;
-        return switch (h.status()) {
-            case OK -> Badge.NONE;
-            case FIXABLE -> Badge.WARN;
-            case INCOMPATIBLE -> Badge.ERROR;
-        };
+        if (state != VoiceCatalog.State.INSTALLED || h == null || h.status() == Status.OK) return Badge.NONE;
+        return fixMode(h) != Fix.NONE ? Badge.WARN : Badge.ERROR;
     }
 
-    /** Translation key for the status line (takes the reason as %s), or null when there is nothing to report. */
+    /**
+     * Translation key for an installed model's status line (takes the translated reason as %s, except
+     * "checking"), or null when the model is OK. A fixable model with no language to fix with is shown
+     * as incompatible: there is nothing the player can do in game.
+     */
     public static String statusKey(Health h) {
-        if (h == null || h.status() == Status.OK) return null;
-        return h.status() == Status.FIXABLE ? "omnichat.ui.voice.needs_fix" : "omnichat.ui.voice.incompatible_model";
+        if (h == null) return "omnichat.ui.voice.checking";
+        if (h.status() == Status.OK) return null;
+        return fixMode(h) != Fix.NONE ? "omnichat.ui.voice.needs_fix" : "omnichat.ui.voice.incompatible_model";
     }
 
-    /** A known-broken model is never made active (the engine would refuse it and fall back). */
+    public static String reasonKey(Reason reason) {
+        return "omnichat.reason." + reason.name().toLowerCase(Locale.ROOT);
+    }
+
+    /** Translation key for a failed repair; unknown errors get a generic text. */
+    public static String failureKey(Throwable error) {
+        if (error instanceof ModelRepair.RepairException e) {
+            return switch (e.failure()) {
+                case IN_USE -> "omnichat.repair_error.in_use";
+                case INCOMPATIBLE -> "omnichat.repair_error.incompatible";
+                case VERIFY_FAILED -> "omnichat.repair_error.verify";
+                case OTHER -> "omnichat.repair_error.generic";
+            };
+        }
+        return "omnichat.repair_error.generic";
+    }
+
+    /** Only a checked, healthy model is made active (a pending one is just selected until its check ends). */
     public static boolean canActivate(VoiceCatalog.State state, Health h) {
-        return state == VoiceCatalog.State.INSTALLED && (h == null || h.status() == Status.OK);
+        return state == VoiceCatalog.State.INSTALLED && h != null && h.status() == Status.OK;
     }
 
     /** The language to fix with without asking: the piper json's voice, or the only espeak voice there is. */

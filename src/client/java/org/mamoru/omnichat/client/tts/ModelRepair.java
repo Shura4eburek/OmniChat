@@ -26,13 +26,36 @@ import java.util.stream.Stream;
 public final class ModelRepair {
     public enum Status { OK, FIXABLE, INCOMPATIBLE }
 
+    /** Why a model isn't OK, for translated UI text ({@link Health#problem()} keeps the English detail for logs). */
+    public enum Reason { NONE, MISSING_VOICE, NOT_VITS, READ_ERROR, TOO_LARGE }
+
+    /** What went wrong in {@link #apply}, for translated UI text. */
+    public enum Failure { IN_USE, INCOMPATIBLE, VERIFY_FAILED, OTHER }
+
+    /** {@link #apply} failure with a {@link Failure} kind; the message is English, for logs. */
+    public static final class RepairException extends IOException {
+        private final Failure failure;
+
+        public RepairException(Failure failure, String message, Throwable cause) {
+            super(message, cause);
+            this.failure = failure;
+        }
+
+        public Failure failure() {
+            return failure;
+        }
+    }
+
     /**
-     * @param problem        "" when OK
+     * @param reason         NONE when OK
+     * @param problem        "" when OK; English detail for logs
      * @param suggestedVoice "" when unknown
      * @param voices         sorted espeak voices available in the model's espeak-ng-data, may be empty
      */
-    public record Health(Status status, String problem, String suggestedVoice, List<String> voices) {
+    public record Health(Status status, Reason reason, String problem, String suggestedVoice, List<String> voices) {
     }
+
+    private static final Health HEALTHY = new Health(Status.OK, Reason.NONE, "", "", List.of());
 
     private ModelRepair() {
     }
@@ -41,20 +64,21 @@ public final class ModelRepair {
     public static Health check(Path modelDir) {
         try {
             if (ModelScanner.detectType(modelDir) == ModelScanner.ModelType.GLADOS) {
-                return new Health(Status.OK, "", "", List.of());
+                return HEALTHY;
             }
             Path onnx = ModelScanner.resolveOnnxModel(modelDir);
             Map<String, String> meta = OnnxMetadata.parse(onnx);
             String problem = OnnxMetadata.vitsProblem(meta);
-            if (problem == null) return new Health(Status.OK, "", "", List.of());
-            if (!OnnxMetadata.missingVoiceOnly(meta)) return new Health(Status.INCOMPATIBLE, problem, "", List.of());
+            if (problem == null) return HEALTHY;
+            Reason reason = meta.containsKey("n_speakers") ? Reason.MISSING_VOICE : Reason.NOT_VITS;
+            if (!OnnxMetadata.missingVoiceOnly(meta)) return new Health(Status.INCOMPATIBLE, reason, problem, "", List.of());
             String suggested = voiceFromPiperJson(onnx.resolveSibling(onnx.getFileName() + ".json"));
-            return new Health(Status.FIXABLE, problem, suggested, espeakVoices(modelDir.resolve("espeak-ng-data")));
+            return new Health(Status.FIXABLE, reason, problem, suggested, espeakVoices(modelDir.resolve("espeak-ng-data")));
         } catch (OutOfMemoryError e) {
-            return new Health(Status.INCOMPATIBLE, "out of memory while reading the model", "", List.of());
+            return new Health(Status.INCOMPATIBLE, Reason.TOO_LARGE, "out of memory while reading the model", "", List.of());
         } catch (IOException | RuntimeException e) {
             String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            return new Health(Status.INCOMPATIBLE, msg, "", List.of());
+            return new Health(Status.INCOMPATIBLE, Reason.READ_ERROR, msg, "", List.of());
         }
     }
 
@@ -65,15 +89,15 @@ public final class ModelRepair {
      * throws IOException with the reason. Keeps a {@code .bak} copy if none exists yet.
      */
     public static void apply(Path modelDir, String voice) throws IOException {
-        if (voice == null || voice.isBlank()) throw new IOException("no espeak voice given");
+        if (voice == null || voice.isBlank()) throw new RepairException(Failure.OTHER, "no espeak voice given", null);
         Health health = check(modelDir);
         if (health.status() == Status.OK) return;
-        if (health.status() == Status.INCOMPATIBLE) throw new IOException("model can't be repaired: " + health.problem());
+        if (health.status() == Status.INCOMPATIBLE) throw new RepairException(Failure.INCOMPATIBLE, "model can't be repaired: " + health.problem(), null);
         Path onnx;
         try {
             onnx = ModelScanner.resolveOnnxModel(modelDir);
         } catch (IllegalStateException e) {
-            throw new IOException(e.getMessage(), e);
+            throw new RepairException(Failure.OTHER, e.getMessage(), e);
         }
         Map<String, String> meta = OnnxMetadata.parse(onnx);
         Map<String, String> add = new LinkedHashMap<>();
@@ -110,9 +134,9 @@ public final class ModelRepair {
                 Files.move(tmp, onnx, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (AccessDeniedException e) {
-            throw new IOException("model file is in use or read-only: " + onnx.getFileName(), e);
+            throw new RepairException(Failure.IN_USE, "model file is in use or read-only: " + onnx.getFileName(), e);
         } catch (FileSystemException e) {
-            throw new IOException("model file is in use or can't be replaced: " + onnx.getFileName(), e);
+            throw new RepairException(Failure.IN_USE, "model file is in use or can't be replaced: " + onnx.getFileName(), e);
         } finally {
             Files.deleteIfExists(tmp);
             Files.deleteIfExists(bakTmp);

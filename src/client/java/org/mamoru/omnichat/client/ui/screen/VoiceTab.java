@@ -182,14 +182,17 @@ public class VoiceTab implements HudTab {
             try {
                 ModelRepair.apply(dir, voice);
                 ModelRepair.Health after = ModelRepair.check(dir);
-                if (after.status() != ModelRepair.Status.OK) throw new IOException(after.problem());
+                if (after.status() != ModelRepair.Status.OK) {
+                    throw new ModelRepair.RepairException(ModelRepair.Failure.VERIFY_FAILED, "still broken: " + after.problem(), null);
+                }
                 LOGGER.info("Repaired model '{}' (espeak voice '{}')", model, voice);
                 HudToast.show(Text.translatable("omnichat.toast.repaired"),
                         onServer ? Text.translatable("omnichat.toast.repaired.server") : null, HudTheme.OK);
             } catch (IOException | RuntimeException ex) {
                 String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
                 LOGGER.warn("Failed to repair model '{}': {}", model, reason);
-                HudToast.show(Text.translatable("omnichat.toast.repair_failed"), Text.literal(reason), HudTheme.ERROR);
+                HudToast.show(Text.translatable("omnichat.toast.repair_failed"),
+                        Text.translatable(ModelHealthView.failureKey(ex)), HudTheme.ERROR);
             } finally {
                 ModelHealthCache.INSTANCE.invalidate(model);
                 VoiceCatalog.invalidateLocal(model);
@@ -346,15 +349,23 @@ public class VoiceTab implements HudTab {
             default -> {
                 ModelRepair.Health h = health(e);
                 String key = ModelHealthView.statusKey(h);
+                boolean active = e.meta().model().equals(config.getModelPath());
+                if (h == null) {
+                    left = Text.translatable(key);
+                    right = active ? Text.translatable("omnichat.ui.voice.active") : Text.empty();
+                    color = HudTheme.MUTED;
+                    break;
+                }
                 if (key != null) {
-                    left = Text.translatable(key, h.problem());
-                    boolean fixable = h.status() == ModelRepair.Status.FIXABLE;
-                    right = Text.literal(fixable ? "⚠" : "!");
+                    left = Text.translatable(key, Text.translatable(ModelHealthView.reasonKey(h.reason())));
+                    boolean fixable = ModelHealthView.badge(e.state(), h) == ModelHealthView.Badge.WARN;
+                    String mark = fixable ? "⚠" : "!";
+                    // The configured voice stays "selected" even while broken (TTS falls back meanwhile)
+                    right = active ? Text.translatable("omnichat.ui.voice.active").append(" " + mark) : Text.literal(mark);
                     color = fixable ? HudTheme.WARN : HudTheme.ERROR;
                     break;
                 }
                 left = e.onServer() ? Text.translatable("omnichat.ui.voice.installed") : Text.translatable("omnichat.ui.voice.local_only");
-                boolean active = e.meta().model().equals(config.getModelPath());
                 right = active ? Text.translatable("omnichat.ui.voice.active") : Text.empty();
                 color = HudTheme.OK;
             }

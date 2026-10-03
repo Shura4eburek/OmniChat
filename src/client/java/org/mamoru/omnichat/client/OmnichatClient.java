@@ -19,7 +19,6 @@ import org.mamoru.omnichat.client.tts.TtsPlaybackWorker;
 import org.mamoru.omnichat.client.tts.TtsService;
 import org.mamoru.omnichat.client.ui.ModelHealthCache;
 import org.mamoru.omnichat.client.ui.PortraitTextures;
-import org.mamoru.omnichat.client.ui.screen.OmnichatScreen;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,9 +53,6 @@ public class OmnichatClient implements ClientModInitializer {
         DownloadProgressHud.register();
         // Runs on whatever thread saved the model; the worker evicts on its own thread
         ModelDownloadManager.getInstance().setOnDownloadComplete(modelName -> tts.onModelDownloaded(modelName));
-
-        // A finished model check redraws the Voice tab's badges/status
-        ModelHealthCache.INSTANCE.setListener(model -> MinecraftClient.getInstance().execute(OmnichatScreen::rebuildIfOpen));
 
         // Clean up on disconnect
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
