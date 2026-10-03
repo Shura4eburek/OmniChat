@@ -76,8 +76,10 @@ def decode(data: bytes | str | None) -> str:
 
 
 def wsl_cmd(*args: str) -> list[str]:
-    """A command inside the omnivoice distro, as root (the imported rootfs has no other user)."""
-    return ["wsl", "-d", DISTRO, "-u", "root", "--", *args]
+    """A command inside the omnivoice distro, as root (the imported rootfs has no other user).
+    --exec passes argv verbatim; `--` would re-parse it with the shell (quotes, spaces, «(» or «&» in paths
+    break it). Shell features need an explicit `sh -c`."""
+    return ["wsl", "-d", DISTRO, "-u", "root", "--exec", *args]
 
 
 def _run(run: Run, cmd: list[str], timeout: float | None = TIMEOUT, input: bytes | None = None

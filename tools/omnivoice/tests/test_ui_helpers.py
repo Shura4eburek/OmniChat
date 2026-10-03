@@ -373,3 +373,9 @@ def test_env_badge_shows_wsl_backend():
     from omnivoice.train import Env
     badge = h.env_badge(Env(False, True, "RTX 4070", 12000, backend="wsl"))
     assert "RTX 4070" in badge and S.WSL_OK in badge and S.DOCKER_NO not in badge
+
+
+def test_env_badge_wsl_without_gpu():
+    from omnivoice.train import Env
+    badge = h.env_badge(Env(False, False, "RTX 4070", 12000, backend=None, wsl_ready=True, wsl_gpu=False))
+    assert S.WSL_NO_GPU in badge and S.WSL_NO_GPU == "WSL: нет GPU" and S.DOCKER_NO not in badge

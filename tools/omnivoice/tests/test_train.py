@@ -254,7 +254,7 @@ def test_oom_retry_respects_should_stop(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
     fake, polls = OomFake(), []
     def should_stop():
-        polls.append(1); return len(polls) > 3   # the 3 preparation polls pass, the retry poll stops
+        polls.append(1); return len(polls) > 4   # the 4 preparation polls pass, the retry poll stops
     assert train.train_project(p, env=ENV12, run=fake, batch=16, should_stop=should_stop) == train.STOPPED
     assert fake.batches == [16]
 
@@ -338,7 +338,7 @@ def test_cli_build_needs_no_project(tmp_path, monkeypatch):
 # ---------------- WSL backend ----------------
 from omnivoice import wslenv
 
-WSL_PY = ["wsl", "-d", "omnivoice", "-u", "root", "--", "/opt/omnivoice/venv/bin/python"]
+WSL_PY = ["wsl", "-d", "omnivoice", "-u", "root", "--exec", "/opt/omnivoice/venv/bin/python"]
 ENV_WSL = train.Env(False, True, "RTX", 12000, backend="wsl")
 
 
@@ -377,8 +377,7 @@ def test_detect_env_falls_back_to_docker(kw):
     assert env.backend == "docker" and env.docker and env.gpu
 
 
-@pytest.mark.parametrize("kw", [dict(ready=False, docker=False), dict(ready=False, docker_gpu=False),
-                                dict(wsl_gpu=False, docker=False)])
+@pytest.mark.parametrize("kw", [dict(ready=False, docker=False), dict(ready=False, docker_gpu=False)])
 def test_detect_env_no_backend(kw, tmp_path):
     env = train.detect_env(WslFake(**kw))
     assert env.backend is None and train.backend_for(env) is None
@@ -473,7 +472,7 @@ def test_wsl_unmappable_project_path_is_russian(tmp_path, monkeypatch):
 
 def test_stop_commands():
     class P: name = "glados"
-    assert train.WSL.stop(P()) == ["wsl", "-d", "omnivoice", "-u", "root", "--", "pkill", "-f", "piper.train"]
+    assert train.WSL.stop(P()) == ["wsl", "-d", "omnivoice", "-u", "root", "--exec", "pkill", "-f", "piper.train"]
     assert train.DOCKER.stop(P()) == ["docker", "stop", "omnivoice-train-glados"]
 
 
@@ -510,3 +509,39 @@ def test_stream_ctrl_c_runs_backend_stop(monkeypatch):
     stop = wslenv.wsl_cmd("pkill", "-f", "piper.train")
     assert train._stream(["x"], lines.append, stop) == 130
     assert ran == [stop] and lines == ["epoch 1", "Обучение остановлено — продолжить: omnivoice train"]
+
+
+def test_wsl_ready_without_gpu_and_no_docker_explains_driver(tmp_path):
+    env = train.detect_env(WslFake(wsl_gpu=False, docker=False))
+    assert env.backend is None and env.wsl_ready and env.wsl_gpu is False
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    with pytest.raises(train.TrainError) as e:
+        train.train_project(p, env=env, run=Fake({}))
+    assert str(e.value) == ("Среда WSL готова, но не видит видеокарту NVIDIA — обнови драйвер NVIDIA "
+                            "и перезапусти компьютер (или используй Colab)")
+
+
+def test_detect_env_records_wsl_state():
+    env = train.detect_env(WslFake())
+    assert env.wsl_ready and env.wsl_gpu is True
+    env = train.detect_env(WslFake(ready=False))
+    assert not env.wsl_ready and env.backend == "docker"
+    assert train.Env(True, True, "RTX", 12000).wsl_ready is False  # old-style construction still works
+
+
+def test_should_stop_after_clean_base(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    polls = []
+    def should_stop():
+        polls.append(1); return len(polls) >= 4   # csv, download, prepare pass; the post-clean poll stops
+    fake = Fake({})
+    assert train.train_project(p, env=ENV_WSL, run=fake, should_stop=should_stop) == train.STOPPED
+    assert not any("piper.train" in " ".join(c) for c in fake.calls) and len(polls) == 4
+
+
+@pytest.mark.parametrize("exc", [FileNotFoundError("docker"), OSError("nope")])
+def test_stop_training_without_docker_is_quiet(tmp_path, exc):
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    def run(cmd, **kw):
+        raise exc
+    assert train.stop_training(p, run=run) is None

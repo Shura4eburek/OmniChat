@@ -179,12 +179,15 @@ def parse_epoch(line: str) -> int | None:
 def env_badge(env) -> str:
     if env is None:
         return S.ENV_CHECKING
+    wsl_no_gpu = env.backend is None and env.wsl_ready and env.wsl_gpu is False
     if env.gpu_name:
-        gpu = S.GPU_PREFIX + env.gpu_name + ("" if env.gpu else S.GPU_DOCKER_NO)
+        gpu = S.GPU_PREFIX + env.gpu_name + ("" if env.gpu or wsl_no_gpu else S.GPU_DOCKER_NO)
     else:
         gpu = S.NO_GPU
-    if getattr(env, "backend", None) == "wsl":
+    if env.backend == "wsl":
         return f"{gpu} · {S.WSL_OK}"
+    if wsl_no_gpu:
+        return f"{gpu} · {S.WSL_NO_GPU}"
     return f"{gpu} · {S.DOCKER_OK if env.docker else S.DOCKER_NO}"
 
 

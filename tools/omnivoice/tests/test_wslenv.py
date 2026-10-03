@@ -127,7 +127,7 @@ def test_gpu_ok():
 
 
 def test_commands_inside_distro_run_as_root():
-    assert wslenv.wsl_cmd("true") == ["wsl", "-d", "omnivoice", "-u", "root", "--", "true"]
+    assert wslenv.wsl_cmd("true") == ["wsl", "-d", "omnivoice", "-u", "root", "--exec", "true"]
 
 
 # --- ensure_wsl / elevation -----------------------------------------------------------------------

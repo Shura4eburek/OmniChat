@@ -16,6 +16,8 @@ DOCKER_DIR = Path(__file__).resolve().parent / "piper_compat"
 VENV_PY = f"{wslenv.ROOT}/venv/bin/python"
 CLEAN_SCRIPT = "/opt/omnivoice/clean_ckpt.py"  # same path in the Docker image and in the WSL distro
 NO_ENV = "Нет среды обучения — нажми «Установить зависимости» (omnivoice setup)"
+WSL_NO_GPU = ("Среда WSL готова, но не видит видеокарту NVIDIA — обнови драйвер NVIDIA "
+              "и перезапусти компьютер (или используй Colab)")
 
 class TrainError(Exception):
     pass
@@ -27,6 +29,8 @@ class Env:
     gpu_name: str | None
     vram_mib: int | None
     backend: str | None = None  # "wsl" | "docker" | None (no usable training environment)
+    wsl_ready: bool = False  # the omnivoice distro is provisioned (READY marker matches)
+    wsl_gpu: bool | None = None  # nvidia-smi works inside it (None: not checked)
 
 def _docker_ok(run) -> bool:
     try:
@@ -53,11 +57,13 @@ def detect_env(run=subprocess.run) -> Env:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         name = vram = None
     st = _wsl_ready(run)
-    if st and st.ready and st.gpu:  # status() already ran WSL.gpu_ok
-        return Env(False, True, name, vram, "wsl")  # the slow Docker probe isn't needed
+    wsl_ready = bool(st and st.ready)
+    wsl_gpu = st.gpu if wsl_ready else None  # status() already ran WSL.gpu_ok
+    if wsl_ready and wsl_gpu:
+        return Env(False, True, name, vram, "wsl", True, True)  # the slow Docker probe isn't needed
     docker = _docker_ok(run)
     gpu = docker and name is not None and DOCKER.gpu_ok(run)
-    return Env(docker, gpu, name, vram, "docker" if gpu else None)
+    return Env(docker, gpu, name, vram, "docker" if gpu else None, wsl_ready, wsl_gpu)
 
 def backend_for(env: Env) -> str | None:
     if env.backend in BACKENDS:
@@ -208,8 +214,13 @@ _ACTIVE: dict[str, str] = {}  # container_name(p) → backend of the run in prog
 def stop_training(p, run=subprocess.run, timeout: int = 60):
     """Stop p's training in whichever backend runs it (the UI Stop button). Before a backend is
     chosen nothing has been launched; the legacy `docker stop` is then a harmless no-op."""
-    be = BACKENDS[_ACTIVE.get(container_name(p), "docker")]
-    return run(be.stop(p), capture_output=True, timeout=timeout)
+    active = _ACTIVE.get(container_name(p))
+    if active:
+        return run(BACKENDS[active].stop(p), capture_output=True, timeout=timeout)
+    try:
+        return run(DOCKER.stop(p), capture_output=True, timeout=timeout)
+    except OSError:  # no Docker installed (FileNotFoundError is an OSError): nothing to stop
+        return None
 
 
 def _stream(cmd: list[str], on_line, stop_cmd: list[str] | None = None) -> int:
@@ -277,6 +288,8 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
     env = env or detect_env(run)
     name = backend_for(env)
     if name is None:
+        if env.wsl_ready and env.wsl_gpu is False and not (env.docker and env.gpu):
+            raise TrainError(WSL_NO_GPU)
         why = " (Docker не видит видеокарту NVIDIA)" if env.docker and not env.gpu else ""
         raise TrainError(f"{NO_ENV}{why} или обучай в Colab: omnivoice train --colab")
     be = BACKENDS[name]
@@ -300,6 +313,8 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
     if stop():
         return STOPPED
     ckpt = _clean_base(ckpt, run, be)
+    if stop():
+        return STOPPED
     base_ckpt = be.base_ckpt(ckpt)
     bs = batch or batch_size_for(env.vram_mib)
     key = container_name(p)
