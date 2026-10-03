@@ -1,6 +1,6 @@
 import subprocess, pytest
 from pathlib import Path
-from omnivoice import train, checkpoints, dataset
+from omnivoice import train, checkpoints, dataset, download
 from omnivoice.dataset import Segment
 from omnivoice.project import Project
 
@@ -106,7 +106,7 @@ def test_ensure_network_failure_is_russian(tmp_path, monkeypatch):
     import urllib.error
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
     def boom(*a, **k): raise urllib.error.URLError("down")
-    monkeypatch.setattr(checkpoints.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(download.urllib.request, "urlopen", boom)
     with pytest.raises(checkpoints.CheckpointError, match="https://huggingface.co"):
         checkpoints.ensure("ru/x=1.ckpt")
 
@@ -119,7 +119,7 @@ def test_ensure_restarts_when_range_ignored(tmp_path, monkeypatch):
         def read(self, n): return self.data.pop(0)
         def __enter__(self): return self
         def __exit__(self, *a): pass
-    monkeypatch.setattr(checkpoints.urllib.request, "urlopen", lambda req, timeout=None: R())
+    monkeypatch.setattr(download.urllib.request, "urlopen", lambda req, timeout=None: R())
     assert checkpoints.ensure("x.ckpt").read_bytes() == b"NEW"
 
 def _setup_train(tmp_path, monkeypatch):
@@ -170,7 +170,7 @@ class _R:
 
 def test_ensure_truncated_download_keeps_part(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
-    monkeypatch.setattr(checkpoints.urllib.request, "urlopen", lambda req, timeout=None: _R([b"ab"], length=10))
+    monkeypatch.setattr(download.urllib.request, "urlopen", lambda req, timeout=None: _R([b"ab"], length=10))
     with pytest.raises(checkpoints.CheckpointError, match="оборвалась"):
         checkpoints.ensure("x.ckpt")
     assert (tmp_path / "checkpoints" / "x.ckpt.part").read_bytes() == b"ab"
@@ -180,7 +180,7 @@ def test_ensure_416_promotes_part(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
     part = tmp_path / "checkpoints" / "x.ckpt.part"; part.parent.mkdir(parents=True); part.write_bytes(b"FULL")
     def boom(req, timeout=None): raise urllib.error.HTTPError("u", 416, "range", {}, None)
-    monkeypatch.setattr(checkpoints.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(download.urllib.request, "urlopen", boom)
     assert checkpoints.ensure("x.ckpt").read_bytes() == b"FULL" and not part.exists()
 
 @pytest.mark.parametrize("stop_at", [1, 2, 3])
