@@ -19,7 +19,8 @@ import java.util.function.LongSupplier;
 /**
  * Background {@link ModelRepair#check} results per installed model, re-checked when the model's .onnx
  * file changes (mtime, looked at no more than every {@link #RECHECK_NANOS} per model, so the render
- * thread doesn't stat files every frame). {@link #get} never blocks: it returns null while pending.
+ * thread doesn't stat files every frame). {@link #get} never blocks: it returns null while pending;
+ * a model whose folder is missing gets an INCOMPATIBLE (READ_ERROR) result.
  * The Voice tab notices new results through its periodic rebuild signature, not a callback.
  */
 public final class ModelHealthCache {
@@ -32,16 +33,22 @@ public final class ModelHealthCache {
                 return t;
             }), System::nanoTime);
 
+    // A model whose folder can't be found: settled, so the tab doesn't show "checking" forever
+    private static final Health MISSING = new Health(ModelRepair.Status.INCOMPATIBLE, ModelRepair.Reason.READ_ERROR,
+            "model folder not found", "", java.util.List.of());
+
     private static final class Result {
         final Health health;
         final Path onnx;
         final long mtime;
+        final boolean missing;
         volatile long verifiedAt;
 
-        Result(Health health, Path onnx, long mtime, long verifiedAt) {
+        Result(Health health, Path onnx, long mtime, boolean missing, long verifiedAt) {
             this.health = health;
             this.onnx = onnx;
             this.mtime = mtime;
+            this.missing = missing;
             this.verifiedAt = verifiedAt;
         }
     }
@@ -67,14 +74,17 @@ public final class ModelHealthCache {
         if (r != null) {
             long now = clock.getAsLong();
             if (now - r.verifiedAt < RECHECK_NANOS) return r.health;
-            if (r.onnx == null || mtime(r.onnx) == r.mtime) {
+            if (r.missing ? !exists(resolver.apply(model)) : r.onnx == null || mtime(r.onnx) == r.mtime) {
                 r.verifiedAt = now;
                 return r.health;
             }
             results.remove(model, r);
         }
         Path dir = resolver.apply(model);
-        if (dir == null || !Files.isDirectory(dir)) return null;
+        if (!exists(dir)) {
+            results.put(model, new Result(MISSING, null, 0, true, clock.getAsLong()));
+            return MISSING;
+        }
         Object token = new Object();
         if (pending.putIfAbsent(model, token) == null) {
             executor.execute(() -> run(model, dir, token));
@@ -95,7 +105,7 @@ public final class ModelHealthCache {
         // Store only if this check wasn't invalidated meanwhile (compute is atomic per model)
         pending.computeIfPresent(model, (m, t) -> {
             if (t != token) return t;
-            results.put(model, new Result(h, onnx, mtime, clock.getAsLong()));
+            results.put(model, new Result(h, onnx, mtime, false, clock.getAsLong()));
             return null;
         });
     }
@@ -110,6 +120,10 @@ public final class ModelHealthCache {
     public void clear() {
         pending.clear();
         results.clear();
+    }
+
+    private static boolean exists(Path dir) {
+        return dir != null && Files.isDirectory(dir);
     }
 
     private static Path onnxOf(Path dir) {

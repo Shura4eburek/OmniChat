@@ -317,9 +317,31 @@ public class VoiceTab implements HudTab {
         }
 
         int y = d.y() + big + 6;
-        for (String line : HudText.wrap(e.meta().description(), d.w(), 4, tr::getWidth)) {
+        ModelRepair.Health problem = health(e);
+        if (e.state() != VoiceCatalog.State.INSTALLED || problem == null || problem.status() == ModelRepair.Status.OK) {
+            problem = null;
+        }
+        // A problem voice: the translated reason in full, the description shrinks so neither reaches the fix widgets
+        List<String> reason = problem == null ? List.of() : HudText.wrap(
+                Text.translatable(ModelHealthView.reasonKey(problem.reason())).getString(), d.w(), 3, tr::getWidth);
+        int descMax = 4;
+        if (problem != null) {
+            int limit = ModelHealthView.controlsTop(ModelHealthView.fixMode(problem), d.bottom() - StatusLine.HEIGHT - 2);
+            descMax = ModelHealthView.descriptionLines(y, limit, reason.size(), 4);
+        }
+        // wrap() needs at least one line
+        List<String> desc = descMax > 0 ? HudText.wrap(e.meta().description(), d.w(), descMax, tr::getWidth) : List.of();
+        for (String line : desc) {
             ctx.drawText(tr, line, d.x(), y, HudTheme.TEXT, false);
             y += 10;
+        }
+        if (problem != null) {
+            int reasonColor = ModelHealthView.badge(e.state(), problem) == ModelHealthView.Badge.WARN ? HudTheme.WARN : HudTheme.ERROR;
+            y += 4;
+            for (String line : reason) {
+                ctx.drawText(tr, line, d.x(), y, reasonColor, false);
+                y += 10;
+            }
         }
         Text hint = e.state() != VoiceCatalog.State.INSTALLED ? Text.translatable("omnichat.ui.voice.preview_remote")
                 : ModelHealthView.canActivate(e.state(), health(e)) ? Text.translatable("omnichat.ui.voice.preview_hint")
@@ -357,7 +379,7 @@ public class VoiceTab implements HudTab {
                     break;
                 }
                 if (key != null) {
-                    left = Text.translatable(key, Text.translatable(ModelHealthView.reasonKey(h.reason())));
+                    left = Text.translatable(key); // the reason is drawn in full in the card body
                     boolean fixable = ModelHealthView.badge(e.state(), h) == ModelHealthView.Badge.WARN;
                     String mark = fixable ? "⚠" : "!";
                     // The configured voice stays "selected" even while broken (TTS falls back meanwhile)

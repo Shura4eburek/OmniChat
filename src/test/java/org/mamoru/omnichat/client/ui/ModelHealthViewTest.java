@@ -101,4 +101,20 @@ class ModelHealthViewTest {
         assertEquals("OK", ModelHealthView.token(OK));
         assertEquals("FIXABLE", ModelHealthView.token(AUTO));
     }
+
+    @Test
+    void controlsTopMatchesTheFixWidgets() {
+        assertEquals(178, ModelHealthView.controlsTop(ModelHealthView.Fix.BUTTON, 196));
+        assertEquals(162, ModelHealthView.controlsTop(ModelHealthView.Fix.PICKER, 196));
+        assertEquals(196, ModelHealthView.controlsTop(ModelHealthView.Fix.NONE, 196));
+    }
+
+    @Test
+    void descriptionGivesWayToTheReason() {
+        // 427x240: text starts at 106, picker at 162 -> 54 px: 3 reason lines + 1 gap leave 2 description lines
+        assertEquals(2, ModelHealthView.descriptionLines(106, 162, 3, 4));
+        assertEquals(3, ModelHealthView.descriptionLines(106, 178, 3, 4));
+        assertEquals(4, ModelHealthView.descriptionLines(106, 300, 3, 4), "never more than wanted");
+        assertEquals(0, ModelHealthView.descriptionLines(106, 120, 3, 4), "never negative");
+    }
 }

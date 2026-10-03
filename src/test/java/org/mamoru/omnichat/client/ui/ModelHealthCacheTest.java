@@ -66,10 +66,21 @@ class ModelHealthCacheTest {
     }
 
     @Test
-    void missingModelIsNotChecked() {
+    void missingModelSettlesOnReadError() throws Exception {
         ModelHealthCache c = cache();
-        assertNull(c.get("nope"));
+        Health h = c.get("nope");
+        assertNotNull(h, "never pending forever");
+        assertEquals(Status.INCOMPATIBLE, h.status());
+        assertEquals(Reason.READ_ERROR, h.reason());
+        assertSame(h, c.get("nope"), "cached");
         assertTrue(queued.isEmpty());
+        // The folder shows up later: after the re-check interval it gets a real check
+        model("nope");
+        assertSame(h, c.get("nope"));
+        clock.addAndGet(ModelHealthCache.RECHECK_NANOS + 1);
+        assertNull(c.get("nope"));
+        runQueued();
+        assertEquals(Status.FIXABLE, c.get("nope").status());
     }
 
     @Test

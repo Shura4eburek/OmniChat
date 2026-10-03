@@ -83,6 +83,24 @@ public final class ModelHealthView {
         return Math.max(0, en);
     }
 
+    /** Top y of the fix widgets VoiceTab places above {@code bottom} (the status line top minus 2). */
+    public static int controlsTop(Fix fix, int bottom) {
+        return switch (fix) {
+            case BUTTON -> bottom - 18;
+            case PICKER -> bottom - 34;
+            case NONE -> bottom;
+        };
+    }
+
+    /**
+     * How many 10-px description lines fit between {@code top} and {@code limit} when {@code reasonLines}
+     * reason lines (plus a 4 px gap and 2 px clearance) must fit too; at most {@code wanted}, never negative.
+     */
+    public static int descriptionLines(int top, int limit, int reasonLines, int wanted) {
+        int free = limit - 2 - top - reasonLines * 10 - 4;
+        return Math.clamp(free / 10, 0, wanted);
+    }
+
     /** Part of the Voice tab's rebuild signature. */
     public static String token(Health h) {
         return h == null ? "?" : h.status().name();
