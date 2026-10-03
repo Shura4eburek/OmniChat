@@ -17,6 +17,7 @@ import org.mamoru.omnichat.client.screen.DownloadProgressHud;
 import org.mamoru.omnichat.client.tts.SpatialAudioPlayer;
 import org.mamoru.omnichat.client.tts.TtsPlaybackWorker;
 import org.mamoru.omnichat.client.tts.TtsService;
+import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +59,7 @@ public class OmnichatClient implements ClientModInitializer {
             ModelDownloadManager.getInstance().clear();
             ChatBubbleManager.getInstance().clear();
             tts.onDisconnect();
+            client.execute(PortraitTextures::clear);
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> tts.shutdown());
 

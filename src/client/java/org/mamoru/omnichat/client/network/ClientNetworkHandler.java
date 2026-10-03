@@ -11,6 +11,7 @@ import net.minecraft.util.Formatting;
 import org.mamoru.omnichat.client.OmnichatClient;
 import org.mamoru.omnichat.client.chat.ChatBubbleManager;
 import org.mamoru.omnichat.client.config.OmnichatConfig;
+import org.mamoru.omnichat.client.ui.PortraitTextures;
 import org.mamoru.omnichat.network.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +63,11 @@ public class ClientNetworkHandler {
         return serverProtocol == ServerProtocol.COMPATIBLE && ClientPlayNetworking.canSend(id);
     }
 
+    /** True when connected to a server whose OmniChat protocol doesn't match ours. */
+    public static boolean isIncompatible() {
+        return serverProtocol == ServerProtocol.INCOMPATIBLE;
+    }
+
     /** Registers a receiver that drops payloads unless the handshake succeeded. */
     private static <T extends CustomPayload> void receive(CustomPayload.Id<T> id,
                                                           ClientPlayNetworking.PlayPayloadHandler<T> handler) {
@@ -109,6 +115,8 @@ public class ClientNetworkHandler {
 
     private static void onCatalog(VoiceCatalogS2CPayload payload, ClientPlayNetworking.Context context) {
         VoiceCache.getInstance().setCatalog(payload.voices());
+        // Portraits may have changed with the catalog; textures are rebuilt on demand
+        MinecraftClient.getInstance().execute(PortraitTextures::clear);
         List<String> models = VoiceCache.getInstance().getServerModels();
         LOGGER.info("Received server model list: {}", models);
         syncVoiceSelection(models);

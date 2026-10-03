@@ -17,12 +17,12 @@ public class TabBar extends ClickableWidget {
     public static final int HEIGHT = 14;
     private final List<Text> labels;
     private final IntConsumer onSelect;
-    private final int active;
+    private final int activeTab;
 
     public TabBar(int x, int y, int w, List<Text> labels, int active, IntConsumer onSelect) {
         super(x, y, w, HEIGHT, labels.get(active));
         this.labels = labels;
-        this.active = active;
+        this.activeTab = active;
         this.onSelect = onSelect;
     }
 
@@ -38,13 +38,13 @@ public class TabBar extends ClickableWidget {
         var tr = MinecraftClient.getInstance().textRenderer;
         for (int i = 0; i < labels.size(); i++) {
             int x = tabX(i), w = tr.getWidth(labels.get(i)) + 12;
-            boolean on = i == active;
+            boolean on = i == activeTab;
             boolean hover = mouseX >= x && mouseX < x + w && mouseY >= getY() && mouseY < getY() + HEIGHT;
             if (on) ctx.fill(x, getY(), x + w, getY() + HEIGHT, 0x1435E0C8);
             HudTheme.frame(ctx, x, getY(), w, HEIGHT, on ? HudTheme.ACCENT : HudTheme.ACCENT_DIM);
             ctx.drawText(tr, labels.get(i), x + 6, getY() + 3, on || hover ? HudTheme.ACCENT : HudTheme.MUTED, false);
         }
-        if (isFocused()) ctx.fill(tabX(active), getY() + HEIGHT, tabX(active) + 8, getY() + HEIGHT + 1, HudTheme.ACCENT);
+        if (isFocused()) ctx.fill(tabX(activeTab), getY() + HEIGHT, tabX(activeTab) + 8, getY() + HEIGHT + 1, HudTheme.ACCENT);
     }
 
     @Override
@@ -52,18 +52,18 @@ public class TabBar extends ClickableWidget {
         var tr = MinecraftClient.getInstance().textRenderer;
         for (int i = 0; i < labels.size(); i++) {
             int x = tabX(i), w = tr.getWidth(labels.get(i)) + 12;
-            if (click.x() >= x && click.x() < x + w && i != active) onSelect.accept(i);
+            if (click.x() >= x && click.x() < x + w && i != activeTab) onSelect.accept(i);
         }
     }
 
     @Override
     public boolean keyPressed(KeyInput input) {
-        if (input.isLeft() && active > 0) {
-            onSelect.accept(active - 1);
+        if (input.isLeft() && activeTab > 0) {
+            onSelect.accept(activeTab - 1);
             return true;
         }
-        if (input.isRight() && active < labels.size() - 1) {
-            onSelect.accept(active + 1);
+        if (input.isRight() && activeTab < labels.size() - 1) {
+            onSelect.accept(activeTab + 1);
             return true;
         }
         return false;
