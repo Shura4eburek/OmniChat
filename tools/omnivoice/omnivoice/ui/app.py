@@ -529,7 +529,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 n_epochs = int(n_epochs or 1000)
                 runner(name).start(p, epochs=n_epochs, resume=resume, batch=int(n_batch) if n_batch else None,
                                    env=probe.env, target=last_epoch_target(p, n_epochs),
-                                   on_prepared=lambda: locks.release(key))
+                                   offset=train.base_epoch(p), on_prepared=lambda: locks.release(key))
             except BaseException:
                 locks.release(key)
                 raise

@@ -300,13 +300,14 @@ class TrainRunner:
             return "\n".join(self._lines)
 
     def start(self, p, epochs: int, resume: bool, batch, env, target: int | None = None,
-              on_prepared=None) -> None:
+              on_prepared=None, offset: int = 0) -> None:
         """on_prepared() runs once: after the dataset csv is written, or when the run ends earlier."""
         with self._lock:
             if self.running:
                 raise RuntimeError(S.TRAIN_BUSY)
             self._p = p
             self.status, self.code, self.epoch, self.target = "running", None, None, target
+            self.offset = offset  # base checkpoint's epoch: the log's absolute epochs minus this = new epochs
             self._lines.clear()
             self._stop.clear()
             self._prepared, self._last_pct = on_prepared, -1
@@ -349,7 +350,9 @@ class TrainRunner:
         if self.status == "running":
             if self.epoch is None:
                 return S.TRAIN_RUNNING_NO_EPOCH
-            return S.TRAIN_RUNNING.format(epoch=self.epoch, target=self.target if self.target is not None else "?")
+            off = getattr(self, "offset", 0)
+            target = self.target - off if self.target is not None else "?"
+            return S.TRAIN_RUNNING.format(epoch=self.epoch - off, target=target)
         return {"idle": S.TRAIN_IDLE, "done": S.TRAIN_DONE, "stopped": S.TRAIN_STOPPED,
                 "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
 

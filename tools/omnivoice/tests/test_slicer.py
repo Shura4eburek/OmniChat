@@ -152,7 +152,7 @@ def test_slice_with_recognizer_cuts_by_sentences_and_fills_text(tmp_path, monkey
     assert abs(segs[0].duration - ((3.535 - 0.35) + 0.3)) < 0.02   # cut span + 150 ms pad each side
     assert seen[0] == 0.0 and seen[-1] == 1.0
     assert any("распозна" in m for m in logs)
-    assert p.steps["slice"]
+    assert p.steps["slice"] and p.steps["phrases"]  # text recognised → phrases step done
 
 
 def test_slice_flags_low_confidence_and_no_speech(tmp_path, monkeypatch):

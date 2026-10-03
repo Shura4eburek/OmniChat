@@ -192,5 +192,6 @@ def slice_project(p, isolate: bool = False, progress=None, recognizer=None, log=
         tmp_marker.write_text(json.dumps(done), encoding="utf-8")
         os.replace(tmp_marker, done_file)
     if added:
-        p.mark_fresh(("audio", "slice"))
+        # recognised text means the phrases step is done too; the user can still edit them in «Фразы»
+        p.mark_fresh(("audio", "slice", "phrases") if use_words else ("audio", "slice"))
     return added

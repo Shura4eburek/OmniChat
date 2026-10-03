@@ -91,7 +91,8 @@ def last_checkpoint(p) -> Path | None:
     return found[-1] if found else None
 
 def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str) -> list[str]:
-    return ["python3", "-m", "piper.train", "fit",
+    # -W ignore: torch/lightning/jsonargparse deprecation warnings would bury the progress in the log
+    return ["python3", "-W", "ignore", "-m", "piper.train", "fit",
             "--data.voice_name", p.name,
             "--data.csv_path", f"{root}/train/train.csv",
             "--data.audio_dir", f"{root}/segments/",

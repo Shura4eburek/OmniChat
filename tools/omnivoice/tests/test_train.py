@@ -54,7 +54,7 @@ def test_fit_command_args(tmp_path):
     p = Project.create(tmp_path / "glados", name="glados", language="ru")
     cmd = train.fit_command(p, "/ckpt/base.ckpt", batch=24, max_epochs=3000, resume=False)
     joined = " ".join(cmd)
-    for part in ["--gpus all", "python3 -m piper.train fit", "--data.voice_name glados", "--data.espeak_voice ru",
+    for part in ["--gpus all", "python3 -W ignore -m piper.train fit", "--data.voice_name glados", "--data.espeak_voice ru",
                  "--data.csv_path /work/train/train.csv", "--data.audio_dir /work/segments/",
                  "--model.sample_rate 22050", "--data.batch_size 24", "--trainer.max_epochs 3000",
                  "--ckpt_path /ckpt/base.ckpt"]:
@@ -396,7 +396,7 @@ def test_wsl_fit_command_exact(tmp_path):
     p = Project.create(tmp_path / "glados", name="glados", language="ru")
     r = wslenv.wsl_path(p.root.resolve())
     cmd = train.WSL.fit(p, "/mnt/c/cache/checkpoints/a/b.ckpt", 24, 3000, resume=False)
-    assert cmd == WSL_PY + ["-m", "piper.train", "fit",
+    assert cmd == WSL_PY + ["-W", "ignore", "-m", "piper.train", "fit",
         "--data.voice_name", "glados", "--data.csv_path", f"{r}/train/train.csv",
         "--data.audio_dir", f"{r}/segments/", "--model.sample_rate", "22050", "--data.espeak_voice", "ru",
         "--data.cache_dir", f"{r}/train/cache/", "--data.config_path", f"{r}/train/config.json",
