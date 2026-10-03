@@ -205,10 +205,14 @@ def train_cmd(project: Path = typer.Option(Path("."), "--project", "-p"),
               colab_: bool = typer.Option(False, "--colab", help="Подготовить zip для Colab")):
     """Дообучить голос (Docker с GPU) или подготовить zip для Colab."""
     from omnivoice import train as tr
+    if build:  # the image doesn't depend on a project
+        try:
+            tr.build_image()
+        except tr.TrainError as e:
+            typer.secho(str(e), fg="red"); raise typer.Exit(1)
+        return
     p = _load(project)
     try:
-        if build:
-            tr.build_image(); return
         if colab_:
             from omnivoice import colab
             z = colab.make_dataset_zip(p)

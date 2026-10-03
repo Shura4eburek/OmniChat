@@ -12,6 +12,31 @@ class Fake:
         code, out = self.codes.get(key, (0, ""))
         return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
 
+_REAL_CLEAN = train._clean_base
+
+@pytest.fixture(autouse=True)
+def _no_ckpt_clean(monkeypatch):
+    monkeypatch.setattr(train, "_clean_base", lambda ckpt, run: ckpt)
+
+def test_clean_base_runs_cleaner_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    ckpt = tmp_path / "checkpoints/ru/x/epoch=4139-step=1.ckpt"; ckpt.parent.mkdir(parents=True); ckpt.write_bytes(b"x")
+    calls = []
+    def run(cmd, **kw):
+        calls.append(cmd); (ckpt.parent / "epoch=4139-step=1.clean.ckpt").write_bytes(b"y")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    out = _REAL_CLEAN(ckpt, run)
+    assert out.name == "epoch=4139-step=1.clean.ckpt"
+    assert "/opt/omnivoice/clean_ckpt.py" in calls[0] and "/ckpt/ru/x/epoch=4139-step=1.ckpt" in calls[0]
+    assert _REAL_CLEAN(ckpt, run) == out and len(calls) == 1
+
+def test_clean_base_failure_is_russian(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path))
+    ckpt = tmp_path / "checkpoints/a.ckpt"; ckpt.parent.mkdir(parents=True); ckpt.write_bytes(b"x")
+    run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom")
+    with pytest.raises(train.TrainError, match="Не удалось подготовить базовую модель"):
+        _REAL_CLEAN(ckpt, run)
+
 def test_checkpoint_url_encodes_equals():
     assert checkpoints.url("ru/ru_RU/irina/medium/epoch=4139-step=929464.ckpt").endswith(
         "ru/ru_RU/irina/medium/epoch%3D4139-step%3D929464.ckpt")
@@ -299,3 +324,12 @@ def test_export_builds_missing_image(tmp_path):
     joined = [" ".join(c) for c in fake.calls]
     assert joined[0] == "docker info" and any(j.startswith("docker build") for j in joined)
     assert "export_onnx" in joined[-1]
+
+def test_cli_build_needs_no_project(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+    from omnivoice.cli import app
+    called = []
+    monkeypatch.setattr(train, "build_image", lambda run=None: called.append(1))
+    monkeypatch.chdir(tmp_path)
+    r = CliRunner().invoke(app, ["train", "--build"])
+    assert r.exit_code == 0 and called == [1]

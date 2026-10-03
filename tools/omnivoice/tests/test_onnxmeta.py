@@ -21,3 +21,12 @@ def test_write_metadata_replaces_existing(tmp_path):
     onnxmeta.write_metadata(src, tmp_path / "b.onnx", {"n_speakers": "1", "comment": "piper", "voice": "ru"})
     assert read_onnx_metadata(tmp_path / "b.onnx") == {"n_speakers": "1", "comment": "piper", "voice": "ru"}
     assert read_onnx_metadata(src) == {"comment": "old", "junk": "1"}
+
+def test_tokens_skip_vowel_cluster_entries():
+    cfg = {"phoneme_id_map": {"a": [5], "ɪ": [6], "aɪ": [161]}}
+    assert onnxmeta.tokens_from_config(cfg) == "a 5\nɪ 6\n"
+
+def test_tokens_refuse_models_trained_with_vowel_clusters():
+    import pytest
+    with pytest.raises(ValueError, match="vowel_clusters"):
+        onnxmeta.tokens_from_config({"phoneme_id_map": {"a": [5]}, "vowel_clusters": [["a", "ɪ"]]})

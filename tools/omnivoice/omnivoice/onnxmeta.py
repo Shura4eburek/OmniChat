@@ -14,9 +14,13 @@ def piper_metadata(config: dict, iso_name: str, version: str) -> dict[str, str]:
             "omnivoice_version": version}
 
 def tokens_from_config(config: dict) -> str:
+    # sherpa-onnx reads one codepoint per token; piper1-gpl adds vowel-cluster
+    # entries ("aɪ") that a model only uses when trained with vowel_clusters.
+    if config.get("vowel_clusters"):
+        raise ValueError("модель обучена с vowel_clusters — sherpa-onnx в моде их не поддерживает")
     lines = []
     for s, i in config["phoneme_id_map"].items():
-        if s == "\n":
+        if s == "\n" or len(s) != 1:
             continue
         if isinstance(i, list):
             i = i[0]

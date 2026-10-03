@@ -89,6 +89,8 @@ def fit_command(p, ckpt_in_container: str, batch: int, max_epochs: int, resume: 
     ckpt = _container(p, last) if last else ckpt_in_container
     return ["docker", "run", "--rm", "--name", container_name(p), "--gpus", "all", "--shm-size=8g",
             "-v", f"{p.root.resolve()}:/work", "-v", f"{(cache_dir() / 'checkpoints').resolve()}:/ckpt",
+            # torch.hub cache: the UTMOS quality model (~400 MB) is downloaded once, not every run
+            "-v", f"{(cache_dir() / 'torch-hub').resolve()}:/root/.cache/torch",
             IMAGE, *fit_args(p, ckpt, batch, max_epochs, "/work")]
 
 def export_command(p, ckpt_container_path: str, extra_mount: Path | None = None) -> list[str]:
@@ -120,6 +122,22 @@ def _stream(cmd: list[str], on_line, name: str | None = None) -> int:
 def _ensure_image(run) -> None:
     if run(["docker", "image", "inspect", IMAGE], capture_output=True).returncode != 0:
         build_image(run)
+
+def _clean_base(ckpt: Path, run) -> Path:
+    """Old rhasspy checkpoints carry hparams newer Lightning rejects; make a cleaned sibling once."""
+    clean = ckpt.with_name(ckpt.stem + ".clean.ckpt")
+    if clean.is_file():
+        return clean
+    root = (cache_dir() / "checkpoints").resolve()
+    rel = ckpt.resolve().relative_to(root).as_posix()
+    rel_clean = clean.resolve().relative_to(root).as_posix()
+    r = run(["docker", "run", "--rm", "-v", f"{root}:/ckpt", IMAGE,
+             "python3", "/opt/omnivoice/clean_ckpt.py", f"/ckpt/{rel}", f"/ckpt/{rel_clean}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0 or not clean.is_file():
+        tail = (r.stderr or "")[-300:]
+        raise TrainError(f"Не удалось подготовить базовую модель: {tail}")
+    return clean
 
 STOPPED = 130  # returned when should_stop() asked to abort before the container started
 MIN_BATCH = 4
@@ -171,6 +189,7 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
     _ensure_image(run)
     if stop():
         return STOPPED
+    ckpt = _clean_base(ckpt, run)
     base_ckpt = "/ckpt/" + ckpt.resolve().relative_to((cache_dir() / "checkpoints").resolve()).as_posix()
     bs = batch or batch_size_for(env.vram_mib)
     name = container_name(p)
