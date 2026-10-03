@@ -279,3 +279,66 @@ def ui_cmd(projects: Path = typer.Option(Path("."), "--projects", help="Папк
     except ImportError:
         typer.secho(NEED_UI, fg="red"); raise typer.Exit(1)
     launch(projects, port=port, inbrowser=not no_browser)
+
+def _item_line(it) -> str:
+    opt = " (необязательно)" if it.optional else ""
+    return f"{'✓' if it.ok else '✗'} {it.name}{opt} — {it.detail}"
+
+def _print_checklist(items) -> bool:
+    """Print ✓/✗ rows; returns True when every required item is OK."""
+    for it in items:
+        color = "green" if it.ok else ("yellow" if it.optional else "red")
+        typer.secho(_item_line(it), fg=color)
+    return all(it.ok for it in items if not it.optional)
+
+class _Progress:
+    """Download percent every 5 %, restarting when a new download begins."""
+    def __init__(self):
+        self.last = -1
+    def __call__(self, done, total):
+        if not total:
+            return
+        pct = min(100, done * 100 // total // 5 * 5)
+        if pct < self.last:
+            self.last = -1
+        if pct > self.last:
+            self.last = pct; typer.echo(f"Скачиваю: {pct}%")
+
+def _setup_line(line: str) -> None:
+    from omnivoice.wslenv import parse_step
+    if step := parse_step(line):
+        typer.secho(f"[{step[0]}/{step[1]}] {step[2]}", fg="cyan", bold=True)
+    else:
+        typer.echo(line)
+
+@app.command("setup")
+def setup_cmd(check: bool = typer.Option(False, "--check", help="Только показать, чего не хватает")):
+    """Установить всё для подготовки и обучения: пакеты, ffmpeg, среду WSL."""
+    from omnivoice import deps, train as tr, wslenv
+    # typer.Exit is a RuntimeError too, so no raise typer.Exit inside the try
+    errors = (deps.DepsError, wslenv.WslError, tr.TrainError, RuntimeError, OSError)
+    code = 0
+    try:
+        ok = _print_checklist(deps.check_all())
+        if check:
+            if not ok:
+                typer.secho("Чего-то не хватает — запусти «omnivoice setup» или нажми «Установить зависимости» "
+                            "в интерфейсе", fg="red")
+            code = 0 if ok else 1
+        else:
+            typer.echo("")
+            reboot = deps.install_all(_setup_line, _Progress())
+            if reboot:
+                typer.secho(reboot, fg="yellow", bold=True)
+                code = 2
+            else:
+                typer.echo("")
+                if _print_checklist(deps.check_all()):
+                    typer.secho("Всё установлено — можно обучать: omnivoice ui", fg="green")
+                else:
+                    typer.secho("Установка завершилась, но не всё готово — см. список выше", fg="red")
+                    code = 1
+    except errors as e:
+        typer.secho(str(e) or type(e).__name__, fg="red")
+        code = 1
+    raise typer.Exit(code)

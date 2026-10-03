@@ -176,4 +176,26 @@ button.lg, button.md, button.sm {{ letter-spacing:1px; text-transform:uppercase;
 .portrait img {{ image-rendering: pixelated; }}
 .section-msg {{ min-height:1.2em; }}
 .section-msg.err, .section-msg .err {{ color:var(--bad); }}
+
+/* setup: dependency checklist, progress bar, reboot notice */
+.st.warn {{ color:var(--flag); border-color:var(--flag); }}
+.checklist {{ display:flex; flex-direction:column; border:1px solid var(--acd); }}
+.ck-row {{ display:grid; grid-template-columns:22px minmax(150px, 220px) 1fr; gap:10px; align-items:baseline;
+          padding:6px 10px; border-bottom:1px dashed #2a2430; font-size:13px; }}
+.ck-row:last-child {{ border-bottom:0; }}
+.ck-mark {{ font-weight:600; }}
+.ck-row.ok .ck-mark, .ck-row.ok .ck-name {{ color:var(--ok); }}
+.ck-row.miss .ck-mark, .ck-row.miss .ck-name {{ color:var(--bad); }}
+.ck-row.opt .ck-mark, .ck-row.opt .ck-name {{ color:var(--muted); }}
+.ck-detail {{ color:var(--muted); overflow-wrap:anywhere; }}
+.ck-chip {{ margin-left:8px; padding:0 6px; border:1px solid var(--acd); color:var(--muted); font-size:10px;
+           letter-spacing:1px; text-transform:uppercase; }}
+.setup-progress {{ display:flex; flex-direction:column; gap:6px; }}
+.setup-bar {{ height:10px; border:1px solid var(--acd); background:{BG}; }}
+.setup-bar i {{ display:block; height:100%; background:var(--ac); transition:width .4s; }}
+.setup-step {{ font-size:12px; color:var(--muted); min-height:1.2em; }}
+.setup-reboot {{ border:1px solid var(--flag); color:var(--flag); padding:10px 14px; background:rgba(255,207,74,.06); }}
+.setup-reboot b {{ font-family:'Silkscreen', 'JetBrains Mono', monospace; letter-spacing:2px; font-size:15px; }}
+.setup-reboot p {{ margin:6px 0 0; color:{TEXT}; }}
+.train-status.ok {{ color:var(--ok); }}
 """

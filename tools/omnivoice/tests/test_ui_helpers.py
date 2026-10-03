@@ -379,3 +379,111 @@ def test_env_badge_wsl_without_gpu():
     from omnivoice.train import Env
     badge = h.env_badge(Env(False, False, "RTX 4070", 12000, backend=None, wsl_ready=True, wsl_gpu=False))
     assert S.WSL_NO_GPU in badge and S.WSL_NO_GPU == "WSL: нет GPU" and S.DOCKER_NO not in badge
+
+
+# ---------- setup section ----------
+
+def _item(name, ok, detail="d", optional=False):
+    from omnivoice.deps import Item
+    return Item(name, ok, detail, optional)
+
+
+def test_checklist_html_rows():
+    html = h.checklist_html([_item("ffmpeg", True, "C:/ff<b>"), _item("WSL", False, "не установлен"),
+                             _item("Docker", False, "не найден", optional=True)])
+    assert html.count('class="ck-row') == 3
+    assert 'class="ck-row ok"' in html and "✓" in html and "C:/ff&lt;b&gt;" in html
+    assert 'class="ck-row miss"' in html and "✗" in html
+    assert 'class="ck-row opt"' in html and S.SETUP_OPTIONAL in html
+
+
+def test_checklist_html_pending():
+    assert S.SETUP_CHECKING in h.checklist_html(None)
+
+
+def test_needs_setup():
+    from omnivoice.train import Env
+    assert not h.needs_setup(None)  # still probing: don't nag
+    assert h.needs_setup(Env(False, False, None, None))
+    assert not h.needs_setup(Env(False, False, None, None, backend=None, wsl_ready=True, wsl_gpu=False))
+    assert not h.needs_setup(Env(True, True, "RTX", 8000, backend="docker"))
+
+
+def test_steps_bar_need_setup_chip():
+    html = h.steps_bar_html({}, None, need_setup=True)
+    assert f'data-section="{S.SEC_SETUP}"' in html and S.SETUP_FIRST.upper() in html
+    assert S.SETUP_FIRST.upper() not in h.steps_bar_html({}, None)
+
+
+def test_nav_sections_start_with_setup():
+    assert h.NAV_SECTIONS[0] == S.SEC_SETUP and h.NAV_SECTIONS[1:] == h.SECTIONS
+
+
+def test_setup_progress_parses_steps_and_downloads():
+    pr = h.SetupProgress()
+    assert pr.pct == 0 and pr.title == ""
+    pr.line("Скачиваю ffmpeg…")
+    assert pr.title == "Скачиваю ffmpeg…"
+    pr.download(25, 100)
+    assert pr.pct == 25 and "25%" in pr.title
+    pr.line("STEP 3/6 Ставлю torch")
+    assert (pr.step, pr.total) == (3, 6) and pr.title == "Ставлю torch" and pr.pct == 33
+    pr.line("Collecting numpy")  # an ordinary log line keeps the step title
+    assert pr.title == "Ставлю torch"
+    html = pr.html()
+    assert 'style="width:33%"' in html and "3/6" in html and "Ставлю torch" in html
+
+
+def test_setup_runner_success_rechecks_and_calls_back():
+    seen = []
+    def install(on_line, progress):
+        on_line("STEP 1/2 Ставлю пакеты"); progress(5, 10); on_line("Готово.")
+        return None
+    r = h.SetupRunner(install_fn=install, check_fn=lambda: [_item("WSL", True)], on_finish=lambda: seen.append(1))
+    r.start(); r.join(5)
+    assert r.status == "done" and r.reboot is None and seen == [1]
+    assert r.items[0].ok and "Готово." in r.log_text() and r.progress.pct == 100
+    assert r.version > 0
+
+
+def test_setup_runner_reboot_and_errors():
+    from omnivoice.deps import DepsError
+    r = h.SetupRunner(install_fn=lambda on_line, progress: "Перезагрузи Windows", check_fn=lambda: [])
+    r.start(); r.join(5)
+    assert r.status == "reboot" and r.reboot == "Перезагрузи Windows"
+    assert "Перезагрузи Windows" in r.status_html() and "setup-reboot" in r.status_html()
+
+    def boom(on_line, progress):
+        raise DepsError("нет uv")
+    r = h.SetupRunner(install_fn=boom, check_fn=lambda: [])
+    r.start(); r.join(5)
+    assert r.status == "error" and "нет uv" in r.status_html() and "нет uv" in r.log_text()
+
+
+def test_setup_runner_busy_guard():
+    gate = threading.Event()
+    r = h.SetupRunner(install_fn=lambda on_line, progress: gate.wait(5) and None, check_fn=lambda: [])
+    r.start()
+    with pytest.raises(RuntimeError, match=S.SETUP_BUSY):
+        r.start()
+    gate.set(); r.join(5)
+    assert r.status == "done"
+
+
+def test_setup_runner_check_in_background_survives_errors():
+    def bad():
+        raise OSError("wsl сломан")
+    r = h.SetupRunner(install_fn=lambda *a: None, check_fn=bad)
+    assert r.items is None
+    r.check(); r.join(5)
+    assert r.items == [] and "wsl сломан" in r.status_html()
+
+
+def test_env_probe_restart():
+    from omnivoice.train import Env
+    n = []
+    probe = h.EnvProbe(lambda: n.append(1) or Env(bool(len(n) > 1), False, None, None))
+    probe.start(); probe.join(5)
+    assert not probe.env.docker
+    probe.restart(); probe.join(5)
+    assert probe.env.docker and len(n) == 2

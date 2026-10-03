@@ -261,7 +261,7 @@ def test_install_prep_locked_files_hint(monkeypatch, text):
             self.stdout = io.StringIO(text + " ")
             self.returncode = 2
 
-    with pytest.raises(deps.DepsError, match="Файлы заняты запущенной программой.*Установить omnivoice.bat"):
+    with pytest.raises(deps.DepsError, match="Файлы заняты запущенной программой.*install-omnivoice.bat"):
         deps.install_prep(lambda l: None, popen=Locked)
 
 

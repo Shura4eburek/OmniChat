@@ -45,3 +45,14 @@ def test_build_survives_corrupt_review_json(tmp_path):
     dataset.save(p, [Segment("a", "x", 1.0)])
     p.review_json.write_text("{broken", encoding="utf-8")
     assert isinstance(build(tmp_path), gr.Blocks)
+
+
+def test_build_has_setup_section_first_and_does_not_check_deps(tmp_path):
+    def boom(*a, **k):
+        raise AssertionError("check_all / install_all must not run inside build()")
+    demo = build(tmp_path, check_fn=boom, install_fn=boom)
+    radios = [b for b in demo.blocks.values() if isinstance(b, gr.Radio)]
+    from omnivoice.ui import strings as S
+    assert any(r.choices and r.choices[0][0] == S.SEC_SETUP for r in radios)
+    buttons = [b.value for b in demo.blocks.values() if isinstance(b, gr.Button)]
+    assert S.SETUP_INSTALL in buttons and S.SETUP_GOTO in buttons

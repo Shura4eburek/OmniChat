@@ -26,6 +26,7 @@ PROJECT_EXISTS = "Папка «{name}» уже существует"
 NO_PROJECT_SELECTED = "Сначала выбери или создай проект"
 
 # Sections (also the step chips)
+SEC_SETUP = "Установка"
 SEC_AUDIO = "Аудио"
 SEC_SLICE = "Нарезка"
 SEC_PHRASES = "Фразы"
@@ -110,6 +111,27 @@ COLAB_HINT = ("**Нет видеокарты NVIDIA для Docker** — обуч
               "и открой [ноутбук omnivoice]({url}).")
 COLAB_ZIP = "Скачать датасет для Colab"
 COLAB_FILE = "Датасет для Colab"
+
+# Setup (dependencies)
+SETUP_INTRO = ("Всё, что нужно для подготовки и обучения: пакеты, ffmpeg и среда обучения WSL "
+               "(~6 ГБ, ставится один раз). Уже установленное пропускается.")
+SETUP_CHECKING = "Проверяю, что уже установлено…"
+SETUP_OPTIONAL = "необязательно"
+SETUP_INSTALL = "Установить зависимости"
+SETUP_LOG = "Журнал установки"
+SETUP_IDLE = "Установка не запущена"
+SETUP_RUNNING = "Идёт установка — можно свернуть окно, но не закрывай его"
+SETUP_DONE = "Готово — всё установлено"
+SETUP_DONE_MISSING = "Установка завершилась, но не всё готово — см. список"
+SETUP_REBOOT_TITLE = "Нужна перезагрузка"
+SETUP_ERROR = "Установка прервалась"
+SETUP_CHECK_FAILED = "Не удалось проверить зависимости: {error}"
+SETUP_BUSY = "Установка уже идёт — подожди"
+SETUP_STEP = "Шаг {n}/{total}"
+SETUP_DOWNLOADING = "Скачиваю: {pct}%"
+SETUP_FIRST = "Сначала установи зависимости"
+SETUP_FIRST_HINT = "Среда обучения не найдена: ни WSL omnivoice, ни Docker с GPU. Сначала установи зависимости → «Установка»."
+SETUP_GOTO = "Перейти к установке"
 
 # Pack
 F_NAME = "Имя"

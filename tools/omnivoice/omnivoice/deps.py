@@ -128,7 +128,7 @@ def find_uv() -> str | None:
 
 LOCKED_MARKERS = ("access is denied", "os error 5")
 LOCKED_MSG = ("Файлы заняты запущенной программой — закрой интерфейс omnivoice и запусти установку из "
-              "«Установить omnivoice.bat»")
+              "«install-omnivoice.bat»")
 
 
 def install_prep(on_line: Callable[[str], None], popen=subprocess.Popen) -> None:

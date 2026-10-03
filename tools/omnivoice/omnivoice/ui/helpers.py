@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import html
 import io
+import logging
 import re
 import shutil
 import subprocess
 import threading
+import traceback
 from contextlib import contextmanager
 from collections import deque
 from pathlib import Path
@@ -25,9 +27,11 @@ from omnivoice.project import FILE as PROJECT_FILE
 from omnivoice.ui import strings as S
 
 SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_TRAIN, S.SEC_PACK)
+NAV_SECTIONS = (S.SEC_SETUP, *SECTIONS)  # sidebar order: setup first, then the project steps
 SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "train", "pack")))
 COLUMNS = [S.COL_ID, S.COL_TEXT, S.COL_DURATION, S.COL_FLAGS, S.COL_DROPPED]
 FLAG = "⚑"
+log = logging.getLogger("omnivoice.ui")
 
 
 # ---------- projects ----------
@@ -41,9 +45,10 @@ def list_projects(root: Path) -> list[str]:
 
 # ---------- steps bar ----------
 
-def steps_bar_html(steps: dict, current: str | None) -> str:
+def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False) -> str:
     """`current` is a step key (project.STEPS), e.g. "phrases".
-    Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey."""
+    Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey.
+    need_setup adds a yellow chip that leads to «Установка» (no training environment yet)."""
     chips = []
     for i, section in enumerate(SECTIONS, 1):
         step = SECTION_STEP[section]
@@ -51,6 +56,9 @@ def steps_bar_html(steps: dict, current: str | None) -> str:
         cls = "st on" if step == current else ("st done" if done else "st")
         label = f"{i} {section.upper()}{' ✓' if done else ''}"
         chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}</span>')
+    if need_setup:
+        chips.append(f'<span class="st warn" data-section="{html.escape(S.SEC_SETUP)}">'
+                     f'{html.escape(S.SETUP_FIRST.upper())} →</span>')
     return '<div class="steps">' + "".join(chips) + "</div>"
 
 
@@ -198,6 +206,7 @@ class EnvProbe:
         self._detect = detect
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._gen = 0
         self.env = None
 
     @property
@@ -207,16 +216,28 @@ class EnvProbe:
     def start(self) -> None:
         with self._lock:
             if self._thread is None:
-                self._thread = threading.Thread(target=self._run, daemon=True, name="omnivoice-env")
-                self._thread.start()
+                self._spawn()
 
-    def _run(self) -> None:
+    def restart(self) -> None:
+        """Probe again (after «Установить зависимости»); a result from an older probe is dropped."""
+        with self._lock:
+            self._gen += 1
+            self.env = None
+            self._spawn()
+
+    def _spawn(self) -> None:
+        self._thread = threading.Thread(target=self._run, args=(self._gen,), daemon=True, name="omnivoice-env")
+        self._thread.start()
+
+    def _run(self, gen: int = 0) -> None:
         try:
             env = self._detect()
         except Exception:
             from omnivoice.train import Env
             env = Env(False, False, None, None)
-        self.env = env
+        with self._lock:
+            if gen == self._gen:
+                self.env = env
 
     def join(self, timeout=None) -> None:
         if self._thread:
@@ -331,6 +352,178 @@ class TrainRunner:
             return S.TRAIN_RUNNING.format(epoch=self.epoch, target=self.target if self.target is not None else "?")
         return {"idle": S.TRAIN_IDLE, "done": S.TRAIN_DONE, "stopped": S.TRAIN_STOPPED,
                 "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
+
+
+# ---------- setup (dependencies) ----------
+
+def needs_setup(env) -> bool:
+    """No usable training environment and the omnivoice WSL distro isn't built (None = still probing)."""
+    return env is not None and env.backend is None and not env.wsl_ready
+
+
+def checklist_html(items) -> str:
+    """deps.check_all() items as HUD rows: ✓ green, ✗ red, optional misses grey with a chip."""
+    if items is None:
+        return f'<div class="checklist"><div class="ck-row muted">{html.escape(S.SETUP_CHECKING)}</div></div>'
+    rows = []
+    for it in items:
+        cls = "ok" if it.ok else ("opt" if it.optional else "miss")  # not "bad": that one strikes through
+        chip = f'<span class="ck-chip">{html.escape(S.SETUP_OPTIONAL)}</span>' if it.optional else ""
+        rows.append(f'<div class="ck-row {cls}"><span class="ck-mark">{"✓" if it.ok else "✗"}</span>'
+                    f'<span class="ck-name">{html.escape(it.name)}{chip}</span>'
+                    f'<span class="ck-detail">{html.escape(it.detail)}</span></div>')
+    return '<div class="checklist">' + "".join(rows) + "</div>"
+
+
+class SetupProgress:
+    """Progress of install_all: `STEP n/total title` lines from wsl_setup.sh, download percent, and the
+    stage lines of install_all (they end with «…»)."""
+
+    def __init__(self):
+        self.pct, self.step, self.total, self.title = 0, None, None, ""
+
+    def line(self, line: str) -> None:
+        from omnivoice.wslenv import parse_step
+        if st := parse_step(line):
+            self.step, self.total, self.title = st
+            self.pct = (self.step - 1) * 100 // max(self.total, 1)
+        elif line.rstrip().endswith("…") and len(line) < 120:
+            self.title = line.strip()
+
+    def download(self, done, total) -> None:
+        if total:
+            self.pct = max(0, min(100, done * 100 // total))
+            self.title = S.SETUP_DOWNLOADING.format(pct=self.pct)
+
+    def finish(self) -> None:
+        self.pct = 100
+
+    def html(self) -> str:
+        label = self.title
+        if self.step is not None:
+            label = S.SETUP_STEP.format(n=self.step, total=self.total) + (f" · {self.title}" if self.title else "")
+        return (f'<div class="setup-progress"><div class="setup-bar"><i style="width:{self.pct}%"></i></div>'
+                f'<div class="setup-step">{html.escape(label)}</div></div>')
+
+
+class SetupRunner:
+    """«Установить зависимости» in a daemon thread (same pattern as TrainRunner): one run at a time,
+    a live log, progress, then a fresh check_all() and on_finish() (re-probes the environment).
+    `version` changes on every update, so the UI timer can skip idle ticks."""
+
+    def __init__(self, install_fn=None, check_fn=None, on_finish=None, max_lines: int = 600):
+        from omnivoice import deps, train, wslenv
+        self._install = install_fn or deps.install_all
+        self._check = check_fn or deps.check_all
+        self._on_finish = on_finish
+        self._errors = (deps.DepsError, wslenv.WslError, train.TrainError, RuntimeError, OSError)
+        self._lines: deque[str] = deque(maxlen=max_lines)
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._check_thread: threading.Thread | None = None
+        self.status = "idle"  # idle | running | done | reboot | error
+        self.items = None
+        self.reboot: str | None = None
+        self.error: str | None = None
+        self.check_error: str | None = None
+        self.progress = SetupProgress()
+        self.version = 0
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _bump(self) -> None:
+        self.version += 1
+
+    def _line(self, line: str) -> None:
+        with self._lock:
+            self._lines.append(line)
+        self.progress.line(line)
+        self._bump()
+
+    def _download(self, done, total) -> None:
+        self.progress.download(done, total)
+        self._bump()
+
+    def log_text(self) -> str:
+        with self._lock:
+            return "\n".join(self._lines)
+
+    def check(self) -> None:
+        """Re-run check_all() in the background (it calls wsl.exe, which can take seconds)."""
+        with self._lock:
+            if self.running or (self._check_thread and self._check_thread.is_alive()):
+                return
+            self._check_thread = threading.Thread(target=self._recheck, daemon=True, name="omnivoice-deps-check")
+            self._check_thread.start()
+
+    def _recheck(self) -> None:
+        try:
+            self.items, self.check_error = self._check(), None
+        except Exception as e:  # wsl.exe hanging / missing: show it, never a traceback
+            log.warning("check_all failed: %s", e)
+            self.items, self.check_error = [], S.SETUP_CHECK_FAILED.format(error=str(e) or type(e).__name__)
+        self._bump()
+
+    def start(self) -> None:
+        with self._lock:
+            if self.running:
+                raise RuntimeError(S.SETUP_BUSY)
+            self.status, self.reboot, self.error = "running", None, None
+            self.progress = SetupProgress()
+            self._lines.clear()
+            self._thread = threading.Thread(target=self._work, daemon=True, name="omnivoice-setup")
+            self._thread.start()
+        self._bump()
+
+    def _work(self) -> None:
+        try:
+            self.reboot = self._install(self._line, self._download)
+            self.status = "reboot" if self.reboot else "done"
+            if not self.reboot:
+                self.progress.finish()
+        except self._errors as e:
+            self.error = str(e) or type(e).__name__
+            self._line(self.error)
+            self.status = "error"
+        except Exception:
+            log.error("setup failed:\n%s", traceback.format_exc())
+            self.error = S.ERR_UNKNOWN
+            self._line(self.error)
+            self.status = "error"
+        self._recheck()
+        if self._on_finish:
+            try:
+                self._on_finish()
+            except Exception:
+                log.error("setup on_finish failed:\n%s", traceback.format_exc())
+        self._bump()
+
+    def join(self, timeout=None) -> None:
+        for t in (self._thread, self._check_thread):
+            if t:
+                t.join(timeout)
+
+    def status_html(self) -> str:
+        e = html.escape
+        if self.status == "reboot":
+            out = (f'<div class="setup-reboot"><b>{e(S.SETUP_REBOOT_TITLE)}</b>'
+                   f'<p>{e(self.reboot or "")}</p></div>')
+        elif self.status == "error":
+            text = e(self.error or "").replace("\n", "<br>")
+            out = f'<div class="section-msg err">{e(S.SETUP_ERROR)}: {text}</div>'
+        elif self.status == "done":
+            missing = any(not i.ok and not i.optional for i in self.items or [])
+            out = (f'<div class="section-msg err">{e(S.SETUP_DONE_MISSING)}</div>' if missing
+                   else f'<div class="train-status ok">{e(S.SETUP_DONE)}</div>')
+        elif self.status == "running":
+            out = f'<div class="train-status">{e(S.SETUP_RUNNING)}</div>'
+        else:
+            out = f'<div class="section-msg muted">{e(S.SETUP_IDLE)}</div>'
+        if self.check_error:
+            out += f'<div class="section-msg err">{e(self.check_error)}</div>'
+        return out
 
 
 # ---------- per-project write lock ----------

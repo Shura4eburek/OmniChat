@@ -1,8 +1,8 @@
 """Gradio front end over the omnivoice core, in the OmniChat HUD style.
 
 build() only wires components; nothing slow runs there. The environment probe (docker / GPU, up to
-~2 minutes) starts on the first page load in a daemon thread, training runs in a daemon thread per
-project, and slicing / transcription use the queue with gr.Progress so other sections stay usable.
+~2 minutes) and the dependency checklist start on the first page load in daemon threads, «Установить
+зависимости» and training run in daemon threads (SetupRunner / TrainRunner, polled by gr.Timer), and slicing / transcription use the queue with gr.Progress so other sections stay usable.
 
 Writes are serialised per project by helpers.ProjectLocks (non-blocking): slice, transcribe, save
 edits, drop/restore, «Готово», check, pack and the Colab zip hold the project's lock for their whole
@@ -25,9 +25,9 @@ from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError
 from omnivoice.ui import strings as S
 from omnivoice.ui import theme
-from omnivoice.ui.helpers import (COLUMNS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks, TrainRunner,
-                                  apply_edits, check_install_target, copy_uploads, counter_label,
-                                  env_badge, error_text, list_projects,
+from omnivoice.ui.helpers import (COLUMNS, NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
+                                  SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
+                                  copy_uploads, counter_label, env_badge, error_text, list_projects, needs_setup,
                                   list_raw_files, portrait_preview, report_html, segments_rows, stats_line,
                                   steps_bar_html, toggle_dropped)
 
@@ -108,9 +108,11 @@ def first_open_section(steps: dict) -> str:
     return S.SEC_PACK
 
 
-def build(projects_root: Path, detect=None) -> gr.Blocks:
+def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> gr.Blocks:
+    """detect / check_fn / install_fn replace train.detect_env / deps.check_all / deps.install_all (tests)."""
     root = Path(projects_root)
     probe = EnvProbe(detect or (lambda: train.detect_env()))
+    setup = SetupRunner(install_fn=install_fn, check_fn=check_fn, on_finish=probe.restart)
     runners: dict[str, TrainRunner] = {}
     locks = ProjectLocks()
 
@@ -148,12 +150,12 @@ def build(projects_root: Path, detect=None) -> gr.Blocks:
         return stats_line(segs), table_value(segments_rows(segs, only_flagged))
 
     def steps_html(p, section):
-        return steps_bar_html(p.steps if p else {}, SECTION_STEP.get(section))
+        return steps_bar_html(p.steps if p else {}, SECTION_STEP.get(section), need_setup=needs_setup(probe.env))
 
     projects = list_projects(root)
     first = projects[0] if projects else None
     p0 = try_load(first)
-    sec0 = first_open_section(p0.steps) if p0 else S.SEC_AUDIO
+    sec0 = first_open_section(p0.steps) if p0 else S.SEC_SETUP  # a fresh install starts at «Установка»
     stats0, rows0 = table_update(p0, False, tolerant=True)
     display0 = p0.display if p0 else {}
     targets = [str(t) for t in install.default_targets()]
@@ -166,7 +168,7 @@ def build(projects_root: Path, detect=None) -> gr.Blocks:
                 with gr.Column(scale=1, min_width=210, elem_classes="hud-nav"):
                     project_dd = gr.Dropdown(projects, value=first, label=S.PROJECT,
                                              info=None if projects else S.NO_PROJECTS)
-                    section = gr.Radio(list(SECTIONS), value=sec0, show_label=False, container=False)
+                    section = gr.Radio(list(NAV_SECTIONS), value=sec0, show_label=False, container=False)
                     with gr.Accordion(S.NEW_PROJECT, open=not projects, elem_classes="hud-new"):
                         new_name = gr.Textbox(label=S.NEW_NAME, max_lines=1)
                         new_lang = gr.Dropdown(list(languages.PRESETS), value="ru", label=S.NEW_LANGUAGE)
@@ -176,6 +178,16 @@ def build(projects_root: Path, detect=None) -> gr.Blocks:
                 # ---------------- main ----------------
                 with gr.Column(scale=4, elem_classes="hud-main"):
                     steps = gr.HTML(steps_html(p0, sec0), js_on_load=STEPS_JS)
+
+                    with gr.Column(visible=sec0 == S.SEC_SETUP, elem_classes="hud-section") as g_setup:
+                        gr.HTML(msg_html(S.SETUP_INTRO))
+                        checklist = gr.HTML(checklist_html(None))
+                        setup_btn = gr.Button(S.SETUP_INSTALL, variant="primary")
+                        setup_progress = gr.HTML(setup.progress.html())
+                        setup_status = gr.HTML(setup.status_html())
+                        setup_log = gr.Textbox(label=S.SETUP_LOG, lines=12, max_lines=12, interactive=False,
+                                               autoscroll=True)
+                        setup_seen = gr.State(-1)
 
                     with gr.Column(visible=sec0 == S.SEC_AUDIO, elem_classes="hud-section") as g_audio:
                         upload = gr.File(label=S.UPLOAD, file_count="multiple", type="filepath")
@@ -210,6 +222,9 @@ def build(projects_root: Path, detect=None) -> gr.Blocks:
                         check_out = gr.HTML(msg_html(S.CHECK_EMPTY))
 
                     with gr.Column(visible=sec0 == S.SEC_TRAIN, elem_classes="hud-section") as g_train:
+                        with gr.Column(visible=False, elem_classes="setup-needed") as setup_needed:
+                            gr.HTML(msg_html(S.SETUP_FIRST_HINT, error=True))
+                            goto_setup = gr.Button(S.SETUP_GOTO, variant="primary")
                         with gr.Column(visible=False) as colab_group:
                             gr.Markdown(S.COLAB_HINT.format(url=colab.NOTEBOOK_URL))
                             colab_btn = gr.Button(S.COLAB_ZIP)
@@ -261,38 +276,66 @@ def build(projects_root: Path, detect=None) -> gr.Blocks:
                         install_btn = gr.Button(S.INSTALL, variant="primary")
                         install_msg = gr.HTML()
 
-        groups = [g_audio, g_phrases, g_check, g_train, g_pack]
-        group_of = {S.SEC_AUDIO: g_audio, S.SEC_SLICE: g_phrases, S.SEC_PHRASES: g_phrases,
+        groups = [g_setup, g_audio, g_phrases, g_check, g_train, g_pack]
+        group_of = {S.SEC_SETUP: g_setup, S.SEC_AUDIO: g_audio, S.SEC_SLICE: g_phrases, S.SEC_PHRASES: g_phrases,
                     S.SEC_CHECK: g_check, S.SEC_TRAIN: g_train, S.SEC_PACK: g_pack}
         env_timer = gr.Timer(1.0)
         train_timer = gr.Timer(2.0)
+        setup_timer = gr.Timer(1.0)
         loss_timer = gr.Timer(15.0)
 
         # ---------------- environment probe ----------------
         def start_probe():
             probe.start()
+            if setup.items is None:
+                setup.check()
             return header_html(probe.env)
 
-        def poll_env():
+        def poll_env(name, sec):
             env = probe.env
             if env is None:
-                return gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                return (gr.skip(),) * 6
             return (header_html(env), train.batch_size_for(env.vram_mib), gr.update(visible=not env.gpu),
-                    gr.Timer(active=False))
+                    gr.update(visible=needs_setup(env)), steps_html(try_load(name), sec), gr.Timer(active=False))
 
         demo.load(start_probe, outputs=header)
-        env_timer.tick(poll_env, outputs=[header, batch, colab_group, env_timer])
+        env_timer.tick(poll_env, [project_dd, section], [header, batch, colab_group, setup_needed, steps, env_timer],
+                       show_progress="hidden")
+
+        # ---------------- setup ----------------
+        @guarded(2)
+        def on_setup():
+            setup.start()  # RuntimeError(S.SETUP_BUSY) on a double click → toast
+            return setup.status_html(), setup.progress.html()
+
+        setup_btn.click(on_setup, None, [setup_status, setup_progress])
+
+        def on_setup_tick(seen):
+            v = setup.version
+            if v == seen:
+                return (gr.skip(),) * 6
+            # a finished run re-probes the environment (SetupRunner.on_finish): poll the badge again
+            env_poll = gr.Timer(active=True) if setup.status != "running" and setup.status != "idle" else gr.skip()
+            return (checklist_html(setup.items), setup.progress.html(), setup.status_html(), setup.log_text(), v,
+                    env_poll)
+
+        setup_timer.tick(on_setup_tick, setup_seen,
+                         [checklist, setup_progress, setup_status, setup_log, setup_seen, env_timer],
+                         show_progress="hidden")  # 1 s polling must not flash a loader
+        goto_setup.click(lambda: S.SEC_SETUP, None, section)
 
         # ---------------- navigation ----------------
         def on_section(name, sec):
             target = group_of.get(sec)
+            if sec == S.SEC_SETUP and not setup.running:
+                setup.check()  # the user may have installed something by hand meanwhile
             return [steps_html(try_load(name), sec)] + [gr.update(visible=g is target) for g in groups]
 
         section.change(on_section, [project_dd, section], [steps] + groups)
 
         def on_chip(evt: gr.EventData):
             sec = getattr(evt, "section", None)
-            return sec if sec in SECTIONS else gr.skip()
+            return sec if sec in NAV_SECTIONS else gr.skip()
 
         steps.click(on_chip, None, section)
 
