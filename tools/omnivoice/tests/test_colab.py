@@ -42,7 +42,7 @@ def test_notebook_valid_and_in_sync():
     nb = json.loads(text)
     assert nb["cells"] and nb["nbformat"] == 4
     assert nb["metadata"]["accelerator"] == "GPU"
-    assert "fit_args" in text and "base_epoch" in text and "Сколько эпох дообучать" in text and "rm -rf" not in text
+    assert "fit_args" in text and "target_epochs" in text and "Сколько эпох дообучать" in text and "rm -rf" not in text
     assert all(c.get("outputs", []) == [] for c in nb["cells"] if c["cell_type"] == "code")
 
 def test_cli_train_colab_prints_zip_and_url(tmp_path):

@@ -111,6 +111,10 @@ def base_epoch(p) -> int:
     m = re.search(r"epoch=(\d+)", p.base_checkpoint)
     return int(m.group(1)) if m else 0
 
+def target_epochs(p, epochs: int) -> int:
+    """Lightning max_epochs for `epochs` more epochs: the base's epoch=N is 0-based, so N+1 are already done."""
+    return base_epoch(p) + 1 + epochs
+
 def fit_command(p, ckpt_in_container: str, batch: int, max_epochs: int, resume: bool) -> list[str]:
     last = last_checkpoint(p) if resume else None
     ckpt = _container(p, last) if last else ckpt_in_container
@@ -295,7 +299,7 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
     be = BACKENDS[name]
     if dataset.piper_csv(p, p.train_dir / "train.csv") == 0:
         raise TrainError("Нет ни одной фразы с текстом для обучения")
-    target = base_epoch(p) + epochs
+    target = target_epochs(p, epochs)
     if resume:
         done = newest_epoch(p)  # Lightning's epoch=N in checkpoint names is 0-based
         if done is not None and done + 1 >= target:

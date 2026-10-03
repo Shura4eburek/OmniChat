@@ -136,7 +136,7 @@ def test_epochs_are_relative_to_base(tmp_path, monkeypatch):
     p.base_checkpoint = "ru/ru_RU/irina/medium/epoch=4139-step=929464.ckpt"
     fake = Fake({})
     train.train_project(p, epochs=1000, env=train.Env(True, True, "RTX", 12000), run=fake)
-    assert "--trainer.max_epochs 5139" in " ".join(fake.calls[-1])
+    assert "--trainer.max_epochs 5140" in " ".join(fake.calls[-1])
 
 def test_fit_failure_leaves_step_unset(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
@@ -280,10 +280,10 @@ def test_target_already_reached_skips_docker(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
     p.base_checkpoint = "x/epoch=100-step=1.ckpt"
     d = p.train_dir / "lightning_logs/version_1/checkpoints"; d.mkdir(parents=True)
-    (d / "epoch=1099-val_mel=0.3000.ckpt").write_bytes(b"x"); (d / "last.ckpt").write_bytes(b"x")
+    (d / "epoch=1100-val_mel=0.3000.ckpt").write_bytes(b"x"); (d / "last.ckpt").write_bytes(b"x")
     fake, lines = Fake({}), []
     assert train.train_project(p, epochs=1000, env=ENV12, run=fake, on_line=lines.append) == 0
-    assert lines == ["Цель уже достигнута (эпоха 1100) — увеличь --epochs"]
+    assert lines == ["Цель уже достигнута (эпоха 1101) — увеличь --epochs"]
     assert not any("piper.train" in " ".join(c) or c[:2] == ["docker", "rm"] for c in fake.calls)
     assert Project.load(p.root).steps["train"] is False
 
@@ -294,7 +294,7 @@ def test_target_not_reached_or_unknown_trains(tmp_path, monkeypatch):
     (d / "last.ckpt").write_bytes(b"x")   # epoch unknown → proceed
     fake = Fake({})
     train.train_project(p, epochs=1000, env=ENV12, run=fake)
-    (d / "epoch=1098-val_mel=0.3000.ckpt").write_bytes(b"x")
+    (d / "epoch=1099-val_mel=0.3000.ckpt").write_bytes(b"x")
     fake2 = Fake({})
     train.train_project(p, epochs=1000, env=ENV12, run=fake2)
     assert any("piper.train" in " ".join(c) for c in fake.calls) and any("piper.train" in " ".join(c) for c in fake2.calls)
@@ -545,3 +545,8 @@ def test_stop_training_without_docker_is_quiet(tmp_path, exc):
     def run(cmd, **kw):
         raise exc
     assert train.stop_training(p, run=run) is None
+
+def test_target_epochs_counts_base_as_done(tmp_path):
+    p = Project.create(tmp_path / "t", name="t", language="ru")
+    p.base_checkpoint = "x/epoch=4139-step=1.ckpt"
+    assert train.target_epochs(p, 2) == 4142   # epochs 4140 and 4141 are the 2 new ones
