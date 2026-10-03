@@ -433,6 +433,11 @@ class SetupRunner:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    @property
+    def busy(self) -> bool:
+        """An install or a background check is running: the UI keeps polling until both are done."""
+        return self.running or (self._check_thread is not None and self._check_thread.is_alive())
+
     def _bump(self) -> None:
         self.version += 1
 
@@ -453,7 +458,7 @@ class SetupRunner:
     def check(self) -> None:
         """Re-run check_all() in the background (it calls wsl.exe, which can take seconds)."""
         with self._lock:
-            if self.running or (self._check_thread and self._check_thread.is_alive()):
+            if self.busy:
                 return
             self._check_thread = threading.Thread(target=self._recheck, daemon=True, name="omnivoice-deps-check")
             self._check_thread.start()

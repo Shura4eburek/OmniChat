@@ -5,7 +5,7 @@ rem section "Ustanovka", button "Ustanovit zavisimosti".
 rem Set OMNIVOICE_DRYRUN=1 to only print the commands (nothing is installed or launched).
 rem echo keeps the previous errorlevel, so error checks after %RUN% commands are skipped in a dry run.
 setlocal EnableExtensions
-cd /d "%~dp0" || goto :fail_dir
+pushd "%~dp0" || goto :fail_dir
 set "TOOL_DIR=%~dp0"
 if "%TOOL_DIR:~-1%"=="\" set "TOOL_DIR=%TOOL_DIR:~0,-1%"
 set "PROJECTS=%USERPROFILE%\omnivoice-projects"

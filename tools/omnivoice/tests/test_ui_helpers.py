@@ -479,6 +479,16 @@ def test_setup_runner_check_in_background_survives_errors():
     assert r.items == [] and "wsl сломан" in r.status_html()
 
 
+def test_setup_runner_busy_covers_install_and_check():
+    gate = threading.Event()
+    r = h.SetupRunner(install_fn=lambda *a: None, check_fn=lambda: gate.wait(5) and [])
+    assert not r.busy
+    r.check()
+    assert r.busy  # the UI timer keeps polling while a background check runs
+    gate.set(); r.join(5)
+    assert not r.busy
+
+
 def test_env_probe_restart():
     from omnivoice.train import Env
     n = []

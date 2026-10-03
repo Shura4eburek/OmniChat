@@ -56,3 +56,9 @@ def test_build_has_setup_section_first_and_does_not_check_deps(tmp_path):
     assert any(r.choices and r.choices[0][0] == S.SEC_SETUP for r in radios)
     buttons = [b.value for b in demo.blocks.values() if isinstance(b, gr.Button)]
     assert S.SETUP_INSTALL in buttons and S.SETUP_GOTO in buttons
+
+
+def test_setup_timer_starts_inactive(tmp_path):
+    demo = build(tmp_path, check_fn=lambda: [], install_fn=lambda *a: None)
+    idle = [t for t in demo.blocks.values() if isinstance(t, gr.Timer) and not t.active]
+    assert [t.value for t in idle] == [1.0]  # only the setup timer, activated by a setup run or check

@@ -22,6 +22,12 @@ def test_bat_has_key_commands():
         assert needle in text, needle
 
 
+def test_bat_uses_pushd_for_its_folder():
+    text = BAT.read_text(encoding="ascii")
+    assert 'pushd "%~dp0"' in text  # works for UNC paths too, unlike cd /d
+    assert "cd /d" not in text
+
+
 def test_gitattributes_keeps_bat_crlf():
     attrs = (ROOT / ".gitattributes").read_text(encoding="utf-8")
     assert "*.bat text eol=crlf" in attrs

@@ -281,7 +281,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                     S.SEC_CHECK: g_check, S.SEC_TRAIN: g_train, S.SEC_PACK: g_pack}
         env_timer = gr.Timer(1.0)
         train_timer = gr.Timer(2.0)
-        setup_timer = gr.Timer(1.0)
+        setup_timer = gr.Timer(1.0, active=False)  # woken by a setup run or check, sleeps when idle
         loss_timer = gr.Timer(15.0)
 
         # ---------------- environment probe ----------------
@@ -289,7 +289,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             probe.start()
             if setup.items is None:
                 setup.check()
-            return header_html(probe.env)
+            return header_html(probe.env), gr.Timer(active=True)
 
         def poll_env(name, sec):
             env = probe.env
@@ -298,40 +298,42 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             return (header_html(env), train.batch_size_for(env.vram_mib), gr.update(visible=not env.gpu),
                     gr.update(visible=needs_setup(env)), steps_html(try_load(name), sec), gr.Timer(active=False))
 
-        demo.load(start_probe, outputs=header)
+        demo.load(start_probe, outputs=[header, setup_timer])
         env_timer.tick(poll_env, [project_dd, section], [header, batch, colab_group, setup_needed, steps, env_timer],
                        show_progress="hidden")
 
         # ---------------- setup ----------------
-        @guarded(2)
+        @guarded(3)
         def on_setup():
             setup.start()  # RuntimeError(S.SETUP_BUSY) on a double click → toast
-            return setup.status_html(), setup.progress.html()
+            return setup.status_html(), setup.progress.html(), gr.Timer(active=True)
 
-        setup_btn.click(on_setup, None, [setup_status, setup_progress])
+        setup_btn.click(on_setup, None, [setup_status, setup_progress, setup_timer])
 
         def on_setup_tick(seen):
             v = setup.version
-            if v == seen:
-                return (gr.skip(),) * 6
+            if v == seen:  # nothing new; once the run/check is over the timer goes back to sleep
+                return (gr.skip(),) * 6 + (gr.skip() if setup.busy else gr.Timer(active=False),)
             # a finished run re-probes the environment (SetupRunner.on_finish): poll the badge again
             env_poll = gr.Timer(active=True) if setup.status != "running" and setup.status != "idle" else gr.skip()
             return (checklist_html(setup.items), setup.progress.html(), setup.status_html(), setup.log_text(), v,
-                    env_poll)
+                    env_poll, gr.skip())
 
         setup_timer.tick(on_setup_tick, setup_seen,
-                         [checklist, setup_progress, setup_status, setup_log, setup_seen, env_timer],
+                         [checklist, setup_progress, setup_status, setup_log, setup_seen, env_timer, setup_timer],
                          show_progress="hidden")  # 1 s polling must not flash a loader
         goto_setup.click(lambda: S.SEC_SETUP, None, section)
 
         # ---------------- navigation ----------------
         def on_section(name, sec):
             target = group_of.get(sec)
+            wake = gr.skip()
             if sec == S.SEC_SETUP and not setup.running:
                 setup.check()  # the user may have installed something by hand meanwhile
-            return [steps_html(try_load(name), sec)] + [gr.update(visible=g is target) for g in groups]
+                wake = gr.Timer(active=True)
+            return [steps_html(try_load(name), sec)] + [gr.update(visible=g is target) for g in groups] + [wake]
 
-        section.change(on_section, [project_dd, section], [steps] + groups)
+        section.change(on_section, [project_dd, section], [steps] + groups + [setup_timer])
 
         def on_chip(evt: gr.EventData):
             sec = getattr(evt, "section", None)
