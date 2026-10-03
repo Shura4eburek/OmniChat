@@ -72,4 +72,13 @@ class OnnxMetadataTest {
         assertEquals("missing 'n_speakers' metadata", OnnxMetadata.vitsProblem(Map.of("comment", "piper", "voice", "ru")));
         assertNull(OnnxMetadata.vitsProblem(Map.of("n_speakers", "4", "comment", "coqui")));
     }
+
+    @Test
+    void missingVoiceOnlyChecksTheConditionDirectly() {
+        assertTrue(OnnxMetadata.missingVoiceOnly(Map.of("n_speakers", "1", "comment", "piper")));
+        assertTrue(OnnxMetadata.missingVoiceOnly(Map.of("n_speakers", "1", "comment", "Piper", "voice", " ")));
+        assertFalse(OnnxMetadata.missingVoiceOnly(Map.of("n_speakers", "1", "comment", "piper", "voice", "ru")));
+        assertFalse(OnnxMetadata.missingVoiceOnly(Map.of("comment", "piper")));
+        assertFalse(OnnxMetadata.missingVoiceOnly(Map.of("n_speakers", "1", "comment", "coqui")));
+    }
 }

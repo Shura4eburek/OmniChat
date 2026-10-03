@@ -121,7 +121,9 @@ public final class OnnxMetadata {
 
     /** True when the only problem is a missing/blank espeak {@code voice} on a piper model. */
     public static boolean missingVoiceOnly(Map<String, String> meta) {
-        return meta.containsKey("n_speakers") && vitsProblem(meta) != null;
+        return meta.containsKey("n_speakers")
+                && "piper".equalsIgnoreCase(meta.getOrDefault("comment", ""))
+                && meta.getOrDefault("voice", "").isBlank();
     }
 
     /**
