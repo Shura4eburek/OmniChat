@@ -113,6 +113,7 @@ def import_dataset(p: Project, source: Path) -> ImportResult:
 
 def piper_csv(p: Project, out: Path) -> int:
     rows = [s for s in load(p) if not s.dropped and s.text.strip()]
+    Path(out).parent.mkdir(parents=True, exist_ok=True)  # train/ may have been deleted to free disk space
     with Path(out).open("w", encoding="utf-8", newline="") as f:
         for s in rows:
             f.write(f"{s.id}.wav|{clean_text(s.text)}\n")

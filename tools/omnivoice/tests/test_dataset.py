@@ -36,6 +36,14 @@ def test_piper_csv_skips_dropped_and_empty(tmp_path):
     n = dataset.piper_csv(p, tmp_path / "train.csv")
     assert n == 1 and (tmp_path / "train.csv").read_text(encoding="utf-8") == "a.wav|Один\n"
 
+def test_piper_csv_recreates_a_deleted_train_dir(tmp_path):
+    # users delete train/ to free disk space (it holds GBs of checkpoints); training must still start
+    import shutil
+    p = proj(tmp_path)
+    dataset.save(p, [Segment("a", "Один", 2.0)])
+    shutil.rmtree(p.train_dir)
+    assert dataset.piper_csv(p, p.train_dir / "train.csv") == 1
+
 def test_save_load_roundtrip_keeps_review_state(tmp_path):
     p = proj(tmp_path)
     dataset.save(p, [Segment("a", "x|y", 2.0, confidence=0.4, flags=["check"], edited=True)])
