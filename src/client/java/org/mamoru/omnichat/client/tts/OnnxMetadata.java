@@ -35,6 +35,39 @@ public final class OnnxMetadata {
         return out;
     }
 
+    /**
+     * The model bytes followed by one metadata_props entry per map entry. Protobuf allows repeated
+     * top-level fields anywhere, so appending is a valid way to add metadata without rewriting the graph.
+     */
+    public static byte[] appendEntries(byte[] model, Map<String, String> entries) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(model.length + 64);
+        out.writeBytes(model);
+        for (Map.Entry<String, String> e : entries.entrySet()) {
+            java.io.ByteArrayOutputStream entry = new java.io.ByteArrayOutputStream();
+            writeString(entry, 1, e.getKey());
+            writeString(entry, 2, e.getValue());
+            writeVarint(out, ((long) METADATA_PROPS << 3) | 2);
+            writeVarint(out, entry.size());
+            out.writeBytes(entry.toByteArray());
+        }
+        return out.toByteArray();
+    }
+
+    private static void writeString(java.io.ByteArrayOutputStream out, int number, String s) {
+        byte[] b = s.getBytes(StandardCharsets.UTF_8);
+        writeVarint(out, ((long) number << 3) | 2);
+        writeVarint(out, b.length);
+        out.writeBytes(b);
+    }
+
+    private static void writeVarint(java.io.ByteArrayOutputStream out, long v) {
+        while ((v & ~0x7FL) != 0) {
+            out.write((int) ((v & 0x7F) | 0x80));
+            v >>>= 7;
+        }
+        out.write((int) v);
+    }
+
     private static void readEntry(byte[] data, int start, int len, Map<String, String> out) {
         Reader r = new Reader(data, start, start + len);
         String key = null, value = "";
