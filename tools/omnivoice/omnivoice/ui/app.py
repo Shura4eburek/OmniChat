@@ -19,7 +19,8 @@ from pathlib import Path
 
 import gradio as gr
 
-from omnivoice import checker, colab, dataset, install, languages, pack, previews, slicer, train, transcriber, verify
+from omnivoice import (checker, colab, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
+                       transcriber, verify)
 from omnivoice.fsutil import TargetBusy
 from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError
@@ -27,7 +28,8 @@ from omnivoice.ui import strings as S
 from omnivoice.ui import theme
 from omnivoice.ui.helpers import (COLUMNS, NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  copy_uploads, counter_label, env_badge, error_text, last_epoch_target,
+                                  copy_uploads, counter_label, data_dir_html, env_badge, error_text,
+                                  last_epoch_target,
                                   list_projects, needs_setup, list_raw_files, portrait_preview, report_html,
                                   segments_rows, stats_line, steps_bar_html, toggle_dropped)
 
@@ -159,6 +161,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
     stats0, rows0 = table_update(p0, False, tolerant=True)
     display0 = p0.display if p0 else {}
     targets = [str(t) for t in install.default_targets()]
+    dd0, dd_source = paths.cache_source()
 
     with gr.Blocks(title=S.PAGE_TITLE) as demo:
         with gr.Column(elem_classes="hud-panel"):
@@ -182,6 +185,11 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                     with gr.Column(visible=sec0 == S.SEC_SETUP, elem_classes="hud-section") as g_setup:
                         gr.HTML(msg_html(S.SETUP_INTRO))
                         checklist = gr.HTML(checklist_html(None))
+                        with gr.Row(equal_height=True):
+                            data_dir_box = gr.Textbox(str(dd0), label=S.DATA_DIR, info=S.DATA_DIR_INFO, scale=4,
+                                                      interactive=dd_source != "env")
+                            data_dir_btn = gr.Button(S.DATA_DIR_MOVE, scale=1, interactive=dd_source != "env")
+                        data_dir_hint = gr.HTML(data_dir_html(dd0, dd_source))
                         setup_btn = gr.Button(S.SETUP_INSTALL, variant="primary")
                         setup_progress = gr.HTML(setup.progress.html())
                         setup_status = gr.HTML(setup.status_html())
@@ -317,17 +325,39 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         setup_btn.click(on_setup, None, [setup_status, setup_progress, setup_timer])
 
+        @guarded(3)
+        def on_data_dir(target):
+            new = (target or "").strip()
+
+            def job(on_line, progress):
+                datadir.move_data(new, on_line)  # DataDirError (a RuntimeError) → the status shows it
+                return None
+            setup.start(job=job, done_text=S.DATA_DIR_DONE, error_title=S.DATA_DIR_ERROR)  # busy guard as setup
+            return setup.status_html(), setup.progress.html(), gr.Timer(active=True)
+
+        data_dir_btn.click(on_data_dir, data_dir_box, [setup_status, setup_progress, setup_timer])
+
+        def on_data_dir_typed(target):
+            t = Path((target or "").strip())
+            return data_dir_html(t, dd_source) if t.anchor else gr.skip()
+
+        data_dir_box.blur(on_data_dir_typed, data_dir_box, data_dir_hint, show_progress="hidden")
+
         def on_setup_tick(seen):
             v = setup.version
             if v == seen:  # nothing new; once the run/check is over the timer goes back to sleep
-                return (gr.skip(),) * 6 + (gr.skip() if setup.busy else gr.Timer(active=False),)
+                return (gr.skip(),) * 8 + (gr.skip() if setup.busy else gr.Timer(active=False),)
             # a finished run re-probes the environment (SetupRunner.on_finish): poll the badge again
-            env_poll = gr.Timer(active=True) if setup.status != "running" and setup.status != "idle" else gr.skip()
+            finished = setup.status != "running" and setup.status != "idle"
+            env_poll = gr.Timer(active=True) if finished else gr.skip()
+            cur, source = paths.cache_source()
+            box = str(cur) if setup.status == "done" and setup.done_text == S.DATA_DIR_DONE else gr.skip()
             return (checklist_html(setup.items), setup.progress.html(), setup.status_html(), setup.log_text(), v,
-                    env_poll, gr.skip())
+                    env_poll, data_dir_html(cur, source), box, gr.skip())
 
         setup_timer.tick(on_setup_tick, setup_seen,
-                         [checklist, setup_progress, setup_status, setup_log, setup_seen, env_timer, setup_timer],
+                         [checklist, setup_progress, setup_status, setup_log, setup_seen, env_timer, data_dir_hint,
+                          data_dir_box, setup_timer],
                          show_progress="hidden")  # 1 s polling must not flash a loader
         goto_setup.click(lambda: S.SEC_SETUP, None, section)
 

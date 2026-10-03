@@ -515,7 +515,8 @@ def test_last_epoch_target_matches_lightning_0_based_epochs():
 
 
 def test_setup_intro_disk_size():
-    assert "~15 ГБ на диске C:" in S.SETUP_INTRO and "6 ГБ" not in S.SETUP_INTRO
+    assert "~15 ГБ" in S.SETUP_INTRO and "6 ГБ" not in S.SETUP_INTRO
+    assert "диске C:" not in S.SETUP_INTRO  # the folder is configurable now
 
 
 def test_app_uses_last_epoch_target():
@@ -535,3 +536,46 @@ def test_setup_runner_done_without_gpu_is_not_missing():
     html = r.status_html()
     assert S.SETUP_DONE in html and S.SETUP_DONE_MISSING not in html
     assert deps.NO_GPU_DETAIL in r.log_text() and deps.NO_GPU_DETAIL in h.checklist_html(r.items)
+
+
+# ---------- dependency folder ----------
+from collections import namedtuple
+
+_Usage = namedtuple("_Usage", "total used free")
+
+
+def test_data_dir_html_shows_path_and_free_space():
+    out = h.data_dir_html(Path("G:/omnivoice"), "config", disk_usage=lambda p: _Usage(10**12, 0, 150 * 2**30))
+    assert "150,0 ГБ" in out and "G:" in out
+
+
+def test_data_dir_html_env_and_unavailable_drive():
+    out = h.data_dir_html(Path("C:/x"), "env", disk_usage=lambda p: _Usage(1, 0, 2**30))
+    assert "OMNIVOICE_CACHE" in out
+    def gone(p):
+        raise OSError("нет диска")
+    assert S.DATA_DIR_NO_DRIVE.split("{")[0] in h.data_dir_html(Path("Q:/x"), "config", disk_usage=gone)
+
+
+def test_data_dir_html_escapes():
+    out = h.data_dir_html(Path("C:/<b>"), "default", disk_usage=lambda p: _Usage(1, 0, 1))
+    assert "<b>" not in out
+
+
+def test_setup_runner_runs_a_custom_job_with_its_own_done_text():
+    seen = []
+    r = h.SetupRunner(install_fn=lambda *a: (_ for _ in ()).throw(AssertionError("no install")),
+                      check_fn=lambda: [], on_finish=lambda: seen.append(1))
+    def job(on_line, progress):
+        on_line("Копирую checkpoints…")
+        return None
+    r.start(job=job, done_text="Перенесено")
+    r.join(5)
+    assert r.status == "done" and "Перенесено" in r.status_html() and seen == [1]
+    assert "Копирую checkpoints…" in r.log_text()
+    r.start(job=lambda on_line, progress: (_ for _ in ()).throw(RuntimeError("Мало места")),
+            done_text="Перенесено", error_title="Перенос не удался")
+    r.join(5)
+    assert r.status == "error" and "Перенос не удался: Мало места" in r.status_html()
+    r.start(); r.join(5)  # the next plain run uses install_fn and the usual wording again
+    assert r.status == "error" and S.SETUP_ERROR in r.status_html()

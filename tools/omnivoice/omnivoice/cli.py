@@ -311,14 +311,41 @@ def _setup_line(line: str) -> None:
     else:
         typer.echo(line)
 
+SOURCE_LABELS = {"env": "переменная окружения OMNIVOICE_CACHE", "config": "настройка {config}",
+                 "default": "по умолчанию"}
+
+@app.command("data-dir")
+def data_dir_cmd(path: str = typer.Argument(None, help=r"Новая папка, например G:\omnivoice: всё будет перенесено туда")):
+    """Показать или сменить папку для зависимостей (среда WSL, базовые модели, ffmpeg). Проекты не трогаются."""
+    from omnivoice import datadir, paths, wslenv
+    code = 0  # typer.Exit is a RuntimeError too, so no raise typer.Exit inside the try
+    try:
+        if path is None:
+            d, source, used = datadir.describe()
+            typer.echo(f"Папка для зависимостей: {d}")
+            typer.echo(f"Откуда: {SOURCE_LABELS[source].format(config=paths.config_path())}")
+            typer.echo(f"Занято: {datadir.human_size(used)}")
+            typer.echo("Сменить и перенести: omnivoice data-dir <новая папка>")
+        else:
+            datadir.move_data(path, typer.echo)
+    except (datadir.DataDirError, wslenv.WslError, RuntimeError, OSError) as e:
+        typer.secho(str(e) or type(e).__name__, fg="red")
+        code = 1
+    raise typer.Exit(code)
+
 @app.command("setup")
-def setup_cmd(check: bool = typer.Option(False, "--check", help="Только показать, чего не хватает")):
+def setup_cmd(check: bool = typer.Option(False, "--check", help="Только показать, чего не хватает"),
+              data_dir: str = typer.Option(None, "--data-dir",
+                                           help="Сначала сменить папку для зависимостей (как omnivoice data-dir)")):
     """Установить всё для подготовки и обучения: пакеты, ffmpeg, среду WSL."""
-    from omnivoice import deps, train as tr, wslenv
+    from omnivoice import datadir, deps, train as tr, wslenv
     # typer.Exit is a RuntimeError too, so no raise typer.Exit inside the try
-    errors = (deps.DepsError, wslenv.WslError, tr.TrainError, RuntimeError, OSError)
+    errors = (datadir.DataDirError, deps.DepsError, wslenv.WslError, tr.TrainError, RuntimeError, OSError)
     code = 0
     try:
+        if data_dir:
+            datadir.move_data(data_dir, typer.echo)
+            typer.echo("")
         ok = _print_checklist(deps.check_all())
         if check:
             if not ok:

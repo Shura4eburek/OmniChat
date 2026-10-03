@@ -62,3 +62,17 @@ def test_setup_timer_starts_inactive(tmp_path):
     demo = build(tmp_path, check_fn=lambda: [], install_fn=lambda *a: None)
     idle = [t for t in demo.blocks.values() if isinstance(t, gr.Timer) and not t.active]
     assert [t.value for t in idle] == [1.0]  # only the setup timer, activated by a setup run or check
+
+
+def test_setup_section_has_data_dir_box_above_install(tmp_path, monkeypatch):
+    from omnivoice.ui import strings as S
+    monkeypatch.delenv("OMNIVOICE_CACHE", raising=False)
+    monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    demo = build(tmp_path, check_fn=lambda: [], install_fn=lambda *a: None)
+    blocks = list(demo.blocks.values())
+    box = next(b for b in blocks if isinstance(b, gr.Textbox) and b.label == S.DATA_DIR)
+    assert box.value == str(tmp_path / "local" / "omnivoice")
+    move = next(b for b in blocks if isinstance(b, gr.Button) and b.value == S.DATA_DIR_MOVE)
+    install = next(b for b in blocks if isinstance(b, gr.Button) and b.value == S.SETUP_INSTALL)
+    assert box._id < move._id < install._id

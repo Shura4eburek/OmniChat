@@ -121,3 +121,56 @@ def test_setup_check_without_gpu_exits_0_and_points_to_colab(monkeypatch):
     r = CliRunner().invoke(app, ["setup", "--check"])
     assert r.exit_code == 0, r.output
     assert f"✗ Среда обучения (необязательно) — {deps.NO_GPU_DETAIL}" in r.output
+
+
+# ---------- omnivoice data-dir ----------
+from omnivoice import datadir
+
+
+def test_data_dir_without_argument_prints_location(monkeypatch, tmp_path):
+    monkeypatch.setattr(datadir, "describe", lambda: (tmp_path / "omnivoice", "config", 3 * 2**30))
+    monkeypatch.setattr(datadir, "move_data", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no move")))
+    r = CliRunner().invoke(app, ["data-dir"])
+    assert r.exit_code == 0, r.output
+    assert str(tmp_path / "omnivoice") in r.output and "3,0 ГБ" in r.output and "config.json" in r.output
+
+
+def test_data_dir_with_argument_moves_and_streams(monkeypatch, tmp_path):
+    seen = {}
+    def move(new_root, on_line, **kw):
+        seen["to"] = new_root
+        on_line("Копирую checkpoints…")
+        return True
+    monkeypatch.setattr(datadir, "move_data", move)
+    r = CliRunner().invoke(app, ["data-dir", str(tmp_path / "g")])
+    assert r.exit_code == 0, r.output
+    assert seen["to"] == str(tmp_path / "g") and "Копирую checkpoints…" in r.output
+
+
+def test_data_dir_error_exits_1_without_traceback(monkeypatch, tmp_path):
+    def move(new_root, on_line, **kw):
+        raise datadir.DataDirError("Мало места на диске G:")
+    monkeypatch.setattr(datadir, "move_data", move)
+    r = CliRunner().invoke(app, ["data-dir", str(tmp_path / "g")])
+    assert r.exit_code == 1 and "Мало места на диске G:" in r.output
+    assert r.exception is None or isinstance(r.exception, SystemExit)
+    assert "Traceback" not in r.output
+
+
+def test_setup_data_dir_sets_location_before_install(monkeypatch, tmp_path):
+    order = []
+    monkeypatch.setattr(datadir, "move_data", lambda new_root, on_line, **kw: order.append(("move", new_root)) or True)
+    monkeypatch.setattr(deps, "check_all", lambda: order.append("check") or _items())
+    monkeypatch.setattr(deps, "install_all", lambda on_line, progress=None: order.append("install"))
+    r = CliRunner().invoke(app, ["setup", "--data-dir", str(tmp_path / "g")])
+    assert r.exit_code == 0, r.output
+    assert order[0] == ("move", str(tmp_path / "g")) and "install" in order
+
+
+def test_setup_data_dir_error_stops_before_install(monkeypatch, tmp_path):
+    def move(new_root, on_line, **kw):
+        raise datadir.DataDirError("Диск G: не найден")
+    monkeypatch.setattr(datadir, "move_data", move)
+    monkeypatch.setattr(deps, "install_all", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no install")))
+    r = CliRunner().invoke(app, ["setup", "--data-dir", r"G:\x"])
+    assert r.exit_code == 1 and "Диск G: не найден" in r.output

@@ -435,6 +435,9 @@ class SetupRunner:
         self.check_error: str | None = None
         self.progress = SetupProgress()
         self.version = 0
+        self._job = self._install
+        self.done_text: str | None = None
+        self.error_title: str | None = None
 
     @property
     def running(self) -> bool:
@@ -478,11 +481,14 @@ class SetupRunner:
             self.items, self.check_error = [], S.SETUP_CHECK_FAILED.format(error=str(e) or type(e).__name__)
         self._bump()
 
-    def start(self) -> None:
+    def start(self, job=None, done_text: str | None = None, error_title: str | None = None) -> None:
+        """Run install_fn, or `job` (same signature: on_line, progress → reboot message | None) with the same
+        busy guard, log and progress; `done_text` / `error_title` replace the install wording of the status."""
         with self._lock:
             if self.running:
                 raise RuntimeError(S.SETUP_BUSY)
             self.status, self.reboot, self.error = "running", None, None
+            self._job, self.done_text, self.error_title = job or self._install, done_text, error_title
             self.progress = SetupProgress()
             self._lines.clear()
             self._thread = threading.Thread(target=self._work, daemon=True, name="omnivoice-setup")
@@ -491,7 +497,7 @@ class SetupRunner:
 
     def _work(self) -> None:
         try:
-            self.reboot = self._install(self._line, self._download)
+            self.reboot = self._job(self._line, self._download)
             self.status = "reboot" if self.reboot else "done"
             if not self.reboot:
                 self.progress.finish()
@@ -524,7 +530,9 @@ class SetupRunner:
                    f'<p>{e(self.reboot or "")}</p></div>')
         elif self.status == "error":
             text = e(self.error or "").replace("\n", "<br>")
-            out = f'<div class="section-msg err">{e(S.SETUP_ERROR)}: {text}</div>'
+            out = f'<div class="section-msg err">{e(self.error_title or S.SETUP_ERROR)}: {text}</div>'
+        elif self.status == "done" and self.done_text:
+            out = f'<div class="train-status ok">{e(self.done_text)}</div>'
         elif self.status == "done":
             missing = any(not i.ok and not i.optional for i in self.items or [])
             out = (f'<div class="section-msg err">{e(S.SETUP_DONE_MISSING)}</div>' if missing
@@ -536,6 +544,21 @@ class SetupRunner:
         if self.check_error:
             out += f'<div class="section-msg err">{e(self.check_error)}</div>'
         return out
+
+
+def data_dir_html(path: Path, source: str, disk_usage=shutil.disk_usage) -> str:
+    """Hint under the dependency-folder box: free space on that drive (or why it can't be changed here)."""
+    from omnivoice.datadir import human_size
+    drive = Path(path).drive or Path(path).anchor or str(path)
+    try:
+        text = S.DATA_DIR_FREE.format(drive=drive, free=human_size(disk_usage(Path(path).anchor or str(path)).free))
+        cls = "section-msg muted"
+    except (OSError, ValueError):
+        text, cls = S.DATA_DIR_NO_DRIVE.format(drive=drive), "section-msg err"
+    out = f'<div class="{cls}">{html.escape(text)}</div>'
+    if source == "env":
+        out += f'<div class="section-msg err">{html.escape(S.DATA_DIR_ENV)}</div>'
+    return out
 
 
 # ---------- per-project write lock ----------
