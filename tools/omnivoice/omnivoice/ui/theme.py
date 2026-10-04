@@ -206,6 +206,19 @@ document.addEventListener("click", e => {
   document.querySelectorAll(".phr-row.current").forEach(r => r.classList.remove("current"));
   const row = b.closest(".phr-row"); if (row) row.classList.add("current");
 });
+/* synthetic phrases and references: a button hands "<id>#<act>#<time>" to the hidden #synth-pick box;
+   ▶ also highlights its card (the audio goes to the player below) */
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button.syn-btn"); if (!b) return;
+  const card = b.closest(".syn-row, .syn-ref"); if (!card) return;
+  const box = document.querySelector("#synth-pick textarea, #synth-pick input"); if (!box) return;
+  if (b.dataset.act === "play") {
+    document.querySelectorAll(".syn-row.current").forEach(r => r.classList.remove("current"));
+    card.classList.add("current");
+  }
+  box.value = card.dataset.id + "#" + b.dataset.act + "#" + Date.now();
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+});
 /* Gradio's dropdown re-filters by its own text on any non-navigation key, so a bare Shift / Win
    (e.g. Win+Shift+S for a screenshot) shrinks an open list to the selected item. Non-filterable
    (readonly) dropdowns only need the navigation keys; filterable ones lose just the modifiers. */
@@ -393,6 +406,47 @@ button.phr-back::before {{ width:16px; height:16px; background:var(--ac);
 button.phr-back::after {{ display:none; }}
 .hud-section .row.phr-row > button.phr-back:hover {{ background:rgba(53,224,200,.12) !important; }}
 .hud-section .row.phr-row > button.phr-btn:focus-visible {{ background:rgba(53,224,200,.2) !important; }}
+
+/* synthetic phrases: cards like the phrase cards (▶ · id / duration / reasons, text, what Whisper heard · ✓ ✕ ↺) */
+.html-container:has(.syn-cards), .html-container:has(.syn-refs), .html-container:has(.syn-summary) {{
+            padding-top:0 !important; padding-bottom:0 !important; }}
+.syn-cards {{ display:flex; flex-direction:column; gap:6px; max-height:600px; overflow-y:auto; }}
+.syn-row {{ display:flex; align-items:center; gap:12px; flex:none; padding:8px 10px; background:{PANEL};
+           border-width:1px; border-style:solid; border-color:var(--acd); }}
+.syn-row:hover {{ border-color:var(--ac); }}
+.syn-row.current {{ border-color:var(--ac); background:rgba(53,224,200,.06); }}
+.syn-row.dropped .syn-body, .syn-row.dropped .phr-play {{ opacity:.45; }}
+.syn-row.dropped .syn-text {{ text-decoration:line-through; }}
+.syn-body {{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }}
+.syn-body .phr-meta {{ padding-left:0; }}
+.syn-text {{ font-size:14px; color:{TEXT}; overflow-wrap:anywhere; }}
+.syn-heard {{ font-size:12px; }}
+.syn-acts {{ flex:none; display:flex; gap:8px; }}
+.syn-row button.syn-btn {{ flex:none; position:relative; box-sizing:border-box; width:32px; height:32px; padding:0;
+           margin:0; background:transparent; border-radius:0; box-shadow:none; outline:none; cursor:pointer;
+           border-width:1px; border-style:solid; border-color:var(--ac); }}
+.syn-row button.syn-btn::before, .syn-row button.syn-btn::after {{ content:""; position:absolute; inset:0; margin:auto; }}
+.syn-row button.syn-btn:hover {{ background:rgba(53,224,200,.12); }}
+.syn-row button.syn-btn:focus-visible {{ background:rgba(53,224,200,.2); }}
+.syn-row button.phr-play::after, .syn-row button.phr-back::after {{ display:none; }}
+.syn-row button.phr-rm {{ border-color:#3a2a2e; }}
+.syn-row button.phr-rm:hover {{ border-color:var(--bad); background:rgba(255,90,90,.08); }}
+/* ✓ «принять»: a rotated L in the success colour */
+.syn-row button.syn-ok {{ border-color:rgba(89,227,107,.6); }}
+.syn-row button.syn-ok::before {{ width:6px; height:11px; box-sizing:border-box; transform:translateY(-1px) rotate(45deg);
+           border-right:2px solid var(--ok); border-bottom:2px solid var(--ok); }}
+.syn-row button.syn-ok::after {{ display:none; }}
+.syn-row button.syn-ok:hover {{ border-color:var(--ok); background:rgba(89,227,107,.1); }}
+.syn-summary {{ font-size:13px; color:var(--muted); padding:2px 0 6px; }}
+.syn-refs {{ display:flex; flex-direction:column; gap:6px; }}
+.syn-ref {{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:8px 10px; background:{PANEL};
+           border-width:1px; border-style:solid; border-color:var(--acd); container-type:inline-size; }}
+.syn-ref .raw-name {{ flex:1 1 240px; min-width:120px; }}
+.syn-ref .raw-name .muted {{ white-space:normal; }}
+.syn-ref .rp {{ flex:1 1 260px; }}
+.st-opt {{ font-size:9px; opacity:.7; margin-left:6px; }}
+/* «Обучение»: the checkbox sits on the line of the weight input, not of its label (measured: the form adds 10 px below) */
+.synth-train .syn-use {{ align-self:flex-end !important; margin-bottom:10px !important; }}
 
 /* checkpoints: one card per checkpoint (epoch · MOS / mel · marks); the chosen one is highlighted */
 .hidden-input {{ display:none !important; }}

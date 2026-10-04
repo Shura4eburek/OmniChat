@@ -26,6 +26,8 @@ FFMPEG_EXES = ("ffmpeg.exe", "ffprobe.exe")
 PREP_MODULES = ("faster_whisper", "silero_vad", "demucs", "pyloudnorm", "gradio", "tensorboard")
 HINT = "нажми «Установить зависимости» (omnivoice setup)"
 PREP, FFMPEG, WSL, ENV = "Пакеты (prep, ui)", "ffmpeg", "WSL", "Среда обучения"
+XTTS = "XTTS v2"
+XTTS_DETAIL_MISSING = "для синтетики; не установлена (≈ 8 ГБ) — галочка «и XTTS v2» ниже"
 NO_GPU_DETAIL = "Нет видеокарты NVIDIA — обучайте в Colab (omnivoice train --colab)"
 FFMPEG_LABEL = "Скачиваю ffmpeg (~115 МБ)…"
 
@@ -181,6 +183,7 @@ def check_all(run=subprocess.run) -> list[Item]:
     docker = shutil.which("docker")
     wsl_ok = st.wsl and st.wsl_version_ok
     wsl_detail = "готов" if wsl_ok else ("устарел" if st.wsl else "не установлен") + " — " + HINT
+    xtts = bool(st.ready and wslenv.xtts_ready(run))
     return [
         Item(PREP, prep, "установлены" if prep else "не установлены — " + HINT),
         Item(FFMPEG, bool(ff), ff or "не найден — " + HINT),
@@ -189,6 +192,7 @@ def check_all(run=subprocess.run) -> list[Item]:
         Item("GPU в WSL", bool(st.gpu), "доступен" if st.gpu else "не обнаружен (проверяется после установки среды; "
              "нужен драйвер NVIDIA для Windows)", optional=True),
         Item("Docker", bool(docker), docker or "не найден (необязательно — запасной вариант обучения)", optional=True),
+        Item(XTTS, xtts, "установлена" if xtts else XTTS_DETAIL_MISSING, optional=True),
     ]
 
 
@@ -196,8 +200,16 @@ def _missing(items: list[Item], name: str) -> bool:
     return any(i.name == name and not i.ok for i in items)
 
 
+def _ok(items: list[Item], name: str) -> bool:
+    return any(i.name == name and i.ok for i in items)
+
+
+def gpu_ok(items: list[Item]) -> bool:
+    return not any(i.name == ENV and i.optional for i in items)  # ENV is optional only without an NVIDIA GPU
+
+
 def install_all(on_line: Callable[[str], None], progress: Callable[[int, int], None] | None = None,
-                run=subprocess.run) -> str | None:
+                run=subprocess.run, with_xtts: bool = False) -> str | None:
     """prep → ffmpeg → WSL environment, skipping what is OK. Returns the reboot message if one is needed, else None."""
     items = check_all(run)
     if _missing(items, PREP):
@@ -216,5 +228,8 @@ def install_all(on_line: Callable[[str], None], progress: Callable[[int, int], N
             msg = str(e) or wslenv.REBOOT_MSG
             on_line(msg)
             return msg
+    if with_xtts and gpu_ok(items) and not _ok(items, XTTS):
+        on_line("Устанавливаю XTTS v2 для синтетики…")
+        wslenv.provision_xtts(on_line)
     on_line("Готово.")
     return None

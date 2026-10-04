@@ -92,7 +92,11 @@ def load_whisper(model: str | None, log=None):
 def _default_recognizer(language: str, model: str | None):
     wm, _ = load_whisper(model)
     def run(wav):
-        segs, _ = wm.transcribe(str(wav), language=language, beam_size=5, vad_filter=False)
+        # a 16 kHz array, not the path: faster-whisper 1.2 opens paths with av.open(metadata_errors=…),
+        # which PyAV 19 no longer accepts
+        from omnivoice import audio
+        x, sr = audio.load_mono(wav)
+        segs, _ = wm.transcribe(audio.resample(x, sr, 16000), language=language, beam_size=5, vad_filter=False)
         return [(s.text, s.avg_logprob, s.no_speech_prob) for s in segs]
     return run
 

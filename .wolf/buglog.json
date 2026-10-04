@@ -1086,6 +1086,40 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-04T15:40:00Z"
+    },
+    {
+      "id": "bug-061",
+      "timestamp": "2026-10-04T21:00:00Z",
+      "error_message": "open() got an unexpected keyword argument 'metadata_errors' (Whisper check after synthetic generation)",
+      "file": "tools/omnivoice/omnivoice/transcriber.py",
+      "root_cause": "faster-whisper 1.2.1 decodes a file path with av.open(..., metadata_errors=...), which PyAV 19.0.1 no longer accepts; every path-based transcription (_default_recognizer: phrase transcription and synthetic check) failed",
+      "fix": "_default_recognizer loads the wav with audio.load_mono, resamples to 16 kHz and passes the float32 array to WhisperModel.transcribe (test_default_recognizer_feeds_whisper_a_16k_array)",
+      "tags": [
+        "whisper",
+        "faster-whisper",
+        "pyav",
+        "synth",
+        "transcriber"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T21:00:00Z"
+    },
+    {
+      "id": "bug-062",
+      "timestamp": "2026-10-04T20:00:00Z",
+      "error_message": "manually dropped «спорная» synthetic phrase disappeared from every filter (could not be undone); summary «брак» did not match the «Брак» list",
+      "file": "tools/omnivoice/omnivoice/ui/helpers.py, tools/omnivoice/omnivoice/synth.py",
+      "root_cause": "«Брак» filter and summary counted only verdict == rejected; manual drops of suspect/accepted phrases matched no filter",
+      "fix": "«Брак» and summary['rejected'] include dropped items with manual == 'drop'",
+      "tags": [
+        "synth",
+        "ui",
+        "filter"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T20:00:00Z"
     }
   ]
 }

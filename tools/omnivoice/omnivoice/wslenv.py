@@ -294,6 +294,39 @@ def parse_step(line: str) -> tuple[int, int, str] | None:
     return (int(m.group(1)), int(m.group(2)), m.group(3).strip()) if m else None
 
 
+XTTS_VERSION = "1 coqui-tts-0.27.5 torch-2.8.0+cu126"  # bump with xtts_setup.sh / xtts_constraints.txt
+XTTS_READY = f"{ROOT}/xtts/READY"
+XTTS_FILES = ("xtts_setup.sh", "xtts_constraints.txt")
+
+
+def xtts_ready(run: Run = subprocess.run) -> bool:
+    """The optional XTTS v2 venv (synthetic phrases) is built for this XTTS_VERSION."""
+    rc, out = _run(run, wsl_cmd("cat", XTTS_READY))
+    return rc == 0 and out.strip() == XTTS_VERSION
+
+
+def provision_xtts(on_line: Callable[[str], None], run: Run = subprocess.run, popen=subprocess.Popen) -> None:
+    """Copy xtts_setup.sh + its constraints into the distro and run it (≈ 8 GB the first time)."""
+    for name in XTTS_FILES:
+        data = (COMPAT_DIR / name).read_bytes().replace(b"\r\n", b"\n")  # a CRLF checkout breaks bash
+        rc, out = _run(run, wsl_cmd("sh", "-c", f"mkdir -p {SETUP_DIR} && cat > {SETUP_DIR}/{name}"), input=data)
+        if rc != 0:
+            raise WslError(f"Не удалось скопировать {name} в среду WSL «{DISTRO}»: {_hint(out)}")
+    try:
+        proc = popen(wsl_cmd("bash", f"{SETUP_DIR}/xtts_setup.sh", XTTS_VERSION), stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT, env={**os.environ, "WSL_UTF8": "1"})
+    except OSError as e:
+        raise WslError(f"Не удалось запустить установку XTTS v2: {e}") from e
+    tail: list[str] = []
+    for raw in proc.stdout:
+        line = decode(raw).rstrip("\r\n")
+        tail = (tail + [line])[-8:]
+        on_line(line)
+    if proc.wait() != 0:
+        raise WslError("Установка XTTS v2 не удалась. Повтори «Установить зависимости» с галочкой XTTS — готовые "
+                       "шаги не повторятся. Последние строки:\n" + "\n".join(tail))
+
+
 def provision(on_line: Callable[[str], None], run: Run = subprocess.run, popen=subprocess.Popen) -> None:
     """Copy the setup files into the distro and run wsl_setup.sh, streaming its output to on_line."""
     for name in SETUP_FILES:

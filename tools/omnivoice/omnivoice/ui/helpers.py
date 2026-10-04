@@ -28,10 +28,12 @@ from omnivoice.dataset import clean_text
 from omnivoice.project import FILE as PROJECT_FILE
 from omnivoice.ui import strings as S
 
-SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_TRAIN, S.SEC_PACK)
+SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_SYNTH, S.SEC_TRAIN, S.SEC_PACK)
 # sidebar order: setup first, then the project steps; «Чекпойнты» is a page of the training step
 NAV_SECTIONS = (S.SEC_SETUP, *SECTIONS[:-1], S.SEC_CKPT, SECTIONS[-1])
-SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "train", "pack")))
+SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "synth", "train", "pack")))
+OPTIONAL_STEPS = ("synth",)  # never block the next step; the chip says «необяз.»
+SYNTH_FILTERS = (S.SYNTH_F_SUSPECT, S.SYNTH_F_ACCEPTED, S.SYNTH_F_REJECTED)
 SECTION_STEP[S.SEC_CKPT] = "train"
 LANG_LABELS = {"ru": S.LANG_RU, "en": S.LANG_EN}
 
@@ -90,7 +92,8 @@ def list_projects(root: Path) -> list[str]:
 
 def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False, disabled: bool = False) -> str:
     """`current` is a step key (project.STEPS), e.g. "phrases".
-    Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey.
+    One chip per step: the selected section is `on` (teal), finished steps `done` (green ✓), others grey;
+    optional steps carry «необяз.».
     need_setup adds a yellow chip that leads to «Установка» (no training environment yet).
     disabled (no project yet): grey chips that lead nowhere."""
     chips = []
@@ -98,11 +101,12 @@ def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False, d
         step = SECTION_STEP[section]
         done = bool(steps.get(step))
         label = f"{i} {section.upper()}{' ✓' if done else ''}"
+        opt = f'<span class="st-opt">{html.escape(S.STEP_OPTIONAL)}</span>' if step in OPTIONAL_STEPS else ""
         if disabled:
-            chips.append(f'<span class="st off">{html.escape(label)}</span>')
+            chips.append(f'<span class="st off">{html.escape(label)}{opt}</span>')
             continue
         cls = "st on" if step == current else ("st done" if done else "st")
-        chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}</span>')
+        chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}{opt}</span>')
     if need_setup:
         chips.append(f'<span class="st warn" data-section="{html.escape(S.SEC_SETUP)}">'
                      f'{html.escape(S.SETUP_FIRST.upper())} →</span>')
@@ -550,6 +554,130 @@ class TrainRunner:
                 "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
 
 
+class SynthRunner:
+    """One background generation per project: plan → teacher (WSL) → Whisper check → synth.json.
+    Stop asks xtts_gen.py to finish its phrase (teacher.request_stop) and kills it after STOP_GRACE s."""
+
+    def __init__(self, teacher=None, recognizer_factory=None, run=subprocess.run, clock=None):
+        from omnivoice import teacher as teacher_mod
+        self._teacher = teacher or teacher_mod.XttsTeacher()
+        self._recognizer_factory = recognizer_factory
+        self._run = run
+        self._clock = clock or time.monotonic
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._lines: deque[str] = deque(maxlen=400)
+        self.status = "idle"   # idle | running | checking | done | stopped | failed | error
+        self.code: int | None = None
+        self.done = self.total = 0
+        self._failed: dict[str, str] = {}   # id → message, from xtts_gen's FAIL lines
+        self._started = 0.0
+        self._p = None
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _note(self, line: str) -> None:
+        with self._lock:
+            self._lines.append(line)
+
+    def log_text(self) -> str:
+        with self._lock:
+            return "\n".join(self._lines)
+
+    def _line(self, line: str) -> None:
+        if re.match(r"ITEM \d+/\d+", line):
+            self.done += 1
+        m = re.match(r"FAIL (\S+) ?(.*)$", line)
+        if m:
+            self._failed[m.group(1)] = m.group(2) or "?"
+        self._note(line)
+
+    def start(self, p, minutes: float, refs: list[str]) -> None:
+        with self._lock:
+            if self.running:
+                raise RuntimeError(S.SYNTH_BUSY)
+            self._p, self.status, self.code, self.done, self._failed = p, "running", None, 0, {}
+            self._started = self._clock()
+            self._lines.clear()
+            self._thread = threading.Thread(target=self._work, args=(p, minutes, refs), daemon=True,
+                                            name=f"omnivoice-synth-{p.name}")
+            self._thread.start()
+
+    def _recognizer(self, language):
+        """Whisper as wav → text, or None when it is not installed (phrases stay «unchecked»)."""
+        if self._recognizer_factory is not None:
+            return self._recognizer_factory(language)
+        from omnivoice import transcriber
+        if not transcriber.has_whisper():
+            return None
+        rec = transcriber._default_recognizer(language, None)
+        return lambda wav: " ".join(t.strip() for t, _, _ in rec(wav))
+
+    def _work(self, p, minutes, refs) -> None:
+        from omnivoice import synth
+        try:
+            state = synth.make_plan(p, minutes, refs)
+            synth.save(p, state)
+            pending = [i for i in state.items if i.status == "pending"]
+            self.total = len(pending)
+            code = self._teacher.generate(p, state, self._line) if pending else 0
+            self.code = code
+            state = synth.sync_generated(p, state)
+            for it in state.items:  # «не удалась»: retried by the next «Догенерировать» (make_plan re-plans it)
+                if it.id in self._failed and it.status != "done":
+                    it.status, it.error = "failed", self._failed[it.id]
+            if self.status == "running":
+                self.status = "checking"
+            rec = self._recognizer(p.language)
+            if rec is None:
+                self._note(S.SYNTH_NO_WHISPER)
+            state = synth.apply_check(p, state, rec)
+            synth.save(p, synth.merge_user_changes(p, state))  # ✓ / ✕ / weight changed during the run stay
+            if self.status != "stopped":
+                self.status = "done" if code == 0 else "failed"
+            s = synth.summary(state)
+            self._note(S.SYNTH_DONE.format(accepted=s["accepted"], minutes=s["accepted_min"], suspect=s["suspect"],
+                                           rejected=s["rejected"], failed=s["failed"]))
+        except Exception as e:  # WslError / OSError …: shown in the log, never a traceback
+            log.warning("synthetic generation failed:\n%s", traceback.format_exc())
+            self._note(str(e) or type(e).__name__)
+            if self.status != "stopped":
+                self.status = "error"
+
+    def stop(self, grace: float | None = None) -> None:
+        if not self.running or self._p is None:
+            return
+        from omnivoice import teacher as teacher_mod
+        self.status = "stopped"
+        self._note(S.SYNTH_STOPPING)
+        self._teacher.request_stop(self._p)
+        thread, grace = self._thread, teacher_mod.STOP_GRACE if grace is None else grace
+
+        def kill_if_stuck():
+            thread.join(grace)
+            if thread.is_alive():
+                self._teacher.kill(self._run)
+        threading.Thread(target=kill_if_stuck, daemon=True, name="omnivoice-synth-stop").start()
+
+    def join(self, timeout=None) -> None:
+        if self._thread:
+            self._thread.join(timeout)
+
+    def status_text(self) -> str:
+        if self.status == "running":
+            text = S.SYNTH_RUNNING.format(done=self.done, total=self.total or "?")
+            if self.done and self.total:
+                per = (self._clock() - self._started) / self.done
+                text += S.SYNTH_ETA.format(eta=trainlog.duration_text(per * (self.total - self.done)))
+            return text
+        if self.status == "stopped" and self.running:
+            return S.SYNTH_STOPPING
+        return {"idle": S.SYNTH_IDLE, "checking": S.SYNTH_CHECKING, "done": S.SYNTH_IDLE, "stopped": S.SYNTH_STOPPED,
+                "failed": S.SYNTH_FAILED.format(code=self.code), "error": S.SYNTH_ERROR}[self.status]
+
+
 def _ckpt_text(epoch: int, mos: float | None, mel: float | None) -> str:
     parts = [S.CKPT_EPOCH.format(epoch=epoch)]
     if mos is not None:
@@ -572,6 +700,77 @@ def base_choices(language: str) -> tuple[list[tuple[str, str]], str | None]:
     names = sorted(languages.bases_for(language), key=lambda n: (order.get(languages.BASE_GENDER.get(n), 2), n))
     choices = [(f"{n} · {gender[languages.BASE_GENDER[n]]}" if n in languages.BASE_GENDER else n, n) for n in names]
     return choices, languages.default_base(language)
+
+
+def synth_filtered(items, flt: str) -> list:
+    """«Спорные»: suspect, not decided by the user; «Принятые»: used for training; «Брак»: rejected by the check or dropped by the user."""
+    done = [i for i in items if i.status == "done"]
+    if flt == S.SYNTH_F_ACCEPTED:
+        return [i for i in done if not i.dropped]
+    if flt == S.SYNTH_F_REJECTED:
+        return [i for i in done if i.dropped and (i.verdict == "rejected" or i.manual == "drop")]
+    return [i for i in done if i.verdict == "suspect" and i.manual is None]
+
+
+def _syn_btn(act: str, cls: str, title: str) -> str:
+    return (f'<button type="button" class="syn-btn {cls}" data-act="{act}" title="{html.escape(title)}" '
+            f'aria-label="{html.escape(title)}"></button>')
+
+
+def synth_card_html(it) -> str:
+    """A synthetic phrase like a phrase card: ▶ (the player below), text, what Whisper heard when it differs,
+    the reasons, ✓ / ✕ (↺ when dropped). Buttons report "<id>#<act>#<time>" to #synth-pick (theme.HEAD)."""
+    from omnivoice import synth_check
+    why = " · ".join(synth_check.REASONS.get(r, r) for r in it.reasons)
+    heard = ""
+    if it.heard is not None and synth_check.normalize(it.heard) != synth_check.normalize(it.text):
+        said = S.SYNTH_HEARD.format(text=it.heard) if it.heard.strip() else S.SYNTH_HEARD_NOTHING
+        heard = f'<div class="syn-heard muted">{html.escape(said)}</div>'
+    chips = f'<span class="phr-chip flag">{html.escape(why)}</span>' if why else ""
+    undecided = it.verdict == "suspect" and it.manual is None
+    if undecided:                        # waits for the user: ✓ or ✕
+        acts, dim = _syn_btn("accept", "syn-ok", S.SYNTH_ACCEPT) + _syn_btn("drop", "phr-rm", S.SYNTH_DROP), False
+    elif not it.dropped:                 # used for training: ✕
+        acts, dim = _syn_btn("drop", "phr-rm", S.SYNTH_DROP), False
+    else:                                # dropped by the user or by the check: ✓ (and ↺ to undo a manual drop)
+        acts = _syn_btn("accept", "syn-ok", S.SYNTH_ACCEPT)
+        acts += _syn_btn("reset", "phr-back", S.PHRASE_RESTORE_HINT) if it.manual else ""
+        dim = True
+    return (f'<div class="syn-row{" dropped" if dim else ""}" data-id="{html.escape(it.id)}">'
+            f'{_syn_btn("play", "phr-play", S.PLAY)}'
+            f'<div class="syn-body"><div class="phr-meta"><b>{html.escape(it.id)}</b>'
+            f'<span class="muted">{html.escape(S.PHRASE_SECONDS.format(v=it.duration))}</span>{chips}</div>'
+            f'<div class="syn-text">{html.escape(it.text)}</div>{heard}</div>'
+            f'<div class="syn-acts">{acts}</div></div>')
+
+
+def synth_list_html(items, flt: str) -> str:
+    rows = synth_filtered(items, flt)
+    if not rows:
+        return f'<div class="section-msg muted">{html.escape(S.SYNTH_LIST_EMPTY)}</div>'
+    return '<div class="syn-cards">' + "".join(synth_card_html(i) for i in rows) + "</div>"
+
+
+def synth_summary_html(s: dict) -> str:
+    text = S.SYNTH_DONE.format(accepted=s["accepted"], minutes=s["accepted_min"], suspect=s["suspect"],
+                               rejected=s["rejected"], failed=s["failed"])
+    return f'<div class="syn-summary">{html.escape(text.split(": ", 1)[-1])}</div>'
+
+
+def synth_refs_html(p, refs: list[str]) -> str:
+    """The reference phrases: name, text, a HUD player and ✕ (reports "<id>#unref#<time>")."""
+    from omnivoice import dataset
+    if not refs:
+        return f'<div class="section-msg flag">{html.escape(S.SYNTH_REFS_NONE)}</div>'
+    texts = {s.id: s for s in dataset.load(p)}
+    out = []
+    for r in refs:
+        seg = texts.get(r)
+        rm = _syn_btn("unref", "rp-rm", S.SYNTH_REF_REMOVE)
+        out.append(f'<div class="syn-ref" data-id="{html.escape(r)}"><div class="raw-name"><b>{html.escape(r)}</b>'
+                   f'<span class="muted">{html.escape(seg.text if seg else "")}</span></div>'
+                   f'{hud_player_html(p.segments_dir / f"{r}.wav", rm)}</div>')
+    return '<div class="syn-refs">' + "".join(out) + "</div>"
 
 
 def ckpt_key(epoch: int, kind: str) -> str:

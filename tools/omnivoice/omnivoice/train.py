@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -126,7 +127,7 @@ def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str, script: str |
     return ["python3", "-W", "ignore", *entry, "fit",
             "--data.voice_name", p.name,
             "--data.csv_path", f"{root}/train/train.csv",
-            "--data.audio_dir", f"{root}/segments/",
+            "--data.audio_dir", f"{root}/train/audio/",
             "--model.sample_rate", str(p.sample_rate),
             "--data.espeak_voice", p.espeak_voice,
             "--data.cache_dir", f"{root}/train/cache/",
@@ -135,6 +136,22 @@ def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str, script: str |
             "--trainer.max_epochs", str(max_epochs),
             "--trainer.default_root_dir", f"{root}/train/",
             "--ckpt_path", ckpt]
+
+def build_audio_dir(p, synth_items=()) -> Path:
+    """train/audio: hard links (a copy where a link is impossible) to segments/*.wav and the synthetic wavs
+    used for training — piper reads all audio from one folder. Rebuilt every run so dropped phrases never linger."""
+    from omnivoice import synth
+    d = p.train_dir / "audio"
+    if d.exists():
+        shutil.rmtree(d)
+    d.mkdir(parents=True)
+    for src in [*p.segments_dir.glob("*.wav"), *(synth.wav(p, i.id) for i in synth_items)]:
+        try:
+            os.link(src, d / src.name)
+        except OSError:
+            shutil.copy2(src, d / src.name)
+    return d
+
 
 def container_name(p) -> str:
     return "omnivoice-train-" + re.sub(r"[^A-Za-z0-9_.-]", "_", p.name)
@@ -355,8 +372,12 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
         why = " (Docker не видит видеокарту NVIDIA)" if env.docker and not env.gpu else ""
         raise TrainError(f"{NO_ENV}{why} или обучай в Colab: omnivoice train --colab")
     be = BACKENDS[name]
-    if dataset.piper_csv(p, p.train_dir / "train.csv") == 0:
+    from omnivoice import synth
+    synth_items = synth.training_items(p)
+    weight = synth.load(p).weight if synth_items else 1
+    if dataset.piper_csv(p, p.train_dir / "train.csv", synth_items, weight) == 0:
         raise TrainError("Нет ни одной фразы с текстом для обучения")
+    build_audio_dir(p, synth_items)
     target = target_epochs(p, epochs)
     if resume:
         drop_cut_short(p, on_line)

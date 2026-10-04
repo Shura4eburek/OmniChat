@@ -210,3 +210,45 @@ def test_pick_target_adds_the_chosen_models_folder(tmp_path, monkeypatch):
     assert dd["value"] == models and (models, models) in dd["choices"] and models in msg
     monkeypatch.setattr(ui_app, "pick_folder", lambda current: None)              # dialog cancelled
     assert _handler(build(tmp_path / "projects"), "on_pick_target")(None)[0] == gr.skip()
+
+
+def test_synth_page_buttons_decision_and_no_refs(tmp_path, monkeypatch):
+    from omnivoice import synth, wslenv
+    from omnivoice.ui import strings as S
+    monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: True)
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    demo = build(tmp_path)
+    start, stop, more = _handler(demo, "synth_buttons")("Arthas", [])
+    assert not start["interactive"] and not stop["interactive"] and not more["interactive"]  # no references yet
+    start, _s, _m = _handler(demo, "synth_buttons")("Arthas", ["s1"])
+    assert start["interactive"]
+    refused = _handler(demo, "on_synth_start")("Arthas", 15, "", [])
+    assert S.SYNTH_NO_REFS in refused[0]
+    st = synth.SynthState(["s1"], [synth.SynthItem("synth_0001", "раз", "corpus", status="done",
+                                                   verdict="suspect", reasons=["text"], dropped=True)])
+    synth.save(p, st)
+    out = _handler(demo, "on_synth_decide")("Arthas", "synth_0001#accept#1", S.SYNTH_F_SUSPECT, [])
+    assert synth.load(p).items[0].dropped is False and "synth_0001" not in out[0]   # gone from «Спорные»
+    monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: False)
+    assert not _handler(demo, "synth_buttons")("Arthas", ["s1"])[0]["interactive"]   # no XTTS: no start
+
+
+def test_synthesis_and_training_never_share_the_gpu_and_delete_waits(tmp_path, monkeypatch):
+    # review: XTTS + Whisper + piper on one GPU → CUDA OOM; deleting a project rmtree'd under the generator
+    from omnivoice import wslenv
+    from omnivoice.ui import app as app_mod, strings as S
+    monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: True)
+
+    class BusySynth:
+        running, status = True, "running"
+        def start(self, *a, **k): pass
+        def status_text(self): return "…"
+        def log_text(self): return ""
+    monkeypatch.setattr(app_mod, "SynthRunner", BusySynth)
+    Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    demo = build(tmp_path)
+    _handler(demo, "on_synth_start")("Arthas", 2, "", ["s1"])
+    refused = _handler(demo, "on_train_start")("Arthas", 3, 8)
+    assert S.GPU_BUSY_SYNTH in refused[0]
+    refused = _handler(demo, "on_delete")("Arthas", "Arthas")
+    assert S.DELETE_BUSY_SYNTH in refused[0] and (tmp_path / "Arthas").is_dir()

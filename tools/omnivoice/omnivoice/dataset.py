@@ -111,10 +111,12 @@ def import_dataset(p: Project, source: Path) -> ImportResult:
     if res.added: p.mark_fresh(("audio", "slice"))
     return res
 
-def piper_csv(p: Project, out: Path) -> int:
-    rows = [s for s in load(p) if not s.dropped and s.text.strip()]
+def piper_csv(p: Project, out: Path, synth_items=(), weight: int = 1) -> int:
+    """Rows for piper: the original phrases with text as one block repeated `weight` times (the real
+    voice outweighs the synthetic one), then the synthetic phrases used for training."""
+    rows = [f"{s.id}.wav|{clean_text(s.text)}\n" for s in load(p) if not s.dropped and s.text.strip()] * max(1, weight)
+    rows += [f"{i.id}.wav|{clean_text(i.text)}\n" for i in synth_items]
     Path(out).parent.mkdir(parents=True, exist_ok=True)  # train/ may have been deleted to free disk space
     with Path(out).open("w", encoding="utf-8", newline="") as f:
-        for s in rows:
-            f.write(f"{s.id}.wav|{clean_text(s.text)}\n")
+        f.writelines(rows)
     return len(rows)

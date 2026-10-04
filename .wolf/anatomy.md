@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T15:37:39.897Z
-> Files: 80 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T18:18:41.887Z
+> Files: 104 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -40,6 +40,7 @@
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/
 
+- `buglog_add.py` (~510 tok)
 - `buttons_edit.py` — edit, start_training, train_buttons, start_training (~1443 tok)
 - `ckpt_app_edit.py` — edit, players, players, on_pick (~1772 tok)
 - `ckpt_cards_edit.py` — edit, raw_card_html, hud_player_html, raw_card_html (~1409 tok)
@@ -48,7 +49,10 @@
 - `ckpt_test_edit.py` (~700 tok)
 - `cutshort_edit.py` — edit, list_checkpoints, cut_short, cut_short_checkpoints (~911 tok)
 - `export_info_edit.py` — edit, export_project, write_model_info, model_info (~801 tok)
+- `fix_app.py` — edit, on_train_start, on_train_resume (~1201 tok)
+- `fix_plan.py` — edit, make_plan, make_plan, merge_user_changes (~1271 tok)
 - `install_edit.py` — from: edit, default_targets, find_targets, default_targets + 6 more (~2475 tok)
+- `mk_vis.py` (~612 tok)
 - `pack_card_edit.py` — edit (~979 tok)
 - `pack_model_edit.py` — edit, ckpt_table, ckpt_table, ckpt_cards (~2317 tok)
 - `phrases_css.py` (~1264 tok)
@@ -56,8 +60,16 @@
 - `phrases_edit.py` — edit, table_value, table_update, load_segments (~2837 tok)
 - `real_fit.py` — Real short runs of omnivoice's fit.py on a copy of a project (no UI). (~572 tok)
 - `stop_edit.py` — edit, stop, stop, kill_if_stuck (~1194 tok)
+- `t5_edit.py` — edit, provision, xtts_ready, provision_xtts (~1204 tok)
+- `t6_edit.py` — edit, piper_csv, piper_csv, container_name (~1023 tok)
+- `t7_edit.py` — SynthRunner: edit, running, log_text, start + 4 more (~2006 tok)
+- `t8a_edit.py` — edit, ckpt_key, synth_filtered, synth_card_html (~2055 tok)
+- `t8b_edit.py` — edit, on_setup, on_setup, xtts_ok (~4511 tok)
+- `t8c_edit.py` — edit (~1242 tok)
+- `t9_readme.py` (~792 tok)
 - `tests_edit.py` (~438 tok)
 - `train_edit.py` — edit, fit_args, fit_args, stop (~1121 tok)
+- `wolf_cerebrum.py` (~454 tok)
 
 ## ./
 
@@ -622,12 +634,16 @@
 ## tools/omnivoice/omnivoice/
 
 - `cli.py` — API router (~4625 tok)
+- `corpus.py` — Texts for synthetic speech: a bundled open corpus (Common Voice sentences, CC0) plus the user's own (~566 tok)
 - `datadir.py` — Move the dependency folder (paths.cache_dir()) to another drive. Projects are not affected. (~3222 tok)
 - `deps.py` — Windows-side dependencies: prep/ui extras, ffmpeg, and the WSL training environment (via wslenv). (~1936 tok)
 - `download.py` — Resumable downloads: a .part file, HTTP Range resume, one retry, optional pinned sha256, Russian err (~953 tok)
 - `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~434 tok)
 - `paths.py` — Where omnivoice keeps its heavy dependencies (WSL disk, base checkpoints, ffmpeg). Projects live els (~754 tok)
 - `previews.py` — Training previews (TensorBoard audio) and checkpoint listing. (~4770 tok)
+- `synth_check.py` — Verdict on one synthetic phrase: did the teacher say the text, at a sane pace, without long gaps, (~848 tok)
+- `synth.py` — synth/: the synthetic phrases of a project (spec «Данные проекта»). synth.json holds the plan, the (~1941 tok)
+- `teacher.py` — The teacher model behind synthetic phrases (spec «Модули»). XttsTeacher writes a job, runs (~609 tok)
 - `train.py` — from: detect_env, batch_size_for, build_image, last_checkpoint + 9 more (~3133 tok)
 - `trainlog.py` — Readable training log: piper / Lightning stdout (tqdm bars, warnings, escape codes) → short (~2502 tok)
 - `transcriber.py` — has_whisper, register_cuda_dlls, load_whisper, run (~2059 tok)
@@ -639,6 +655,8 @@
 - `Dockerfile` — Docker container definition (~247 tok)
 - `fit.py` — omnivoice's entry for `piper.train fit`: piper's own CLI with lighter, stop-safe checkpointing. (~1515 tok)
 - `wsl_setup.sh` — Builds the omnivoice training environment inside the WSL distro "omnivoice" (Ubuntu 24.04). (~696 tok)
+- `xtts_gen.py` — Generate synthetic phrases with XTTS v2 (runs inside the WSL venv /opt/omnivoice/xtts). (~758 tok)
+- `xtts_setup.sh` — Builds /opt/omnivoice/xtts: a venv of its own for XTTS v2 (coqui-tts), apart from piper's venv. (~448 tok)
 
 ## tools/omnivoice/omnivoice/ui/
 
@@ -646,12 +664,21 @@
 - `helpers.py` — Pure helpers behind the web UI. No gradio import here, so they are testable without the ui extra. (~11440 tok)
 - `theme.py` — OmniChat HUD look: near-black background, teal 1 px frames, corner brackets, square corners. (~8806 tok)
 
+## tools/omnivoice/scripts/
+
+- `build_corpus.py` — One-off: build omnivoice/data/corpus_ru.txt from Common Voice sentences (CC0). (~231 tok)
+
 ## tools/omnivoice/tests/
 
 - `test_cli.py` — test_version, test_cli_cyrillic_output_does_not_raise, test_force_utf8_reconfigures_streams, test_ui (~2266 tok)
+- `test_corpus.py` — test_good_sentence_rules, test_pick_user_lines_first_and_minutes_budget, test_pick_prefers_new_bigra (~463 tok)
 - `test_datadir.py` — Configurable dependency location (paths.cache_dir / config.json) and moving it (datadir.move_data). (~3925 tok)
 - `test_deps.py` — FakePopen: cache, make_zip, test_ffmpeg_path_prefers_path_then_cache, test_extract_only_two_exes_ato (~2474 tok)
 - `test_installer.py` — The Windows installer: CRLF, UTF-8 without BOM, Russian messages, and the key commands (never execut (~630 tok)
+- `test_synth_check.py` — tone, test_normalize_and_cer, test_longest_pause, test_verdicts (~529 tok)
+- `test_synth.py` — project, test_steps_and_dir, test_choose_refs_and_rate, test_plan_lines_and_roundtrip (~1171 tok)
+- `test_teacher.py` — Proc: test_job_and_command, test_generate_streams_lines_and_stop_request, wait (~445 tok)
 - `test_trainlog.py` — feed_all, epoch_block, test_strip_ansi_and_redraws, test_epoch_lines_from_tqdm_postfix (~1877 tok)
 - `test_ui_helpers.py` — Pure UI helpers: no gradio needed, so these run in the plain test environment too. (~6145 tok)
 - `test_wslenv.py` — Fake: u16, joined, healthy, test_decode_utf16_and_utf8 + 29 more (~5151 tok)
+- `test_xtts_gen.py` — test_run_job_writes_resampled_wavs_skips_existing_and_reports, synthesize, test_run_job_stops_on_the (~490 tok)
