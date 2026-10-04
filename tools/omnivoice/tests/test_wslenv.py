@@ -643,3 +643,30 @@ def test_setup_script_cleans_apt_lists():
     sh = (COMPAT / "wsl_setup.sh").read_text(encoding="utf-8")
     step1 = sh.split('step 1 ', 1)[1].split('step 2 ', 1)[0]
     assert "apt-get clean && rm -rf /var/lib/apt/lists/*" in step1
+
+
+def test_xtts_ready_and_provision():
+    calls = []
+    def run(cmd, **kw):
+        calls.append(cmd)
+        out = wslenv.XTTS_VERSION if cmd[-1] == wslenv.XTTS_READY else ""
+        return subprocess.CompletedProcess(cmd, 0, stdout=out.encode(), stderr=b"")
+    assert wslenv.xtts_ready(run)
+    lines = []
+    class Proc:
+        stdout = iter([b"STEP 1/4 x\n", b"ok\n"])
+        def wait(self): return 0
+    wslenv.provision_xtts(lines.append, run=run, popen=lambda *a, **k: Proc())
+    copied = [" ".join(c) for c in calls if "cat >" in " ".join(c)]
+    assert any("xtts_setup.sh" in c for c in copied) and any("xtts_constraints.txt" in c for c in copied)
+    assert lines == ["STEP 1/4 x", "ok"]
+
+
+def test_xtts_provision_failure_names_the_tail():
+    def run(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+    class Proc:
+        stdout = iter([b"STEP 2/4 torch\n", b"ERROR: no matching distribution\n"])
+        def wait(self): return 1
+    with pytest.raises(wslenv.WslError, match="no matching distribution"):
+        wslenv.provision_xtts(lambda s: None, run=run, popen=lambda *a, **k: Proc())

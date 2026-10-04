@@ -145,8 +145,9 @@ def status(**kw):
     return wslenv.EnvStatus(**base)
 
 
-def items(monkeypatch, st, prep=True, ff=True, docker=True, gpu=True):
+def items(monkeypatch, st, prep=True, ff=True, docker=True, gpu=True, xtts=True):
     monkeypatch.setattr(deps, "host_gpu", lambda run=None: gpu)
+    monkeypatch.setattr(deps.wslenv, "xtts_ready", lambda run=None: xtts)  # never asks the real wsl
     monkeypatch.setattr(deps.wslenv, "status", lambda run=None: st)
     monkeypatch.setattr(deps, "prep_ok", lambda: prep)
     monkeypatch.setattr(deps, "ffmpeg_path", lambda: "ffmpeg.exe" if ff else None)
@@ -157,7 +158,8 @@ def items(monkeypatch, st, prep=True, ff=True, docker=True, gpu=True):
 def test_check_all_everything_ok(monkeypatch):
     it = items(monkeypatch, status())
     assert all(i.ok for i in it.values())
-    assert [i.name for i in it.values()] == [deps.PREP, deps.FFMPEG, deps.WSL, deps.ENV, "GPU в WSL", "Docker"]
+    assert [i.name for i in it.values()] == [deps.PREP, deps.FFMPEG, deps.WSL, deps.ENV, "GPU в WSL", "Docker",
+                                             deps.XTTS]
 
 
 def test_check_all_each_item_fails_separately(monkeypatch):
@@ -175,6 +177,7 @@ def test_check_all_each_item_fails_separately(monkeypatch):
 
 def test_check_all_never_runs_docker(monkeypatch):
     monkeypatch.setattr(deps.wslenv, "status", lambda run=None: status())
+    monkeypatch.setattr(deps.wslenv, "xtts_ready", lambda run=None: True)  # a wsl probe, not docker — faked
     ran = []
     monkeypatch.setattr(deps.subprocess, "run", lambda *a, **k: ran.append(a))
     deps.check_all()
@@ -395,3 +398,21 @@ def test_install_all_logs_ffmpeg_size(monkeypatch):
     fake_install(monkeypatch, status(), calls, ff=False)
     deps.install_all(lines.append)
     assert "Скачиваю ffmpeg (~115 МБ)…" in lines
+
+
+def test_xtts_item_is_optional_and_installed_only_on_request(monkeypatch):
+    monkeypatch.setattr(deps, "prep_ok", lambda: True)
+    monkeypatch.setattr(deps, "ffmpeg_path", lambda: "ffmpeg")
+    monkeypatch.setattr(wslenv, "status", lambda run=None: wslenv.EnvStatus(True, True, True, True, True, "ok"))
+    monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: False)
+    item = next(i for i in deps.check_all() if i.name == deps.XTTS)
+    assert item.optional and not item.ok
+    done = []
+    monkeypatch.setattr(wslenv, "provision_xtts", lambda on_line, **kw: done.append(1))
+    deps.install_all(lambda s: None)
+    assert done == []
+    deps.install_all(lambda s: None, with_xtts=True)
+    assert done == [1]
+    monkeypatch.setattr(deps, "host_gpu", lambda run=None: False)                 # no NVIDIA GPU: never
+    deps.install_all(lambda s: None, with_xtts=True)
+    assert done == [1]
