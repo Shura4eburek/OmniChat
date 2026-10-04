@@ -604,3 +604,7 @@
 | 15:22 | Edited tools/omnivoice/omnivoice/ui/helpers.py | 2→4 lines | ~72 |
 | 17:45 | omnivoice: fit.py (lighter checkpoints, graceful stop), Start/Stop/Resume button states; verified with real WSL runs + UI stop | piper_compat/fit.py, train.py, previews.py, ui/app.py, ui/helpers.py, ui/strings.py, tests | ok | ~60k |
 | 15:24 | Session end: 31 writes across 14 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~36995 tok |
+| 15:24 | Session end: 31 writes across 14 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~36995 tok |
+| 15:26 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/cutshort_edit.py | — | ~911 |
+| 17:55 | omnivoice: resume skips/deletes cut-short checkpoints, resumes from newest complete ckpt; checked on real Arthas files read-only | previews.py, train.py, tests | ok | ~10k |
+| 15:28 | Session end: 32 writes across 15 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~37906 tok |

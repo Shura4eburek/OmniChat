@@ -1052,6 +1052,24 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-10-04T13:40:00Z"
+    },
+    {
+      "id": "bug-059",
+      "timestamp": "2026-10-04T13:55:00Z",
+      "error_message": "PytorchStreamReader failed reading zip archive: failed finding central directory (Продолжить)",
+      "file": "tools/omnivoice/omnivoice/train.py",
+      "root_cause": "last.ckpt cut at 307 MB of 846 by the old hard stop (pkill mid-copy); resume always took last.ckpt",
+      "fix": "previews.cut_short (zip signature but no central directory) → skipped in lists, deleted on resume with a log line, included in prune; last_checkpoint = newest complete *.ckpt (also a best one newer than last)",
+      "tags": [
+        "training",
+        "resume",
+        "checkpoints"
+      ],
+      "related_bugs": [
+        "bug-058"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T13:55:00Z"
     }
   ]
 }
