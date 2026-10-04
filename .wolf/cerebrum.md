@@ -41,6 +41,7 @@
 - Gradio test helper _handler(demo, name) finds handlers among REGISTERED event fns only — a plain helper must be wired to some event (e.g. State.change) to be testable that way.
 - wslenv.xtts_ready() asks WSL (seconds): cache it for timer ticks (app.xtts_ok), call fresh once per page view.
 ## Do-Not-Repeat
+- [2026-10-05] The user's live omnivoice UI must NOT run as a Claude Code background task: under memory pressure Claude Code reaps idle background shells, killing the UI and the training it drives (lost a run at epoch 2489). Tell the user to start it in their own terminal. Before claiming "training was not running", check checkpoint/log mtimes, not only pgrep after the fact. A failed background start can hide behind an old UI still holding port 7860 — verify the served version.
 - [2026-10-04] Visual check of filtered card lists: walk every item state through every action and confirm it stays reachable in SOME filter (a manually dropped «спорная» vanished from all filters until «Брак» included manual drops).
 - [2026-10-04] Killing a background `omnivoice ui` by its port owner can leave the launcher holding the port — kill every process whose CommandLine contains `--port 7861` (not bash.exe).
 - [2026-10-04] Never run bare `python -` from the Bash tool on this machine: it hangs (Store alias). Use tools/omnivoice/.venv/Scripts/python with a script file.
