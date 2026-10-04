@@ -153,3 +153,18 @@ def test_register_cuda_dlls_adds_nvidia_bin_dirs(tmp_path, monkeypatch):
     added = transcriber.register_cuda_dlls()
     assert sorted(added) == sorted(str(tmp_path / l / "bin") for l in ("cublas", "cudnn")) == sorted(added_dirs)
     assert all(d in transcriber.os.environ["PATH"] for d in added)
+
+def test_default_recognizer_feeds_whisper_a_16k_array(tmp_path, monkeypatch):
+    # faster-whisper 1.2 + PyAV 19 fail to open a file path (av.open(metadata_errors=…)): decode it ourselves
+    import numpy as np
+    from omnivoice import audio
+    wav = tmp_path / "a.wav"
+    audio.write_wav(wav, np.zeros(22050, np.float32), 22050)
+    seen = {}
+    class WM:
+        def transcribe(self, a, **k):
+            seen["a"] = a
+            return [], None
+    monkeypatch.setattr(transcriber, "load_whisper", lambda model, *a, **k: (WM(), False))
+    transcriber._default_recognizer("ru", None)(wav)
+    assert isinstance(seen["a"], np.ndarray) and seen["a"].dtype == np.float32 and len(seen["a"]) == 16000
