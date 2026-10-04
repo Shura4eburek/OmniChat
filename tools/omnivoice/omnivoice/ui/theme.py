@@ -177,6 +177,23 @@ HEAD = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
     }
   });
 })();
+/* checkpoints: a card click (or Enter on it) highlights it at once and hands its key to the hidden
+   #ckpt-pick box, whose input event runs the Python side; the time suffix makes a repeat click count */
+(() => {
+  const pick = card => {
+    const box = document.querySelector("#ckpt-pick textarea, #ckpt-pick input");
+    if (!box || !card.dataset.key) return;
+    document.querySelectorAll(".ckpt-card.current").forEach(c => c.classList.remove("current"));
+    card.classList.add("current");
+    box.value = card.dataset.key + "#" + Date.now();
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  document.addEventListener("click", e => { const c = e.target.closest && e.target.closest(".ckpt-card"); if (c) pick(c); });
+  document.addEventListener("keydown", e => {
+    const c = e.target.closest && e.target.closest(".ckpt-card");
+    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pick(c); }
+  });
+})();
 /* phrases: the card whose ▶ was pressed stays highlighted (its audio is in the player below) */
 document.addEventListener("click", e => {
   const b = e.target.closest && e.target.closest("button.phr-play"); if (!b) return;
@@ -370,6 +387,33 @@ button.phr-back::before {{ width:16px; height:16px; background:var(--ac);
 button.phr-back::after {{ display:none; }}
 .hud-section .row.phr-row > button.phr-back:hover {{ background:rgba(53,224,200,.12) !important; }}
 .hud-section .row.phr-row > button.phr-btn:focus-visible {{ background:rgba(53,224,200,.2) !important; }}
+
+/* checkpoints: one card per checkpoint (epoch · MOS / mel · marks); the chosen one is highlighted */
+.hidden-input {{ display:none !important; }}
+.html-container:has(.ckpt-cards), .html-container:has(.lsn-list) {{ padding-top:0 !important; padding-bottom:0 !important; }}
+.ckpt-cards {{ display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; padding-right:4px; }}
+.ckpt-card {{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:10px 14px; border:1px solid var(--acd);
+             background:{PANEL}; cursor:pointer; outline:none; }}
+.ckpt-card:hover {{ border-color:var(--ac); }}
+.ckpt-card:focus-visible {{ border-color:var(--ac); background:rgba(53,224,200,.06); }}
+.ckpt-card.current {{ border-color:var(--ac); background:rgba(53,224,200,.08); }}
+.ckpt-dot {{ flex:none; box-sizing:border-box; width:12px; height:12px; border:1px solid var(--acd); }}
+.ckpt-card:hover .ckpt-dot {{ border-color:var(--ac); }}
+.ckpt-card.current .ckpt-dot {{ background:var(--ac); border-color:var(--ac); }}
+.ckpt-main {{ display:flex; align-items:baseline; gap:12px; min-width:0; flex:0 0 auto; }}
+.ckpt-main b {{ font-weight:600; color:{TEXT}; white-space:nowrap; }}
+.ckpt-main .muted {{ font-size:13px; white-space:nowrap; font-variant-numeric:tabular-nums; }}
+.ckpt-tags {{ display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; margin-left:auto; }}
+.ckpt-tags .phr-chip {{ white-space:nowrap; }}
+.phr-chip.best {{ color:var(--ac); border-color:var(--ac); }}
+
+/* «Послушать»: the epoch's phrases, each with a HUD player */
+.lsn-list {{ display:flex; flex-direction:column; gap:6px; }}
+.lsn-row {{ display:flex; align-items:center; gap:14px; padding:8px 12px 8px 14px; border:1px solid var(--acd);
+           background:{PANEL}; flex-wrap:wrap; }}
+.lsn-n {{ flex:none; width:18px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }}
+.lsn-text {{ flex:1 1 220px; min-width:0; color:{TEXT}; }}
+.lsn-row .rp {{ flex:1 1 300px; }}
 
 /* new project: base models as cards */
 .base-cards .wrap {{ display:grid !important; gap:8px !important;

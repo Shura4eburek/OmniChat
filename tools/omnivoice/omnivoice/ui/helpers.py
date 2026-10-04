@@ -160,19 +160,25 @@ def raw_total_html(files: list[Path]) -> str:
     return f'<div class="raw-total muted">{html.escape(S.RAW_TOTAL.format(n=len(files), size=size))}</div>'
 
 
-def raw_card_html(f: Path) -> str:
-    """Name, size and a compact HUD player (theme.HEAD drives .rp; Gradio's waveform player is tall and grows
-    a scrollbar on long recordings). The file is served by Gradio: the projects folder is in allowed_paths."""
+def hud_player_html(f: Path, extra: str = "") -> str:
+    """A compact HUD player for an audio file (theme.HEAD drives .rp; Gradio's waveform player is tall and
+    grows a scrollbar on long recordings). Gradio serves the file: the projects folder is in allowed_paths.
+    `extra`: more buttons at the end of the player line (e.g. the recording's ✕)."""
     from urllib.parse import quote
-    from omnivoice.datadir import human_size
     src = "gradio_api/file=" + quote(str(Path(f).resolve()))
+    return (f'<div class="rp"><button type="button" class="rp-play" aria-label="{html.escape(S.PLAY)}"></button>'
+            f'<div class="rp-bar"><i></i></div><span class="rp-time">0:00</span>{extra}'
+            f'<audio preload="metadata" src="{html.escape(src)}"></audio></div>')
+
+
+def raw_card_html(f: Path) -> str:
+    """Name, size, a player and the ✕ (it clicks the row's hidden delete button, see theme.HEAD)."""
+    from omnivoice.datadir import human_size
+    rm = (f'<button type="button" class="rp-rm" title="{html.escape(S.RAW_DELETE_HINT)}" '
+          f'aria-label="{html.escape(S.RAW_DELETE_HINT)}"></button>')
     return (f'<div class="raw-card"><div class="raw-name"><b title="{html.escape(f.name)}">{html.escape(f.name)}</b>'
             f'<span class="muted">{html.escape(human_size(f.stat().st_size))}</span></div>'
-            f'<div class="rp"><button type="button" class="rp-play" aria-label="{html.escape(S.PLAY)}"></button>'
-            f'<div class="rp-bar"><i></i></div><span class="rp-time">0:00</span>'
-            f'<button type="button" class="rp-rm" title="{html.escape(S.RAW_DELETE_HINT)}" '
-            f'aria-label="{html.escape(S.RAW_DELETE_HINT)}"></button>'
-            f'<audio preload="metadata" src="{html.escape(src)}"></audio></div></div>')
+            f'{hud_player_html(f, rm)}</div>')
 
 
 def delete_raw_file(raw_dir: Path, name: str) -> None:
@@ -610,6 +616,40 @@ def ckpt_table(rows, offset: int, sort: str | None = None,
                       "" if r.mel is None else f"{r.mel:.3f}", " · ".join(tags)])
         keys[ckpt_key(epoch, _ckpt_kind(r.last, r.old_last))] = str(r.path)
     return table, keys, best
+
+
+def ckpt_cards(rows, offset: int, sort: str | None = None,
+               selected: str | None = None) -> tuple[str, dict[str, str], str | None]:
+    """The checkpoints as clickable cards (theme.HEAD sends a click's data-key to the hidden pick box):
+    (html, card key → checkpoint path, the path to preselect). Same order and marks as ckpt_table; the
+    `selected` card is highlighted instead of marked."""
+    table, keys, best = ckpt_table(rows, offset, sort)
+    if not table:
+        return msg_html_plain(S.NO_CHECKPOINTS), keys, best
+    cards = []
+    for epoch, mos, mel, marks in table:
+        key = ckpt_key_of_row([epoch, mos, mel, marks])
+        cls = "ckpt-card current" if keys.get(key) == selected else "ckpt-card"
+        nums = " · ".join(t for t in (f"MOS {mos}" if mos else "", f"mel {mel}" if mel else "") if t)
+        chips = "".join(f'<span class="phr-chip{" best" if m == S.CKPT_BEST_MOS else ""}">{html.escape(m)}</span>'
+                        for m in marks.split(" · ") if m)
+        cards.append(f'<div class="{cls}" data-key="{html.escape(key)}" role="button" tabindex="0">'
+                     f'<span class="ckpt-dot"></span>'
+                     f'<div class="ckpt-main"><b>{html.escape(S.CKPT_EPOCH.format(epoch=epoch).capitalize())}</b>'
+                     f'<span class="muted">{html.escape(nums)}</span></div>'
+                     f'<div class="ckpt-tags">{chips}</div></div>')
+    return '<div class="ckpt-cards">' + "".join(cards) + "</div>", keys, best
+
+
+def msg_html_plain(text: str) -> str:
+    return f'<div class="section-msg muted">{html.escape(text)}</div>'
+
+
+def listen_html(items, head: str) -> str:
+    """«Послушать»: the epoch line, then one row per phrase — its number and text, a HUD player."""
+    rows = "".join(f'<div class="lsn-row"><span class="lsn-n">{i}</span><span class="lsn-text">{html.escape(text)}</span>'
+                   f'{hud_player_html(path)}</div>' for i, (text, path) in enumerate(items, 1))
+    return head + (f'<div class="lsn-list">{rows}</div>' if rows else "")
 
 
 def ckpt_chosen_html(rows, offset: int, selected: str | None) -> str:

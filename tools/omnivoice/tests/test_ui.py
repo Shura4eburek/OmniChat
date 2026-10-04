@@ -157,25 +157,31 @@ def test_training_panel_fills_charts_checkpoints_players_and_prunes(tmp_path):
         os.utime(f, (old, old))
     demo = build(tmp_path)
     out = _handler(demo, "on_refresh")("Arthas", S.SEC_CKPT, None, S.CKPT_SORT_MOS)
-    msg, status, mos, mel, chart_note, log_note, table, sel, keys, chosen, disk, head, *players = out
+    msg, status, mos, mel, chart_note, log_note, cards, sel, keys, chosen, disk, listen = out
     assert list(mos["value"]["epoch"]) == [1, 2, 3] and list(mel["value"]["epoch"]) == [1, 2, 3]
     assert mos["visible"] and mel["visible"] and chart_note == ""
     # only warm-up epochs exist: nothing is hidden, the best by MOS is preselected and on top
     assert sel == str(d / "epoch=4140-val_mos=3.9800.ckpt") and "эпоха 1 · MOS 3.98" in chosen
-    assert table[0][:3] == [1, "3.98", "0.680"] and S.CKPT_SELECTED in table[0][3] and S.CKPT_BEST_MOS in table[0][3]
-    assert "Эпоха 1" in head and players[0]["visible"] and players[0]["label"].startswith("1. Твоя душа")
+    first = cards.split('<div class="ckpt-card')[2]
+    assert first.startswith(' current"') and "Эпоха 1" in first and "MOS 3.98" in first and S.CKPT_BEST_MOS in first
+    assert cards.count("ckpt-card current") == 1 and len(keys) == cards.count("data-key=")
+    # «Послушать»: the epoch line, then its 5 phrases, each with a player
+    assert "Эпоха 1" in listen and listen.count('class="lsn-row"') == 5 and "Твоя душа" in listen
+    assert listen.count('class="rp"') == 5 and "gradio_api/file=" in listen
     assert S.TRAIN_IDLE_DONE.format(n=3) in status and "Лишних: 1" in disk
     # sorting by mel puts the best-by-mel epoch first
     _m, by_mel, _k, _c = _handler(demo, "on_sort")("Arthas", S.CKPT_SORT_MEL, sel)
-    assert by_mel[0][0] == 3 and S.CKPT_BEST_MEL in by_mel[0][3]
-    # clicking a row picks that checkpoint and plays its phrases
-    from types import SimpleNamespace
-    row = next(r for r in table if r[0] == 3 and S.CKPT_LAST not in r[3].split(" · "))
-    _m, sel2, table2, _k2, chosen2, head2, *pl2 = _handler(demo, "on_pick")(
-        "Arthas", keys, S.CKPT_SORT_MOS, SimpleNamespace(row_value=row))
+    assert "Эпоха 3" in by_mel.split('<div class="ckpt-card')[2] and S.CKPT_BEST_MEL in by_mel.split('<div class="ckpt-card')[2]
+    # clicking a card (its key, plus the time suffix the page adds) picks it and plays its phrases
+    key = next(k for k, v in keys.items() if v == str(d / "epoch=4142-val_mel=0.5500.ckpt"))
+    _m, sel2, cards2, _k2, chosen2, listen2 = _handler(demo, "on_pick")("Arthas", keys, S.CKPT_SORT_MOS,
+                                                                        key + "#1712345678")
     assert sel2 == str(d / "epoch=4142-val_mel=0.5500.ckpt") and "эпоха 3" in chosen2
-    assert "Эпоха 3" in head2 and pl2[4]["visible"]
-    assert S.CKPT_SELECTED in next(r for r in table2 if r[0] == 3 and S.CKPT_LAST not in r[3].split(" · "))[3]
+    assert "Эпоха 3" in listen2 and listen2.count('class="lsn-row"') == 5
+    current = next(c for c in cards2.split('<div class="ckpt-card')[2:] if c.startswith(' current"'))
+    assert f'data-key="{key}"' in current
+    stale = _handler(demo, "on_pick")("Arthas", keys, S.CKPT_SORT_MOS, "nope#1")  # a key from older cards
+    assert stale[0] == "" and len(stale) == 6 and sel2 != stale[1]
     # pruning: needs the checkbox, then keeps best MOS + best mel + last.ckpt
     refused = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, S.CKPT_SORT_MOS, False)
     assert S.PRUNE_NEED_CONFIRM in refused[0] and (d / "epoch=4141-val_mos=3.5000.ckpt").exists()

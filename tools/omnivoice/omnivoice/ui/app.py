@@ -26,11 +26,11 @@ from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError, delete_project
 from omnivoice.ui import strings as S
 from omnivoice.ui import theme
-from omnivoice.ui.helpers import (CKPT_COLUMNS, CKPT_SORTS, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
+from omnivoice.ui.helpers import (CKPT_SORTS, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
                                   delete_parts_html, language_choices, nav_choices,
                                   NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  ckpt_chosen_html, ckpt_key_of_row, ckpt_table as ckpt_table_rows, copy_uploads, counter_label, data_dir_html, disk_html, env_badge,
+                                  ckpt_cards, ckpt_chosen_html, copy_uploads, listen_html, counter_label, data_dir_html, disk_html, env_badge,
                                   error_text,
                                   last_epoch_target,
                                   list_projects, needs_setup, delete_raw_file, raw_files, raw_card_html, raw_total_html,
@@ -41,7 +41,6 @@ log = logging.getLogger("omnivoice.ui")
 USER_ERRORS = (ProjectError, train.TrainError, PackError, TargetBusy, RuntimeError, ValueError, OSError)
 PACK_FIELDS = (("name", S.F_NAME), ("description", S.F_DESCRIPTION), ("gender", S.F_GENDER),
                ("sample", S.F_SAMPLE))
-PREVIEW_SLOTS = 5  # piper synthesises 5 validation phrases per epoch
 
 # Clicking a chip in the steps bar selects that section (event delegation survives re-renders).
 STEPS_JS = """
@@ -274,23 +273,19 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                             ckpt_sort = gr.Radio(list(CKPT_SORTS), value=S.CKPT_SORT_MOS, label=S.CKPT_SORT,
                                                  scale=3)
                             refresh_btn = gr.Button(S.REFRESH, scale=1)
-                        ckpt_table = gr.Dataframe([], headers=CKPT_COLUMNS, type="array",
-                                                  datatype=["number", "str", "str", "str"],
-                                                  interactive=False, max_height=380, elem_classes="ckpt-table",
-                                                  column_widths=["12%", "12%", "12%", "64%"])
+                        ckpt_list = gr.HTML(elem_classes="ckpt-list")
+                        # a card click puts "<key>#<time>" here (theme.HEAD); hidden, but must stay in the DOM
+                        ckpt_pick = gr.Textbox(elem_id="ckpt-pick", elem_classes="hidden-input", container=False,
+                                               show_label=False)
                         ckpt_sel = gr.State(None)   # the chosen checkpoint's path
-                        ckpt_map = gr.State({})     # helpers.ckpt_key → path of the rows shown
+                        ckpt_map = gr.State({})     # helpers.ckpt_key → path of the cards shown
                         ckpt_head = gr.HTML()
                         export_btn = gr.Button(S.EXPORT, variant="primary")
                         gr.HTML(f'<div class="sub-head">{S.LISTEN}</div>' + msg_html(S.LISTEN_HINT, muted=True))
-                        listen_head = gr.HTML()
-                        with gr.Row(elem_classes="listen-row"):
-                            preview_players = [gr.Audio(label=S.PREVIEW.format(n=i + 1), type="filepath",
-                                                        interactive=False, visible=False, min_width=150)
-                                               for i in range(PREVIEW_SLOTS)]
+                        listen_box = gr.HTML()
                         gr.HTML(f'<div class="sub-head">{S.DISK}</div>')
                         disk_info = gr.HTML()
-                        with gr.Row(equal_height=True):
+                        with gr.Row(equal_height=True, elem_classes="slice-row"):
                             prune_ok = gr.Checkbox(label=S.PRUNE_CONFIRM, value=False, scale=1)
                             prune_btn = gr.Button(S.PRUNE, variant="stop", scale=2)
                         ckpt_msg = gr.HTML()
@@ -739,7 +734,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 return {}
 
         def players(p, ckpt, rows):
-            """listen_head + one update per player for the checkpoint `ckpt` (a path string)."""
+            """«Послушать» for the checkpoint `ckpt` (a path string): the epoch line and its phrases."""
             row = next((r for r in rows if str(r.path) == ckpt), None)
             items, epoch = [], None
             if p is not None and row is not None:
@@ -753,12 +748,10 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 off = train.base_epoch(p)
                 text = (S.LISTEN_EPOCH if epoch == row.epoch else S.LISTEN_NEAREST).format(epoch=epoch - off)
                 head = f'<div class="listen-head">{html.escape(text)}</div>'
-            ups = [gr.update(value=str(items[i][1]), label=f"{i + 1}. {items[i][0]}", visible=True)
-                   if i < len(items) else gr.update(value=None, visible=False) for i in range(PREVIEW_SLOTS)]
-            return [head] + ups
+            return [listen_html(items, head)]
 
-        train_panel_outputs = [train_status, mos_plot, mel_plot, chart_note, log_note, ckpt_table, ckpt_sel, ckpt_map,
-                               ckpt_head, disk_info, listen_head, *preview_players]
+        train_panel_outputs = [train_status, mos_plot, mel_plot, chart_note, log_note, ckpt_list, ckpt_sel, ckpt_map,
+                               ckpt_head, disk_info, listen_box]
         panel_inputs = [project_dd, section, ckpt_sel, ckpt_sort]
         panel_sections = (S.SEC_TRAIN, S.SEC_CKPT)
 
@@ -782,9 +775,9 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             mel = pd.DataFrame([(e, v) for e, v in previews.loss_series(p, "val_mel", off, metrics)],
                                columns=["epoch", "mel"])
             rows = previews.rank_checkpoints(p, metrics)
-            _t, _k, best = ckpt_table_rows(rows, off, sort)
+            _c, _k, best = ckpt_cards(rows, off, sort)
             value = current if current in {str(x.path) for x in rows} else best
-            table, keys, _b = ckpt_table_rows(rows, off, sort, value)
+            table, keys, _b = ckpt_cards(rows, off, sort, value)
             keep, drop = previews.prune_plan(p) if rows else ([], [])
             disk = disk_html(size_of(p.train_dir), len(keep) + len(drop),
                              sum(f.stat().st_size for f in drop if f.exists()), len(drop))
@@ -792,7 +785,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             note = msg_html(S.TRAIN_LOG_FILE.format(path=raw_log), muted=True) if raw_log.exists() else ""
             base = languages.base_of(p.base_checkpoint) or p.base_checkpoint
             note = msg_html(S.TRAIN_BASE.format(base=base), muted=True) + note
-            listen = players(p, value, rows) if (value != current or force) else [gr.skip()] * (PREVIEW_SLOTS + 1)
+            listen = players(p, value, rows) if (value != current or force) else [gr.skip()]
             charts = bool(len(mos) or len(mel))
             return [status_html(name, p, metrics), gr.update(value=mos, visible=charts),
                     gr.update(value=mel, visible=charts),
@@ -830,30 +823,32 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         refresh_btn.click(on_refresh, panel_inputs, [ckpt_msg] + train_panel_outputs)
 
         def ckpt_view(name, path, sort):
-            """Table / selection / chosen line for `path` in the `sort` order (no players)."""
+            """Cards / selection / chosen line for `path` in the `sort` order (no players)."""
             p = load(name)
             rows = previews.rank_checkpoints(p, read_metrics(p))
             off = train.base_epoch(p)
-            table, keys, _best = ckpt_table_rows(rows, off, sort, path)
+            table, keys, _best = ckpt_cards(rows, off, sort, path)
             return p, rows, [table, keys, ckpt_chosen_html(rows, off, path)]
 
-        @guarded(PREVIEW_SLOTS + 6)
-        def on_pick(name, keys, sort, evt: gr.SelectData, progress=gr.Progress()):
-            path = (keys or {}).get(ckpt_key_of_row(getattr(evt, "row_value", None) or []))
+        @guarded(6)
+        def on_pick(name, keys, sort, picked, progress=gr.Progress()):
+            """A card click: `picked` is "<card key>#<time>" (the time makes a repeated click a change)."""
+            path = (keys or {}).get((picked or "").split("#")[0])
             if path is None:
-                return [""] + [gr.skip()] * (PREVIEW_SLOTS + 5)
+                return [""] + [gr.skip()] * 5
             progress(0, desc=S.LISTENING)
             p, rows, view = ckpt_view(name, path, sort)
             return ["", path, *view, *players(p, path, rows)]
 
-        ckpt_table.select(on_pick, [project_dd, ckpt_map, ckpt_sort],
-                          [ckpt_msg, ckpt_sel, ckpt_table, ckpt_map, ckpt_head, listen_head, *preview_players])
+        ckpt_pick.change(on_pick, [project_dd, ckpt_map, ckpt_sort, ckpt_pick],
+                        [ckpt_msg, ckpt_sel, ckpt_list, ckpt_map, ckpt_head, listen_box],
+                        show_progress_on=[listen_box])
 
         @guarded(4)
         def on_sort(name, sort, path):
             return [""] + ckpt_view(name, path, sort)[2]
 
-        ckpt_sort.change(on_sort, [project_dd, ckpt_sort, ckpt_sel], [ckpt_msg, ckpt_table, ckpt_map, ckpt_head])
+        ckpt_sort.change(on_sort, [project_dd, ckpt_sort, ckpt_sel], [ckpt_msg, ckpt_list, ckpt_map, ckpt_head])
 
         @guarded(len(train_panel_outputs) + 2)
         def on_prune(name, sec, current, sort, confirmed):
