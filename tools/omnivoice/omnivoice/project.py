@@ -6,7 +6,7 @@ from pathlib import Path
 import tomli_w
 from omnivoice import languages
 
-STEPS = ("audio", "slice", "phrases", "check", "train", "pack")
+STEPS = ("audio", "slice", "phrases", "check", "synth", "train", "pack")
 FILE = "project.toml"
 
 class ProjectError(ValueError):
@@ -38,6 +38,7 @@ class Project:
 
     raw_dir = property(lambda self: self.root / "raw")
     segments_dir = property(lambda self: self.root / "segments")
+    synth_dir = property(lambda self: self.root / "synth")
     metadata_csv = property(lambda self: self.root / "metadata.csv")
     review_json = property(lambda self: self.root / "review.json")
     train_dir = property(lambda self: self.root / "train")
