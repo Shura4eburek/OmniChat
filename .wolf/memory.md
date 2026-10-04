@@ -588,3 +588,19 @@
 | 14:52 | Session end: 19 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27879 tok |
 | 17:05 | omnivoice: hid number spin arrows; fields in a row align on one line + 40px height (checked 1x/3x on train + new project) | ui/theme.py | ok | ~12k |
 | 14:58 | Session end: 19 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27879 tok |
+| 14:59 | Session end: 19 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27879 tok |
+| 15:03 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_cfg.sh | — | ~64 |
+| 15:04 | Session end: 20 writes across 6 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27948 tok |
+| 15:06 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_cfg.sh | — | ~66 |
+| 15:08 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_cfg.sh | — | ~140 |
+| 15:09 | Created tools/omnivoice/omnivoice/piper_compat/fit.py | — | ~1515 |
+| 15:10 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/train_edit.py | — | ~1121 |
+| 15:10 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/tests_edit.py | — | ~438 |
+| 15:12 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/stop_edit.py | — | ~1194 |
+| 15:15 | Edited tools/omnivoice/omnivoice/previews.py | 1→2 lines | ~36 |
+| 15:15 | Edited tools/omnivoice/omnivoice/previews.py | modified _last_ckpt_epoch() | ~136 |
+| 15:15 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/real_fit.py | — | ~572 |
+| 15:16 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/buttons_edit.py | — | ~1443 |
+| 15:22 | Edited tools/omnivoice/omnivoice/ui/helpers.py | 2→4 lines | ~72 |
+| 17:45 | omnivoice: fit.py (lighter checkpoints, graceful stop), Start/Stop/Resume button states; verified with real WSL runs + UI stop | piper_compat/fit.py, train.py, previews.py, ui/app.py, ui/helpers.py, ui/strings.py, tests | ok | ~60k |
+| 15:24 | Session end: 31 writes across 14 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~36995 tok |

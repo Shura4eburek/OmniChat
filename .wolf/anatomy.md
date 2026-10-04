@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T11:48:51.539Z
-> Files: 60 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T12:22:42.923Z
+> Files: 69 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -40,9 +40,15 @@
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/
 
+- `buttons_edit.py` — edit, start_training, train_buttons, start_training (~1443 tok)
+- `ckpt_cfg.sh` (~140 tok)
 - `phrases_css.py` (~1264 tok)
 - `phrases_css2.py` (~662 tok)
 - `phrases_edit.py` — edit, table_value, table_update, load_segments (~2837 tok)
+- `real_fit.py` — Real short runs of omnivoice's fit.py on a copy of a project (no UI). (~572 tok)
+- `stop_edit.py` — edit, stop, stop, kill_if_stuck (~1194 tok)
+- `tests_edit.py` (~438 tok)
+- `train_edit.py` — edit, fit_args, fit_args, stop (~1121 tok)
 
 ## ./
 
@@ -610,6 +616,7 @@
 - `download.py` — Resumable downloads: a .part file, HTTP Range resume, one retry, optional pinned sha256, Russian err (~953 tok)
 - `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~434 tok)
 - `paths.py` — Where omnivoice keeps its heavy dependencies (WSL disk, base checkpoints, ffmpeg). Projects live els (~754 tok)
+- `previews.py` — Training previews (TensorBoard audio) and checkpoint listing. (~4770 tok)
 - `train.py` — from: detect_env, batch_size_for, build_image, last_checkpoint + 9 more (~3133 tok)
 - `trainlog.py` — Readable training log: piper / Lightning stdout (tqdm bars, warnings, escape codes) → short (~2502 tok)
 - `transcriber.py` — has_whisper, register_cuda_dlls, load_whisper, run (~2059 tok)
@@ -619,11 +626,13 @@
 
 - `__init__.py` — Compatibility layer for training with piper1-gpl v1.8.0 on current PyTorch/Lightning. (~287 tok)
 - `Dockerfile` — Docker container definition (~247 tok)
+- `fit.py` — omnivoice's entry for `piper.train fit`: piper's own CLI with lighter, stop-safe checkpointing. (~1515 tok)
 - `wsl_setup.sh` — Builds the omnivoice training environment inside the WSL distro "omnivoice" (Ubuntu 24.04). (~696 tok)
 
 ## tools/omnivoice/omnivoice/ui/
 
 - `app.py` — Gradio front end over the omnivoice core, in the OmniChat HUD style. (~14786 tok)
+- `helpers.py` — Pure helpers behind the web UI. No gradio import here, so they are testable without the ui extra. (~11440 tok)
 - `theme.py` — OmniChat HUD look: near-black background, teal 1 px frames, corner brackets, square corners. (~8806 tok)
 
 ## tools/omnivoice/tests/

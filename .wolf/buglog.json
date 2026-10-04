@@ -1017,6 +1017,41 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-10-04T13:20:00Z"
+    },
+    {
+      "id": "bug-057",
+      "timestamp": "2026-10-04T13:40:00Z",
+      "error_message": "39 с на эпоху, «осталось ≈ 16 ч»",
+      "file": "tools/omnivoice/omnivoice/piper_compat/fit.py",
+      "root_cause": "piper keeps top-5 by val_mel and top-5 by val_mos (~850 MB each); Lightning stages each in /tmp and copies across WSL→C: (12-25 s); while top-5 fill every epoch writes 2-3 files",
+      "fix": "own entry fit.py: top-1 per metric, val_mos ignores warm-up, SparseLast writes last.ckpt every 10 epochs/at end/on stop atomically + last.epoch note",
+      "tags": [
+        "training",
+        "checkpoints",
+        "wsl",
+        "performance"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T13:40:00Z"
+    },
+    {
+      "id": "bug-058",
+      "timestamp": "2026-10-04T13:40:00Z",
+      "error_message": "Traceback при «Стоп»: Invalid cross-device link … DataLoader worker killed by signal: Terminated",
+      "file": "tools/omnivoice/omnivoice/train.py",
+      "root_cause": "Stop = pkill while Lightning was copying last.ckpt from /tmp to /mnt/c — kill mid-save (possible half-written last.ckpt)",
+      "fix": "graceful stop: <train>/STOP flag → fit.py stops after the batch and saves; runner kills only after STOP_GRACE=120 s; train_project returns STOPPED and clears the flag",
+      "tags": [
+        "training",
+        "stop",
+        "wsl"
+      ],
+      "related_bugs": [
+        "bug-057"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T13:40:00Z"
     }
   ]
 }

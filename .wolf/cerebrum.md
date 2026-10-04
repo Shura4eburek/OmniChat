@@ -13,6 +13,8 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- omnivoice training runs omnivoice/piper_compat/fit.py (WSL: via /mnt/c path, no re-setup; Docker: compat dir mounted at /omnivoice_compat) instead of `-m piper.train`; Colab still uses piper's CLI (fit_args script=None). Stop is graceful via <train>/STOP; pkill pattern 'piper_compat/fit.py|piper.train'. Lightning 2.6.6 saves last.ckpt only when a top-k save happens; resume creates a new lightning_logs/version_N.
+- To test the WSL env from Git Bash, write a .sh into the scratchpad and run `wsl.exe -d omnivoice -- bash /mnt/c/...` via PowerShell (inline quoting breaks).
 - Gradio 6 field DOM: Number = label.container > input; Textbox = label.container > .input-container > input; Dropdown frame = .wrap around input[role=combobox] (40px). omnivoice forces single-line inputs to 40px and pins them to the bottom of their block so wrapped labels don't misalign rows; number spin arrows hidden.
 - omnivoice spacing: Gradio pads HTML blocks 12px left/right (now 0 in .hud-section) and 10px top/bottom; a gr.Row with all children hidden has only comment nodes (use :not(:has(*)), not :empty). Measure gaps with getBoundingClientRect; target 20px between stacked blocks. Fake training charts for UI checks: tests.test_previews.piper_events into <project>/train/lightning_logs/version_0.
 - Gradio 6: a .click() with js="(...a)=>{...; return a;}" runs front-end code before the handler while keeping one dependency (tests look up deps by button). Native <audio src="gradio_api/file=<abs>"> works for files in allowed_paths. gr.render(inputs=[...]) + a gr.State revision counter re-renders dynamic lists.
@@ -52,6 +54,7 @@
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
 ## Decision Log
+- [2026-10-04] Checkpointing: one best per metric + last.ckpt every 10 epochs (user chose option 1 over moving checkpoints to the WSL disk).
 - [2026-10-04] Synthetic-data training (XTTS v2 / F5-TTS teacher) deferred → GitHub issue #60.
 
 - [2026-10-03] omnivoice WSL: wsl.exe own output is UTF-16LE (in-distro command output is UTF-8) — use wslenv.decode. Rootfs pin = releases.ubuntu.com/24.04.5 .wsl (gzip tar) sha bb415d82…; in-distro commands via wslenv.wsl_cmd (-u root). Downloads go through omnivoice/download.fetch. core.autocrlf=true → tools/omnivoice/.gitattributes forces LF for *.sh.
