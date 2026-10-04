@@ -821,3 +821,61 @@ def test_target_choices_labels():
                             Target(Path("C:/repo/run/config/omnichat/models"), "", "run")])
     assert out == [("Modrinth · 123123", str(Path("C:/m/123123/config/omnichat/models"))),
                    (S.TARGET_DEV, str(Path("C:/repo/run/config/omnichat/models")))]
+
+
+def test_synth_runner_generates_checks_and_records_failures(tmp_path):
+    import numpy as np
+    from omnivoice import audio, dataset, synth
+    from omnivoice.dataset import Segment
+    from omnivoice.project import Project
+    p = Project.create(tmp_path / "a", name="a", language="ru")
+    audio.write_wav(p.segments_dir / "s1.wav", np.zeros(audio.SR * 5, np.float32))
+    dataset.save(p, [Segment("s1", "раз два три четыре", 5.0)])
+
+    class Teacher:
+        def generate(self, p, state, on_line):
+            pending = [i for i in state.items if i.status == "pending"]
+            for i, it in enumerate(pending[:2], 1):
+                synth.wav(p, it.id).parent.mkdir(parents=True, exist_ok=True)
+                audio.write_wav(synth.wav(p, it.id), (0.2 * np.sin(np.arange(audio.SR * 2) / 9)).astype(np.float32))
+                on_line(f"ITEM {i}/2 {it.id}")
+            on_line(f"FAIL {pending[2].id} cuda oom")
+            return 0
+        def request_stop(self, p): pass
+        def kill(self, run=None): pass
+
+    r = h.SynthRunner(teacher=Teacher(), recognizer_factory=lambda lang: (lambda wav: "текст"))
+    r.start(p, minutes=2, refs=["s1"])   # ≈ 430 characters at 3.6 chars/s: several phrases
+    r.join(10)
+    st = synth.load(p)
+    assert r.status == "done" and sum(i.status == "done" for i in st.items) == 2
+    assert all(i.verdict != "unchecked" for i in st.items if i.status == "done")
+    failed = [i for i in st.items if i.status == "failed"]
+    assert len(failed) == 1 and failed[0].error == "cuda oom" and synth.summary(st)["failed"] == 1
+    assert "ITEM 2/2" in r.log_text() and r.log_text().splitlines()[-1].startswith("Готово")
+    assert r.status_text() == S.SYNTH_IDLE
+
+
+def test_synth_runner_without_whisper_leaves_unchecked(tmp_path):
+    import numpy as np
+    from omnivoice import audio, dataset, synth
+    from omnivoice.dataset import Segment
+    from omnivoice.project import Project
+    p = Project.create(tmp_path / "a", name="a", language="ru")
+    dataset.save(p, [Segment("s1", "раз два три четыре", 5.0)])
+
+    class Teacher:
+        def generate(self, p, state, on_line):
+            it = state.items[0]
+            synth.wav(p, it.id).parent.mkdir(parents=True, exist_ok=True)
+            audio.write_wav(synth.wav(p, it.id), np.zeros(audio.SR * 2, np.float32))
+            return 0
+        def request_stop(self, p): pass
+        def kill(self, run=None): pass
+
+    r = h.SynthRunner(teacher=Teacher(), recognizer_factory=lambda lang: None)
+    r.start(p, minutes=0.5, refs=["s1"])
+    r.join(10)
+    done = [i for i in synth.load(p).items if i.status == "done"]
+    assert done and all(i.verdict == "unchecked" and i.dropped for i in done)
+    assert S.SYNTH_NO_WHISPER in r.log_text()

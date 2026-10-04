@@ -550,6 +550,130 @@ class TrainRunner:
                 "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
 
 
+class SynthRunner:
+    """One background generation per project: plan → teacher (WSL) → Whisper check → synth.json.
+    Stop asks xtts_gen.py to finish its phrase (teacher.request_stop) and kills it after STOP_GRACE s."""
+
+    def __init__(self, teacher=None, recognizer_factory=None, run=subprocess.run, clock=None):
+        from omnivoice import teacher as teacher_mod
+        self._teacher = teacher or teacher_mod.XttsTeacher()
+        self._recognizer_factory = recognizer_factory
+        self._run = run
+        self._clock = clock or time.monotonic
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._lines: deque[str] = deque(maxlen=400)
+        self.status = "idle"   # idle | running | checking | done | stopped | failed | error
+        self.code: int | None = None
+        self.done = self.total = 0
+        self._failed: dict[str, str] = {}   # id → message, from xtts_gen's FAIL lines
+        self._started = 0.0
+        self._p = None
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _note(self, line: str) -> None:
+        with self._lock:
+            self._lines.append(line)
+
+    def log_text(self) -> str:
+        with self._lock:
+            return "\n".join(self._lines)
+
+    def _line(self, line: str) -> None:
+        if re.match(r"ITEM \d+/\d+", line):
+            self.done += 1
+        m = re.match(r"FAIL (\S+) ?(.*)$", line)
+        if m:
+            self._failed[m.group(1)] = m.group(2) or "?"
+        self._note(line)
+
+    def start(self, p, minutes: float, refs: list[str]) -> None:
+        with self._lock:
+            if self.running:
+                raise RuntimeError(S.SYNTH_BUSY)
+            self._p, self.status, self.code, self.done, self._failed = p, "running", None, 0, {}
+            self._started = self._clock()
+            self._lines.clear()
+            self._thread = threading.Thread(target=self._work, args=(p, minutes, refs), daemon=True,
+                                            name=f"omnivoice-synth-{p.name}")
+            self._thread.start()
+
+    def _recognizer(self, language):
+        """Whisper as wav → text, or None when it is not installed (phrases stay «unchecked»)."""
+        if self._recognizer_factory is not None:
+            return self._recognizer_factory(language)
+        from omnivoice import transcriber
+        if not transcriber.has_whisper():
+            return None
+        rec = transcriber._default_recognizer(language, None)
+        return lambda wav: " ".join(t.strip() for t, _, _ in rec(wav))
+
+    def _work(self, p, minutes, refs) -> None:
+        from omnivoice import synth
+        try:
+            state = synth.make_plan(p, minutes, refs)
+            synth.save(p, state)
+            pending = [i for i in state.items if i.status == "pending"]
+            self.total = len(pending)
+            code = self._teacher.generate(p, state, self._line) if pending else 0
+            self.code = code
+            state = synth.sync_generated(p, state)
+            for it in state.items:  # «не удалась»: retried by the next «Догенерировать» (make_plan re-plans it)
+                if it.id in self._failed and it.status != "done":
+                    it.status, it.error = "failed", self._failed[it.id]
+            if self.status == "running":
+                self.status = "checking"
+            rec = self._recognizer(p.language)
+            if rec is None:
+                self._note(S.SYNTH_NO_WHISPER)
+            state = synth.apply_check(p, state, rec)
+            synth.save(p, state)
+            if self.status != "stopped":
+                self.status = "done" if code == 0 else "failed"
+            s = synth.summary(state)
+            self._note(S.SYNTH_DONE.format(accepted=s["accepted"], minutes=s["accepted_min"], suspect=s["suspect"],
+                                           rejected=s["rejected"], failed=s["failed"]))
+        except Exception as e:  # WslError / OSError …: shown in the log, never a traceback
+            log.warning("synthetic generation failed:\n%s", traceback.format_exc())
+            self._note(str(e) or type(e).__name__)
+            if self.status != "stopped":
+                self.status = "error"
+
+    def stop(self, grace: float | None = None) -> None:
+        if not self.running or self._p is None:
+            return
+        from omnivoice import teacher as teacher_mod
+        self.status = "stopped"
+        self._note(S.SYNTH_STOPPING)
+        self._teacher.request_stop(self._p)
+        thread, grace = self._thread, teacher_mod.STOP_GRACE if grace is None else grace
+
+        def kill_if_stuck():
+            thread.join(grace)
+            if thread.is_alive():
+                self._teacher.kill(self._run)
+        threading.Thread(target=kill_if_stuck, daemon=True, name="omnivoice-synth-stop").start()
+
+    def join(self, timeout=None) -> None:
+        if self._thread:
+            self._thread.join(timeout)
+
+    def status_text(self) -> str:
+        if self.status == "running":
+            text = S.SYNTH_RUNNING.format(done=self.done, total=self.total or "?")
+            if self.done and self.total:
+                per = (self._clock() - self._started) / self.done
+                text += S.SYNTH_ETA.format(eta=trainlog.duration_text(per * (self.total - self.done)))
+            return text
+        if self.status == "stopped" and self.running:
+            return S.SYNTH_STOPPING
+        return {"idle": S.SYNTH_IDLE, "checking": S.SYNTH_CHECKING, "done": S.SYNTH_IDLE, "stopped": S.SYNTH_STOPPED,
+                "failed": S.SYNTH_FAILED.format(code=self.code), "error": S.SYNTH_ERROR}[self.status]
+
+
 def _ckpt_text(epoch: int, mos: float | None, mel: float | None) -> str:
     parts = [S.CKPT_EPOCH.format(epoch=epoch)]
     if mos is not None:
