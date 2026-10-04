@@ -177,6 +177,12 @@ HEAD = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
     }
   });
 })();
+/* «Упаковка» → «К чекпойнтам»: click the sidebar's radio item of that section */
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button.pack-goto"); if (!b) return;
+  const item = [...document.querySelectorAll("fieldset.hud-sections input")].find(i => i.value === b.dataset.section);
+  if (item) item.click();
+});
 /* checkpoints: a card click (or Enter on it) highlights it at once and hands its key to the hidden
    #ckpt-pick box, whose input event runs the Python side; the time suffix makes a repeat click count */
 (() => {
@@ -406,6 +412,24 @@ button.phr-back::after {{ display:none; }}
 .ckpt-tags {{ display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; margin-left:auto; }}
 .ckpt-tags .phr-chip {{ white-space:nowrap; }}
 .phr-chip.best {{ color:var(--ac); border-color:var(--ac); }}
+.phr-chip.exported {{ color:var(--ok); border-color:rgba(89,227,107,.6); }}
+
+/* «Упаковка»: which model will be packed */
+.pack-model {{ border:1px solid var(--acd); background:{PANEL}; padding:12px 14px; display:flex; flex-wrap:wrap;
+              align-items:center; gap:10px 16px; }}
+.pack-model-text {{ display:flex; flex-direction:column; gap:3px; flex:1 1 320px; min-width:0; }}
+.pack-goto {{ flex:none; height:40px; padding:0 18px; background:transparent; border:1px solid var(--acd);
+             color:{TEXT}; font-family:inherit; font-weight:600; font-size:13px; letter-spacing:1px;
+             text-transform:uppercase; cursor:pointer; border-radius:0; }}
+.pack-goto:hover {{ border-color:var(--ac); color:var(--ac); }}
+.pack-goto:focus-visible {{ outline:none; border-color:var(--ac); background:rgba(53,224,200,.1); }}
+.pack-model.none .pack-goto {{ border-color:var(--flag); color:var(--flag); }}
+.pack-model.none {{ border-color:var(--flag); color:var(--flag); }}
+.pack-model-head {{ color:var(--ac); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px; }}
+.pack-model.none .pack-model-head {{ color:var(--flag); }}
+.pack-model-what {{ color:{TEXT}; }}
+.pack-model .muted {{ font-size:12px; }}
+.html-container:has(.pack-model) {{ padding-top:0 !important; padding-bottom:0 !important; }}
 
 /* «Послушать»: the epoch's phrases, each with a HUD player */
 .lsn-list {{ display:flex; flex-direction:column; gap:6px; }}
@@ -521,7 +545,7 @@ ul.option-list li.item.selected {{ color:var(--ac); }}
 
 /* a button next to a field lines up with the field, not the whole row height */
 .hud-section .row:has(> button) {{ align-items:flex-end !important; }}
-.hud-section .row > button {{ align-self:flex-end !important; min-height:40px; max-height:42px;
+.hud-section .row > button {{ align-self:flex-end !important; min-height:40px; max-height:40px;
                              white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
                              margin-bottom:10px; }}  /* fields sit inside a block with 10 px padding */
 

@@ -26,11 +26,11 @@ from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError, delete_project
 from omnivoice.ui import strings as S
 from omnivoice.ui import theme
-from omnivoice.ui.helpers import (CKPT_SORTS, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
+from omnivoice.ui.helpers import (CKPT_SORTS, pick_folder, target_choices, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
                                   delete_parts_html, language_choices, nav_choices,
                                   NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  ckpt_cards, ckpt_chosen_html, copy_uploads, listen_html, counter_label, data_dir_html, disk_html, env_badge,
+                                  ckpt_cards, ckpt_chosen_html, copy_uploads, listen_html, pack_model_html, counter_label, data_dir_html, disk_html, env_badge,
                                   error_text,
                                   last_epoch_target,
                                   list_projects, needs_setup, delete_raw_file, raw_files, raw_card_html, raw_total_html,
@@ -150,7 +150,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
     sec0 = first_open_section(p0.steps) if p0 else S.SEC_SETUP  # a fresh install starts at «Установка»
     stats0 = phrases_stats(p0, tolerant=True)
     display0 = p0.display if p0 else {}
-    targets = [str(t) for t in install.default_targets()]
+    targets = target_choices(install.find_targets())
     dd0, dd_source = paths.cache_source()
 
     with gr.Blocks(title=S.PAGE_TITLE) as demo:
@@ -291,6 +291,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         ckpt_msg = gr.HTML()
 
                     with gr.Column(visible=sec0 == S.SEC_PACK, elem_classes="hud-section") as g_pack:
+                        pack_model = gr.HTML()  # which checkpoint export/model.onnx came from (+ «К чекпойнтам»)
                         with gr.Row():
                             with gr.Column(scale=3):
                                 fields = {}
@@ -307,10 +308,12 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         pack_msg = gr.HTML()
                         sample_audio = gr.Audio(label=S.SAMPLE_AUDIO, type="filepath", interactive=False)
                         packed = gr.State(None)
-                        with gr.Row(equal_height=True):
-                            target_dd = gr.Dropdown(targets, value=targets[0] if targets else None,
-                                                    allow_custom_value=True, label=S.INSTALL_TARGET, scale=3)
-                            overwrite = gr.Checkbox(label=S.INSTALL_OVERWRITE, value=False, scale=1)
+                        with gr.Row(equal_height=True, elem_classes="target-row"):
+                            target_dd = gr.Dropdown(targets, value=targets[0][1] if targets else None,
+                                                    allow_custom_value=True, label=S.INSTALL_TARGET,
+                                                    info=S.INSTALL_TARGET_INFO, scale=3)
+                            target_pick = gr.Button(S.TARGET_PICK, scale=1, min_width=170)
+                        overwrite = gr.Checkbox(label=S.INSTALL_OVERWRITE, value=False)
                         install_btn = gr.Button(S.INSTALL, variant="primary")
                         install_msg = gr.HTML()
 
@@ -777,7 +780,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             rows = previews.rank_checkpoints(p, metrics)
             _c, _k, best = ckpt_cards(rows, off, sort)
             value = current if current in {str(x.path) for x in rows} else best
-            table, keys, _b = ckpt_cards(rows, off, sort, value)
+            table, keys, _b = ckpt_cards(rows, off, sort, value, exported_ckpt(p))
             keep, drop = previews.prune_plan(p) if rows else ([], [])
             disk = disk_html(size_of(p.train_dir), len(keep) + len(drop),
                              sum(f.stat().st_size for f in drop if f.exists()), len(drop))
@@ -822,12 +825,16 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         refresh_btn.click(on_refresh, panel_inputs, [ckpt_msg] + train_panel_outputs)
 
+        def exported_ckpt(p):
+            info = train.model_info(p)
+            return info.get("checkpoint") if info else None
+
         def ckpt_view(name, path, sort):
             """Cards / selection / chosen line for `path` in the `sort` order (no players)."""
             p = load(name)
             rows = previews.rank_checkpoints(p, read_metrics(p))
             off = train.base_epoch(p)
-            table, keys, _best = ckpt_cards(rows, off, sort, path)
+            table, keys, _best = ckpt_cards(rows, off, sort, path, exported_ckpt(p))
             return p, rows, [table, keys, ckpt_chosen_html(rows, off, path)]
 
         @guarded(6)
@@ -867,16 +874,30 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         prune_btn.click(on_prune, panel_inputs + [prune_ok], [ckpt_msg, prune_ok] + train_panel_outputs)
 
-        @guarded(1)
-        def on_export(name, ckpt, progress=gr.Progress()):
+        @guarded(4)
+        def on_export(name, ckpt, sort, progress=gr.Progress()):
             if not ckpt:
                 raise ValueError(S.CHOOSE_CHECKPOINT)
             with locked(name, S.OP_EXPORT) as p:
                 progress(0, desc=S.EXPORTING)
-                out = train.export_project(p, Path(ckpt))
-            return msg_html(S.EXPORTED.format(path=out))
+                rows = previews.rank_checkpoints(p, read_metrics(p))
+                row = next((r for r in rows if str(r.path) == ckpt), None)
+                info = {"mos": row.mos, "mel": row.mel} if row is not None else None
+                out = train.export_project(p, Path(ckpt), info=info)
+            cards, keys, _view = ckpt_view(name, ckpt, sort)[2]
+            return msg_html(S.EXPORTED.format(path=out)), cards, keys, pack_model_view(name)
 
-        export_btn.click(on_export, [project_dd, ckpt_sel], ckpt_msg)
+        export_btn.click(on_export, [project_dd, ckpt_sel, ckpt_sort], [ckpt_msg, ckpt_list, ckpt_map, pack_model])
+
+        def pack_model_view(name):
+            p = try_load(name)
+            return pack_model_html(train.model_info(p), p.export_dir / "model.onnx") if p else ""
+
+        section.change(lambda name, sec: pack_model_view(name) if sec == S.SEC_PACK else gr.skip(),
+                       [project_dd, section], pack_model, show_progress="hidden")
+        project_dd.change(pack_model_view, project_dd, pack_model, show_progress="hidden")
+        demo.load(pack_model_view, project_dd, pack_model, show_progress="hidden")
+
 
         @guarded(2)
         def on_colab(name, progress=gr.Progress()):
@@ -936,6 +957,19 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             return msg_html(S.INSTALLED.format(path=dest))
 
         install_btn.click(on_install, [project_dd, packed, target_dd, overwrite], install_msg)
+
+        @guarded(2)
+        def on_pick_target(current):
+            chosen = pick_folder(current)
+            if not chosen:
+                return gr.skip(), gr.skip()
+            models = str(install.models_dir_for(Path(chosen)))
+            choices = target_choices(install.find_targets())
+            if models not in [v for _l, v in choices]:
+                choices.append((models, models))
+            return gr.update(choices=choices, value=models), msg_html(S.TARGET_PICKED.format(path=models), muted=True)
+
+        target_pick.click(on_pick_target, target_dd, [target_dd, install_msg])
 
     demo.omnivoice_probe = probe  # for launch() / debugging
     return demo

@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T12:31:58.826Z
-> Files: 74 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T15:37:39.897Z
+> Files: 80 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -43,10 +43,14 @@
 - `buttons_edit.py` — edit, start_training, train_buttons, start_training (~1443 tok)
 - `ckpt_app_edit.py` — edit, players, players, on_pick (~1772 tok)
 - `ckpt_cards_edit.py` — edit, raw_card_html, hud_player_html, raw_card_html (~1409 tok)
-- `ckpt_cfg.sh` (~140 tok)
+- `ckpt_cfg.sh` (~130 tok)
 - `ckpt_css_edit.py` — edit (~958 tok)
 - `ckpt_test_edit.py` (~700 tok)
 - `cutshort_edit.py` — edit, list_checkpoints, cut_short, cut_short_checkpoints (~911 tok)
+- `export_info_edit.py` — edit, export_project, write_model_info, model_info (~801 tok)
+- `install_edit.py` — from: edit, default_targets, find_targets, default_targets + 6 more (~2475 tok)
+- `pack_card_edit.py` — edit (~979 tok)
+- `pack_model_edit.py` — edit, ckpt_table, ckpt_table, ckpt_cards (~2317 tok)
 - `phrases_css.py` (~1264 tok)
 - `phrases_css2.py` (~662 tok)
 - `phrases_edit.py` — edit, table_value, table_update, load_segments (~2837 tok)
@@ -435,9 +439,11 @@
 ## docs/superpowers/plans/
 
 - `2026-10-04-omnivoice-setup.md` — omnivoice: one-click dependency setup and WSL training backend (~2302 tok)
+- `2026-10-04-omnivoice-synthetic-dataset.md` — omnivoice: синтетический датасет (XTTS v2) — план реализации (~19562 tok)
 
 ## docs/superpowers/specs/
 
+- `2026-10-04-omnivoice-synthetic-dataset-design.md` — omnivoice — синтетический датасет через клонирующую модель: дизайн (~2450 tok)
 
 ## gradle/wrapper/
 

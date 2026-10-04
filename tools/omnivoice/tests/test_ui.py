@@ -199,3 +199,14 @@ def test_prune_refused_while_files_are_fresh(tmp_path):
     d = ckpts(p, "version_0", ["epoch=1-val_mos=2.0000.ckpt", "epoch=2-val_mos=1.0000.ckpt", "last.ckpt"])
     out = _handler(build(tmp_path), "on_prune")("g", S.SEC_TRAIN, None, S.CKPT_SORT_MOS, True)
     assert S.PRUNE_RECENT in out[0] and len(list(d.iterdir())) == 3
+
+
+def test_pick_target_adds_the_chosen_models_folder(tmp_path, monkeypatch):
+    from omnivoice.ui import app as ui_app, strings as S
+    game = tmp_path / "MyPack"; (game / "mods").mkdir(parents=True)
+    monkeypatch.setattr(ui_app, "pick_folder", lambda current: str(game))
+    dd, msg = _handler(build(tmp_path / "projects"), "on_pick_target")(None)
+    models = str(game / "config/omnichat/models")
+    assert dd["value"] == models and (models, models) in dd["choices"] and models in msg
+    monkeypatch.setattr(ui_app, "pick_folder", lambda current: None)              # dialog cancelled
+    assert _handler(build(tmp_path / "projects"), "on_pick_target")(None)[0] == gr.skip()

@@ -641,3 +641,24 @@ def test_resume_prefers_a_best_checkpoint_newer_than_last(tmp_path):
     old = time.time() - 100
     os.utime(last, (old, old))                                          # fit.py: last every 10 epochs
     assert train.last_checkpoint(p) == best
+
+
+def test_export_notes_which_checkpoint_the_model_is(tmp_path):
+    import os, time
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")   # base epoch 4139
+    ck = p.train_dir / "lightning_logs/version_0/checkpoints/epoch=5210-val_mel=0.2048.ckpt"
+    ck.parent.mkdir(parents=True); ck.write_bytes(b"x")
+    assert train.model_info(p) is None                                   # nothing exported yet
+    fake = WslFake(docker=False)
+    def run(cmd, **kw):
+        if "piper.train.export_onnx" in cmd:
+            (p.export_dir / "model.onnx").write_bytes(b"onnx")
+        return fake(cmd, **kw)
+    train.export_project(p, ck, run=run, info={"mos": 2.77})
+    info = train.model_info(p)
+    assert info["epoch"] == 5210 - 4139 and info["mel"] == 0.2048 and info["mos"] == 2.77
+    assert info["checkpoint"] == str(ck.resolve()) and info["exported"]
+    # a model.onnx replaced later (by hand) is no longer described by the note
+    later = time.time() + 60
+    os.utime(p.export_dir / "model.onnx", (later, later))
+    assert train.model_info(p) == {}

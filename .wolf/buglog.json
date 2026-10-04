@@ -1070,6 +1070,22 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-10-04T13:55:00Z"
+    },
+    {
+      "id": "bug-060",
+      "timestamp": "2026-10-04T15:40:00Z",
+      "error_message": "не могу выбрать папку, куда установить голос",
+      "file": "tools/omnivoice/omnivoice/install.py",
+      "root_cause": "default_targets only looked at .minecraft and Prism and only at existing config/omnichat/models; the user plays through Modrinth App (profile 123123); no folder picker",
+      "fix": "install.find_targets: Modrinth/CurseForge/Prism/MultiMC/ATLauncher/GDLauncher/.minecraft instances with the mod (config/omnichat or omnichat*.jar); labels «Modrinth · 123123»; «Выбрать папку…» (tkinter askdirectory on the local machine); models_dir_for maps a game/config folder to config/omnichat/models; only models/ is created",
+      "tags": [
+        "install",
+        "launchers",
+        "ui"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T15:40:00Z"
     }
   ]
 }

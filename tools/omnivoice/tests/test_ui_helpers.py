@@ -789,3 +789,35 @@ def test_phrase_cards_meta_and_filter():
     assert "arthas_0001" in meta and S.PHRASE_SECONDS.format(v=2.25) in meta and h.code_label("check") in meta
     assert S.PHRASE_DROPPED_CHIP in h.phrase_meta_html(b) and S.PHRASE_DROPPED_CHIP not in meta
     assert h.shown_phrases([a, b]) == [a, b] and h.shown_phrases([a, b], only_flagged=True) == [a]
+
+
+def test_pack_model_line_and_exported_chip(tmp_path):
+    onnx = tmp_path / "model.onnx"; onnx.write_bytes(b"x")
+    none = h.pack_model_html(None, onnx)
+    assert S.PACK_MODEL_NONE in none and "none" in none
+    unknown = h.pack_model_html({}, onnx)
+    assert "неизвестно" in unknown
+    known = h.pack_model_html({"epoch": 1071, "mos": 2.77, "mel": 0.2048, "exported": "2026-10-04T17:45:00"}, onnx)
+    assert "Эпоха 1071 · MOS 2.77 · mel 0.205 · экспортирована 04.10 17:45" in known and S.PACK_MODEL_OTHER in known
+    rows = [_NS(path=tmp_path / "a.ckpt", epoch=5210, mos=2.77, mel=0.2, best_mos=False, best_mel=True,
+                last=False, old_last=False)]
+    cards, _k, _b = h.ckpt_cards(rows, 4139, exported=str((tmp_path / "a.ckpt").resolve()))
+    assert S.CKPT_EXPORTED in cards and "phr-chip exported" in cards
+
+
+def test_install_target_creates_only_the_models_folder(tmp_path):
+    game = tmp_path / "profile"; (game / "config/omnichat").mkdir(parents=True); (game / "mods").mkdir()
+    assert h.check_install_target(str(game)) == game / "config/omnichat/models"   # a game folder works too
+    assert (game / "config/omnichat/models").is_dir()
+    with pytest.raises(ValueError):
+        h.check_install_target(str(tmp_path / "nowhere/models"))                # never builds a whole tree
+    with pytest.raises(ValueError):
+        h.check_install_target("relative/models")
+
+
+def test_target_choices_labels():
+    from omnivoice.install import Target
+    out = h.target_choices([Target(Path("C:/m/123123/config/omnichat/models"), "Modrinth", "123123"),
+                            Target(Path("C:/repo/run/config/omnichat/models"), "", "run")])
+    assert out == [("Modrinth · 123123", str(Path("C:/m/123123/config/omnichat/models"))),
+                   (S.TARGET_DEV, str(Path("C:/repo/run/config/omnichat/models")))]

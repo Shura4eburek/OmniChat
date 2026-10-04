@@ -2,6 +2,7 @@
 or a Docker image (fallback). The training loop (OOM retry, relative epochs, target check, Stop) is
 backend-agnostic; a backend only builds command lines (see DockerBackend / WslBackend)."""
 from __future__ import annotations
+import json
 import os
 import re
 import subprocess
@@ -427,7 +428,45 @@ def _fit_loop(p, be, run, on_line, stop, base_ckpt: str, bs: int, target: int, r
         p.mark_fresh("train")
     return code
 
-def export_project(p, ckpt: Path | None = None, run=subprocess.run) -> Path:
+MODEL_INFO = "model.json"  # beside export/model.onnx: which checkpoint it was exported from
+
+
+def _ckpt_value(ckpt: Path, metric: str) -> float | None:
+    m = re.search(rf"{metric}=([0-9.]+)\.ckpt$", ckpt.name)
+    return float(m.group(1)) if m else None
+
+
+def write_model_info(p, ckpt: Path, info: dict | None = None) -> dict:
+    """Note which checkpoint export/model.onnx came from: its path, epoch (counted from the base, as the
+    UI shows it), MOS / mel when known and the time. `info` (e.g. the UI's MOS and mel) overrides."""
+    from datetime import datetime
+    from omnivoice.previews import _last_ckpt_epoch
+    ckpt = Path(ckpt)
+    m = re.match(r"epoch=(\d+)", ckpt.name)
+    epoch = int(m.group(1)) if m else _last_ckpt_epoch(ckpt)
+    data = {"checkpoint": str(ckpt.resolve()), "epoch": None if epoch is None else epoch - base_epoch(p),
+            "mos": _ckpt_value(ckpt, "val_mos"), "mel": _ckpt_value(ckpt, "val_mel"),
+            "exported": datetime.now().isoformat(timespec="seconds"), **(info or {})}
+    (p.export_dir / MODEL_INFO).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return data
+
+
+def model_info(p) -> dict | None:
+    """What «Упаковка» will pack. None: no export/model.onnx yet. {} for a model.onnx exported before this
+    note existed (or with a broken note): its origin is unknown. Otherwise write_model_info's dict."""
+    onnx = p.export_dir / "model.onnx"
+    if not onnx.is_file():
+        return None
+    try:
+        data = json.loads((p.export_dir / MODEL_INFO).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    note = p.export_dir / MODEL_INFO
+    # a model.onnx replaced after the note (by hand / an older omnivoice) is not described by it any more
+    return data if isinstance(data, dict) and note.stat().st_mtime >= onnx.stat().st_mtime - 5 else {}
+
+
+def export_project(p, ckpt: Path | None = None, run=subprocess.run, info: dict | None = None) -> Path:
     ckpt = ckpt or last_checkpoint(p)
     if ckpt is None:
         raise TrainError("Нет чекпойнтов — сначала обучи модель")
@@ -443,4 +482,5 @@ def export_project(p, ckpt: Path | None = None, run=subprocess.run) -> Path:
     p.export_dir.mkdir(parents=True, exist_ok=True)
     if run(be.export(p, Path(ckpt))).returncode != 0:
         raise TrainError("Экспорт в ONNX не удался")
+    write_model_info(p, Path(ckpt), info)
     return p.export_dir / "model.onnx"

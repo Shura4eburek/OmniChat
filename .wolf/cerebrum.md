@@ -5,6 +5,7 @@
 > Last updated: 2026-05-09
 
 ## User Preferences
+- [2026-10-04] The user plays through Modrinth App (profile «123123» has omnichat-0.1.jar); also has CurseForge and .minecraft installed.
 - [2026-10-04] Phrases page: likes the bottom «Выбранная фраза» gr.Audio player as is; list must be cards (▶, track name, editable text, ✕), not a table.
 - [2026-10-04] User expects UI changes to be visually inspected before reporting ("ты смотришь вообще, как оно выглядит?"): zoom in on the changed component, test narrow widths, no native/browser-default widgets that break the HUD style.
 - [2026-10-04] Tables that the user should not edit must not look editable; for file lists prefer cards with play + delete. Destructive/creating flows (new project, delete project) are full pages opened from sidebar buttons, not sidebar accordions.
@@ -13,6 +14,7 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- omnivoice packs export/model.onnx; export_project writes export/model.json (checkpoint, epoch from base, mos, mel, time) — train.model_info: None = not exported, {} = unknown origin (old export / onnx newer than note). Shown on «Упаковка» and as «экспортирован» chip on checkpoint cards. HTML-only buttons switch sections by clicking the hidden sidebar radio input (theme.HEAD).
 - Gradio 6: setting a hidden Textbox's textarea value + dispatching a DOM 'input' event fires the component's .change (not .input) — used for clickable HTML cards (#ckpt-pick). Lists refreshed by a timer are better as one gr.HTML than gr.render (no component re-creation / flicker). helpers.hud_player_html is the shared HUD audio player.
 - omnivoice training runs omnivoice/piper_compat/fit.py (WSL: via /mnt/c path, no re-setup; Docker: compat dir mounted at /omnivoice_compat) instead of `-m piper.train`; Colab still uses piper's CLI (fit_args script=None). Stop is graceful via <train>/STOP; pkill pattern 'piper_compat/fit.py|piper.train'. Lightning 2.6.6 saves last.ckpt only when a top-k save happens; resume creates a new lightning_logs/version_N.
 - To test the WSL env from Git Bash, write a .sh into the scratchpad and run `wsl.exe -d omnivoice -- bash /mnt/c/...` via PowerShell (inline quoting breaks).

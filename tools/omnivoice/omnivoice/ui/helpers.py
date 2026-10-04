@@ -597,11 +597,12 @@ _CKPT_ORDER = {  # ties: a named epoch file above a last.ckpt of the same epoch
 }
 
 
-def ckpt_table(rows, offset: int, sort: str | None = None,
-               selected: str | None = None) -> tuple[list[list], dict[str, str], str | None]:
+def ckpt_table(rows, offset: int, sort: str | None = None, selected: str | None = None,
+               exported: str | None = None) -> tuple[list[list], dict[str, str], str | None]:
     """previews.rank_checkpoints rows → (table rows [epoch, "MOS", "mel", marks] in the `sort` order
     (CKPT_SORTS, MOS by default), row key → checkpoint path, the path to preselect: the best by MOS,
-    else the first row). The `selected` path gets a ▶ mark."""
+    else the first row). The `selected` path gets a ▶ mark, the `exported` one (train.model_info's
+    checkpoint, a resolved path) «экспортирован»."""
     best = next((str(r.path) for r in rows if r.best_mos), str(rows[0].path) if rows else None)
     table, keys = [], {}
     for r in sorted(rows, key=_CKPT_ORDER.get(sort, _CKPT_ORDER[S.CKPT_SORT_MOS])):
@@ -610,6 +611,7 @@ def ckpt_table(rows, offset: int, sort: str | None = None,
         tags += [S.CKPT_BEST_MEL] if r.best_mel else []
         tags += [S.CKPT_LAST] if r.last else []
         tags += [S.CKPT_OLD_LAST] if r.old_last else []
+        tags += [S.CKPT_EXPORTED] if exported and str(Path(r.path).resolve()) == exported else []
         epoch = r.epoch - offset
         # fixed-width text: a number column would show 3 / 2.9 / 0.33; equal widths still sort right
         table.append([epoch, "" if r.mos is None else f"{r.mos:.2f}",
@@ -618,12 +620,12 @@ def ckpt_table(rows, offset: int, sort: str | None = None,
     return table, keys, best
 
 
-def ckpt_cards(rows, offset: int, sort: str | None = None,
-               selected: str | None = None) -> tuple[str, dict[str, str], str | None]:
+def ckpt_cards(rows, offset: int, sort: str | None = None, selected: str | None = None,
+               exported: str | None = None) -> tuple[str, dict[str, str], str | None]:
     """The checkpoints as clickable cards (theme.HEAD sends a click's data-key to the hidden pick box):
     (html, card key → checkpoint path, the path to preselect). Same order and marks as ckpt_table; the
     `selected` card is highlighted instead of marked."""
-    table, keys, best = ckpt_table(rows, offset, sort)
+    table, keys, best = ckpt_table(rows, offset, sort, exported=exported)
     if not table:
         return msg_html_plain(S.NO_CHECKPOINTS), keys, best
     cards = []
@@ -631,7 +633,8 @@ def ckpt_cards(rows, offset: int, sort: str | None = None,
         key = ckpt_key_of_row([epoch, mos, mel, marks])
         cls = "ckpt-card current" if keys.get(key) == selected else "ckpt-card"
         nums = " · ".join(t for t in (f"MOS {mos}" if mos else "", f"mel {mel}" if mel else "") if t)
-        chips = "".join(f'<span class="phr-chip{" best" if m == S.CKPT_BEST_MOS else ""}">{html.escape(m)}</span>'
+        chips = "".join(f'<span class="phr-chip{" best" if m == S.CKPT_BEST_MOS else ""}'
+                        f'{" exported" if m == S.CKPT_EXPORTED else ""}">{html.escape(m)}</span>'
                         for m in marks.split(" · ") if m)
         cards.append(f'<div class="{cls}" data-key="{html.escape(key)}" role="button" tabindex="0">'
                      f'<span class="ckpt-dot"></span>'
@@ -639,6 +642,30 @@ def ckpt_cards(rows, offset: int, sort: str | None = None,
                      f'<span class="muted">{html.escape(nums)}</span></div>'
                      f'<div class="ckpt-tags">{chips}</div></div>')
     return '<div class="ckpt-cards">' + "".join(cards) + "</div>", keys, best
+
+
+def pack_model_html(info: dict | None, onnx: Path) -> str:
+    """«Упаковка»: which model will be packed (train.model_info), or that there is none yet."""
+    head = f'<div class="pack-model-head">{html.escape(S.PACK_MODEL_HEAD)}</div>'
+    # opens «Чекпойнты» through the sidebar (theme.HEAD): a Gradio button can't sit inside this card
+    goto = (f'<button type="button" class="pack-goto" data-section="{html.escape(S.SEC_CKPT)}">'
+            f'{html.escape(S.PACK_GOTO_CKPT)}</button>')
+    if info is None:
+        return (f'<div class="pack-model none"><div class="pack-model-text">{head}'
+                f'<div>{html.escape(S.PACK_MODEL_NONE)}</div></div>{goto}</div>')
+    when = datetime.fromtimestamp(Path(onnx).stat().st_mtime).strftime("%d.%m %H:%M")
+    if not info or info.get("epoch") is None:
+        text = S.PACK_MODEL_UNKNOWN.format(when=when)
+    else:
+        try:
+            when = datetime.fromisoformat(info["exported"]).strftime("%d.%m %H:%M")
+        except (KeyError, TypeError, ValueError):
+            pass
+        text = S.PACK_MODEL.format(what=_ckpt_text(int(info["epoch"]), info.get("mos"), info.get("mel")), when=when)
+        text = text[0].upper() + text[1:]
+    return (f'<div class="pack-model"><div class="pack-model-text">{head}'
+            f'<div class="pack-model-what">{html.escape(text)}</div>'
+            f'<div class="muted">{html.escape(S.PACK_MODEL_OTHER)}</div></div>{goto}</div>')
 
 
 def msg_html_plain(text: str) -> str:
@@ -925,16 +952,43 @@ class ProjectLocks:
 # ---------- install ----------
 
 def check_install_target(target) -> Path:
-    """Install target must be an existing absolute folder; it is never created from the UI."""
+    """An absolute folder: a models folder, or a game / mod config folder (see install.models_dir_for).
+    Only the last step, models/ inside an existing config/omnichat, is ever created here: a fresh instance
+    has the mod but no voice yet."""
+    from omnivoice import install
     text = (target or "").strip()
     if not text:
         raise ValueError(S.INSTALL_NO_TARGET)
     path = Path(text)
     if not path.is_absolute():
         raise ValueError(S.TARGET_NOT_ABSOLUTE)
+    path = install.models_dir_for(path)
     if not path.is_dir():
-        raise ValueError(S.TARGET_NOT_FOUND.format(path=path))
+        if path.name == "models" and path.parent.is_dir():
+            path.mkdir()
+        else:
+            raise ValueError(S.TARGET_NOT_FOUND.format(path=path))
     return path
+
+
+def target_choices(targets) -> list[tuple[str, str]]:
+    """install.find_targets → dropdown (label, path): «Modrinth · 123123», «Папка разработки (run)»."""
+    return [(f"{t.launcher} · {t.name}" if t.launcher else S.TARGET_DEV, str(t.path)) for t in targets]
+
+
+def pick_folder(initial: str | None = None) -> str | None:
+    """The system «choose a folder» dialog (the UI runs on this computer); None when cancelled."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)  # over the browser, not behind it
+    try:
+        start = initial if initial and Path(initial).is_dir() else str(Path.home())
+        chosen = filedialog.askdirectory(parent=root, title=S.TARGET_PICK_TITLE, initialdir=start, mustexist=True)
+    finally:
+        root.destroy()
+    return str(Path(chosen)) if chosen else None
 
 
 # ---------- pack ----------

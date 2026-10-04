@@ -88,3 +88,26 @@ def test_swap_dir_refuses_ancestor_target(tmp_path):
     with pytest.raises(ValueError):
         swap_dir(models / ".t", models)
     assert (models / "keep").is_dir() and (models / ".t").is_dir()
+
+
+def test_find_targets_in_launchers_with_the_mod(tmp_path, monkeypatch):
+    appdata, home = tmp_path / "AppData", tmp_path / "home"
+    mr = appdata / "ModrinthApp/profiles/123123"; (mr / "mods").mkdir(parents=True)
+    (mr / "mods/omnichat-0.1.jar").write_bytes(b"jar")                          # the mod, no models yet
+    (appdata / "ModrinthApp/profiles/Vanilla/mods").mkdir(parents=True)        # no OmniChat: skipped
+    cf = home / "curseforge/minecraft/Instances/Pack"; (cf / "config/omnichat").mkdir(parents=True)
+    pr = appdata / "PrismLauncher/instances/Inst/minecraft"; (pr / "config/omnichat/models").mkdir(parents=True)
+    monkeypatch.setenv("APPDATA", str(appdata)); monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.chdir(tmp_path)
+    found = [(t.launcher, t.name, t.path) for t in install.find_targets()]
+    assert found == [("Prism", "Inst", pr / "config/omnichat/models"),
+                     ("Modrinth", "123123", mr / "config/omnichat/models"),
+                     ("CurseForge", "Pack", cf / "config/omnichat/models")]
+
+
+def test_models_dir_for_a_picked_folder(tmp_path):
+    game = tmp_path / "profile"; (game / "mods").mkdir(parents=True)
+    assert install.models_dir_for(game) == game / "config/omnichat/models"
+    assert install.models_dir_for(game / "config/omnichat") == game / "config/omnichat/models"
+    models = tmp_path / "anything/models"; models.mkdir(parents=True)
+    assert install.models_dir_for(models) == models
