@@ -679,6 +679,344 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-10-03T23:10:00"
+    },
+    {
+      "id": "bug-043",
+      "timestamp": "2026-10-03T21:41:05.855Z",
+      "error_message": "Incorrect value in code",
+      "file": "tools/omnivoice/tests/test_ui_helpers.py",
+      "root_cause": "Had \"~15 ГБ на диске C:\"",
+      "fix": "Changed to \"~15 ГБ\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-03T21:41:05.855Z"
+    },
+    {
+      "id": "bug-044",
+      "timestamp": "2026-10-04T12:00:00Z",
+      "error_message": "omnivoice slice: fast game dialogue (0.1-0.2 s pauses) gave multi-line segments with empty text; slicing progress shown twice and stuck at 0%",
+      "file": "tools/omnivoice/omnivoice/slicer.py",
+      "root_cause": "silero VAD regions 5-10 s + plan_segments merge_gap 0.35; gr.Progress drawn on every output, progress only reported per file",
+      "fix": "transcript-driven slicing (faster-whisper words -> segments.plan_from_words with energy snapping, re-recognition of skipped speech); show_progress_on=[msg]; per-segment progress",
+      "tags": [
+        "omnivoice",
+        "slicer",
+        "whisper",
+        "gradio",
+        "progress"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T12:00:00Z"
+    },
+    {
+      "id": "bug-045",
+      "timestamp": "2026-10-04T12:00:00Z",
+      "error_message": "Library cublas64_12.dll is not found or cannot be loaded (faster-whisper on RTX 4070 Ti)",
+      "file": "tools/omnivoice/omnivoice/transcriber.py",
+      "root_cause": "ctranslate2 counts the GPU but CUDA 12 cuBLAS/cuDNN DLLs are not installed; fails mid-recognition",
+      "fix": "transcriber._cuda_libs_missing checks DLLs up front -> CPU (medium) with a Russian log line; runtime CUDA failure retries on CPU",
+      "tags": [
+        "omnivoice",
+        "cuda",
+        "whisper",
+        "windows"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T12:00:00Z"
+    },
+    {
+      "id": "bug-046",
+      "timestamp": "2026-10-03T23:19:28.901Z",
+      "error_message": "Significant refactor of ",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 15→29 lines (6 removed) | Also: def msg_html(text: str = \"\", error: bool = False) ; cls = \"section-msg err\" if error else \"section-msg",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-10-03T23:19:29.182Z"
+    },
+    {
+      "id": "bug-047",
+      "timestamp": "2026-10-04T10:09:59.136Z",
+      "error_message": "Missing guard clause",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "No early return/throw for edge case: Date.now(",
+      "fix": "Added guard clause: if (Date.now()",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:09:59.136Z"
+    },
+    {
+      "id": "bug-048",
+      "timestamp": "2026-10-04T10:25:00Z",
+      "error_message": "Журнал обучения не автоскроллится вниз; скроллбар не в теме",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "Gradio Textbox autoscroll не срабатывает, когда значение целиком переписывается таймером",
+      "fix": "autoscroll=False + elem_classes=log-box; JS в HEAD: следует за хвостом, при скролле вверх фиксирует позицию и показывает кнопку ↓, у дна снова прилипает; ::-webkit-scrollbar в палитре HUD",
+      "tags": [
+        "gradio",
+        "autoscroll",
+        "textbox",
+        "scrollbar",
+        "ui"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:25:00Z"
+    },
+    {
+      "id": "bug-049",
+      "timestamp": "2026-10-04T10:25:00Z",
+      "error_message": "Шрифт где-то один, где-то другой (пиксельные цифры + обычная кириллица)",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "Silkscreen не содержит кириллицы — буквы падали на JetBrains Mono, а цифры/латиница оставались пиксельными",
+      "fix": "Silkscreen оставлен только для логотипа OMNIVOICE; остальное — JetBrains Mono 600",
+      "tags": [
+        "font",
+        "cyrillic",
+        "silkscreen",
+        "ui"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:25:00Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-10-04T10:23:54.909Z",
+      "error_message": "Significant refactor of ",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→11 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:23:54.909Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-10-04T10:50:00Z",
+      "error_message": "Список чекпойнтов сужается до выбранного пункта при Win+Shift+S",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "Gradio Dropdown на keyup любой не-навигационной клавиши (включая Shift/Win) фильтрует варианты по тексту поля = подписи выбранного",
+      "fix": "JS в HEAD (capture): на input[role=combobox] глотать модификаторы, а на readonly (filterable=False) — все клавиши кроме навигации",
+      "tags": [
+        "gradio",
+        "dropdown",
+        "filter",
+        "keyboard",
+        "ui"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:50:00Z"
+    },
+    {
+      "id": "bug-051",
+      "timestamp": "2026-10-04T10:50:00Z",
+      "error_message": "★ лучший чекпойнт = эпоха 1 (MOS 3.98); ранние эпохи и дубли в списке; хаотичный порядок",
+      "file": "tools/omnivoice/omnivoice/previews.py",
+      "root_cause": "MOS ранних эпох завышен (голос ещё базовый); rank_checkpoints сортировал по MOS и не убирал last.ckpt прошлых запусков с той же эпохой",
+      "fix": "Разгон max(20, 5% эпох) скрыт и не участвует в best (если есть что-то кроме него); порядок: ★, последний, лучший mel, остальные по эпохе по убыванию; старые last.ckpt-дубли убраны",
+      "tags": [
+        "checkpoints",
+        "ranking",
+        "mos",
+        "ui"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:50:00Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-10-04T10:30:09.792Z",
+      "error_message": "Incorrect value in code",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "Had \"training panel refresh failed:\n%s\"",
+      "fix": "Changed to \"training panel refresh failed:\\n%s\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T10:30:09.792Z"
+    },
+    {
+      "id": "bug-052",
+      "timestamp": "2026-10-04T11:20:00Z",
+      "error_message": "Без проектов в сайдбаре доступны все разделы; форма создания проекта тесная и некрасивая",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "Radio разделов всегда содержал NAV_SECTIONS; форма жила в аккордеоне сайдбара",
+      "fix": "nav_choices(has_project): без проекта только «Установка»; «Новый проект» — отдельная страница (скрытый последний пункт radio + кнопка в сайдбаре), базы карточками; steps bar disabled без проекта; шаги-бар обновляет только on_nav_for_project (гонка с refresh_all давала неактивный чип)",
+      "tags": [
+        "ui",
+        "gradio",
+        "navigation",
+        "race"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:20:00Z"
+    },
+    {
+      "id": "bug-055",
+      "timestamp": "2026-10-04T11:01:58.359Z",
+      "error_message": "Incorrect value in code",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "Had \"base sample failed:\n%s\"",
+      "fix": "Changed to \"base sample failed:\\n%s\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:01:58.359Z"
+    },
+    {
+      "id": "bug-056",
+      "timestamp": "2026-10-04T11:01:58.624Z",
+      "error_message": "Wrong reference: colab should be checkpoints",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "Used \"colab\" instead of \"checkpoints\"",
+      "fix": "Changed colab → checkpoints",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:01:58.624Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-10-04T11:45:00Z",
+      "error_message": "InvalidPathError: Cannot move G:\\Main\\VMachines\\omnivoice\\samples\\...mp3 to the gradio cache dir",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "Gradio serves only files under cwd/temp/allowed_paths; base voice samples are cached in the dependency folder",
+      "fix": "launch(): allowed_paths += paths.cache_source()[0]/'samples' (cache_source, not cache_dir, so a missing drive doesn't break launch)",
+      "tags": [
+        "gradio",
+        "allowed_paths",
+        "audio"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:45:00Z"
+    },
+    {
+      "id": "bug-058",
+      "timestamp": "2026-10-04T11:12:11.592Z",
+      "error_message": "Significant refactor of ",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:12:11.592Z"
+    },
+    {
+      "id": "bug-054",
+      "timestamp": "2026-10-04T12:20:00Z",
+      "error_message": "Таблица файлов в «Аудио» выглядит плохо и редактируется (выделение ячейки, ручка ресайза); нельзя прослушать/удалить запись",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "raw files были gr.Dataframe; gr.Audio waveform на длинных записях даёт белый скроллбар в shadow DOM",
+      "fix": "gr.render список карточек: имя+размер+нативный <audio> (gradio_api/file=, projects в allowed_paths) + кнопка ✕ (delete_raw_file только внутри raw/)",
+      "tags": [
+        "ui",
+        "gradio",
+        "audio",
+        "dataframe"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T12:20:00Z"
+    },
+    {
+      "id": "bug-055",
+      "timestamp": "2026-10-04T12:45:00Z",
+      "error_message": "Кнопка плеера после клика — белая скруглённая рамка фокуса; пауза — сплошной блок; ✕ не на одной линии с плеером и обрезается в узкой карточке",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "дефолтный outline браузера; глобальный box-sizing:border-box съедал зазор между полосками паузы; иконки позиционировались пикселями; ✕ был отдельным gr.Button вне строки плеера; overflow:hidden карточки резал outline/кнопки",
+      "fix": "display:grid+place-items:center для иконок, box-sizing:content-box у паузы, focus-visible = заливка вместо внешнего outline, ✕ внутри .rp кликает скрытый gr.Button, container query прячет время в узкой карточке",
+      "tags": [
+        "ui",
+        "css",
+        "focus",
+        "alignment"
+      ],
+      "related_bugs": [
+        "bug-054"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T12:45:00Z"
+    },
+    {
+      "id": "bug-061",
+      "timestamp": "2026-10-04T11:37:33.242Z",
+      "error_message": "Missing guard clause",
+      "file": "tools/omnivoice/omnivoice/ui/theme.py",
+      "root_cause": "No early return/throw for edge case: !b",
+      "fix": "Added guard clause: if (!b)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T11:37:33.242Z"
+    },
+    {
+      "id": "bug-056",
+      "timestamp": "2026-10-04T13:20:00Z",
+      "error_message": "Список фраз — редактируемая таблица, неудобно; иконки ↺ без кольца; длинный текст обрезался",
+      "file": "tools/omnivoice/omnivoice/ui/app.py",
+      "root_cause": "gr.Dataframe; Gradio CSS rewrite drops `border:` shorthand when followed by a longhand; Gradio sizes textarea once to 1 line; Gradio button keeps label text as grid/flex item → icon off-centre",
+      "fix": "gr.render карточки фраз (▶ → нижний плеер с autoplay, текст сохраняется на blur/enter, ✕/↺ выкинуть/вернуть), иконки position:absolute inset:0 margin:auto, border longhands, textarea field-sizing:content",
+      "tags": [
+        "ui",
+        "gradio",
+        "css",
+        "phrases"
+      ],
+      "related_bugs": [
+        "bug-054",
+        "bug-055"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-10-04T13:20:00Z"
     }
   ]
 }

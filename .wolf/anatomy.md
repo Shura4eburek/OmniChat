@@ -1,29 +1,48 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-03T20:06:15.397Z
-> Files: 33 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T11:48:51.539Z
+> Files: 60 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
+- `admin-disk.ps1` (~289 tok)
+- `analyze.py` (~257 tok)
+- `app_train_block.py` — status_html, on_train_tick, read_metrics, players (~2107 tok)
 - `build-window.ps1` (~164 tok)
+- `datadir-report.md` — omnivoice: configurable dependency location — report (~936 tok)
+- `dirsize.py` — Size of every folder up to DEPTH levels below ROOT (allocated-ish: file sizes, links skipped). (~355 tok)
+- `dump_words.py` (~154 tok)
 - `edit_bat.py` (~1134 tok)
 - `edit_deps.py` — rep, check_all, host_gpu, check_all (~739 tok)
 - `edit_readme.py` — rep (~791 tok)
 - `edit_test_deps.py` — rep, items, items, test_host_gpu_runs_nvidia_smi_on_the_host (~868 tok)
 - `edit_wslenv.py` — rep, ensure_wsl, download_rootfs, install_marker (~2128 tok)
 - `fix_sh.py` — rep (~674 tok)
+- `helpers_tests_add.py` — ---------- training section: clean log, train.log, checkpoints, disk ---------- (~1439 tok)
 - `new_tests.py` — ---------------- WSL backend ---------------- (~2525 tok)
 - `patch_app.py` — rep, build, build, start_probe (~1899 tok)
 - `patch_helpers.py` — rep, steps_bar_html, steps_bar_html, start (~946 tok)
 - `patch_slicer.py` (~266 tok)
 - `patch_tests.py` — rep, test_no_docker_message, test_no_env_message (~342 tok)
 - `patch_train.py` — from: rep, detect_env, detect_env, backend_for + 19 more (~4228 tok)
+- `prev_add.py` — ---------- piper events, read incrementally ---------- (~3245 tok)
+- `prev_tests_add.py` — ---------- piper-shaped events: audio of a validation first, then its val scalars + "epoch" -------- (~2046 tok)
 - `pull-progress.ps1` — Declares Rx (~275 tok)
+- `restart-ui.sh` — restart the omnivoice UI on :7860 and wait until it answers (~188 tok)
+- `runner_block.py` — TrainRunner: running, log_text, poll_checkpoints, start + 5 more (~2883 tok)
 - `setup_helpers.py` — ---------- setup (dependencies) ---------- (~2078 tok)
+- `train-ui-report.md` — omnivoice: redesign of the «Обучение» section (~1315 tok)
 - `train-window.ps1` (~171 tok)
+- `ui_test_add.py` — test_training_panel_fills_charts_checkpoints_players_and_prunes, test_prune_refused_while_files_are_ (~808 tok)
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ortsmoke/
 
+
+## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/
+
+- `phrases_css.py` (~1264 tok)
+- `phrases_css2.py` (~662 tok)
+- `phrases_edit.py` — edit, table_value, table_update, load_segments (~2837 tok)
 
 ## ./
 
@@ -577,6 +596,7 @@
 ## tools/omnivoice/
 
 - `install-omnivoice.bat` (~843 tok)
+- `README.md` — Project documentation (~3953 tok)
 
 ## tools/omnivoice/docker/
 
@@ -584,11 +604,15 @@
 
 ## tools/omnivoice/omnivoice/
 
-- `cli.py` — API router (~3564 tok)
+- `cli.py` — API router (~4625 tok)
+- `datadir.py` — Move the dependency folder (paths.cache_dir()) to another drive. Projects are not affected. (~3222 tok)
 - `deps.py` — Windows-side dependencies: prep/ui extras, ffmpeg, and the WSL training environment (via wslenv). (~1936 tok)
 - `download.py` — Resumable downloads: a .part file, HTTP Range resume, one retry, optional pinned sha256, Russian err (~953 tok)
 - `onnxmeta.py` — piper_metadata, tokens_from_config, write_metadata (~434 tok)
+- `paths.py` — Where omnivoice keeps its heavy dependencies (WSL disk, base checkpoints, ffmpeg). Projects live els (~754 tok)
 - `train.py` — from: detect_env, batch_size_for, build_image, last_checkpoint + 9 more (~3133 tok)
+- `trainlog.py` — Readable training log: piper / Lightning stdout (tqdm bars, warnings, escape codes) → short (~2502 tok)
+- `transcriber.py` — has_whisper, register_cuda_dlls, load_whisper, run (~2059 tok)
 - `wslenv.py` — Training environment in an own WSL2 distro «omnivoice»: official Ubuntu 24.04 rootfs + pinned pip pa (~3194 tok)
 
 ## tools/omnivoice/omnivoice/piper_compat/
@@ -599,9 +623,15 @@
 
 ## tools/omnivoice/omnivoice/ui/
 
+- `app.py` — Gradio front end over the omnivoice core, in the OmniChat HUD style. (~14786 tok)
+- `theme.py` — OmniChat HUD look: near-black background, teal 1 px frames, corner brackets, square corners. (~8806 tok)
 
 ## tools/omnivoice/tests/
 
+- `test_cli.py` — test_version, test_cli_cyrillic_output_does_not_raise, test_force_utf8_reconfigures_streams, test_ui (~2266 tok)
+- `test_datadir.py` — Configurable dependency location (paths.cache_dir / config.json) and moving it (datadir.move_data). (~3925 tok)
 - `test_deps.py` — FakePopen: cache, make_zip, test_ffmpeg_path_prefers_path_then_cache, test_extract_only_two_exes_ato (~2474 tok)
 - `test_installer.py` — The Windows installer: CRLF, UTF-8 without BOM, Russian messages, and the key commands (never execut (~630 tok)
+- `test_trainlog.py` — feed_all, epoch_block, test_strip_ansi_and_redraws, test_epoch_lines_from_tqdm_postfix (~1877 tok)
+- `test_ui_helpers.py` — Pure UI helpers: no gradio needed, so these run in the plain test environment too. (~6145 tok)
 - `test_wslenv.py` — Fake: u16, joined, healthy, test_decode_utf16_and_utf8 + 29 more (~5151 tok)

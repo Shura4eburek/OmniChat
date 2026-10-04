@@ -465,3 +465,126 @@
 | 23:10 | omnivoice final fix wave: wsl reboot marker + VMP hint, no-GPU skips WSL, rootfs cleanup, Russian UTF-8 installer; 419 tests pass; commits d854af0, 6da596b | wslenv.py, deps.py, install-omnivoice.bat, README.md | done | ~60k |
 | 23:06 | Created .superpowers/sdd/2026-10-04-omnivoice-setup/final-fix-report.md | — | ~1312 |
 | 23:06 | Session end: 47 writes across 39 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 19 reads | ~60836 tok |
+| 23:06 | Session end: 47 writes across 39 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 19 reads | ~60836 tok |
+| 23:25 | Session end: 47 writes across 39 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 19 reads | ~60836 tok |
+| 23:30 | Session end: 47 writes across 39 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 19 reads | ~60836 tok |
+| 23:31 | Edited tools/omnivoice/omnivoice/ui/theme.py | inline fix | ~32 |
+| 23:31 | Edited tools/omnivoice/omnivoice/ui/theme.py | 1→2 lines | ~28 |
+| 23:32 | Session end: 49 writes across 40 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 20 reads | ~63556 tok |
+| 23:34 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/restart-ui.sh | — | ~188 |
+| 23:37 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:38 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:38 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:39 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:42 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:43 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:43 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 23:58 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 00:12 | Session end: 50 writes across 41 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~63774 tok |
+| 00:12 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/dirsize.py | — | ~355 |
+| 00:12 | Session end: 51 writes across 42 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~64129 tok |
+| 00:15 | Session end: 51 writes across 42 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~64129 tok |
+| 00:27 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/admin-disk.ps1 | — | ~289 |
+| 00:27 | Session end: 52 writes across 43 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~64439 tok |
+| 00:31 | Session end: 52 writes across 43 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~64439 tok |
+| 00:35 | Session end: 52 writes across 43 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 21 reads | ~64439 tok |
+| 00:38 | Created tools/omnivoice/tests/test_datadir.py | — | ~3925 |
+| 00:39 | Created tools/omnivoice/omnivoice/paths.py | — | ~754 |
+| 00:39 | Created tools/omnivoice/omnivoice/datadir.py | — | ~3222 |
+| 00:40 | Edited tools/omnivoice/tests/test_cli.py | inline fix | ~7 |
+| 00:40 | Edited tools/omnivoice/omnivoice/cli.py | inline fix | ~14 |
+| 00:41 | Edited tools/omnivoice/tests/test_ui_helpers.py | 1→2 lines | ~42 |
+| 00:42 | Edited tools/omnivoice/README.md | expanded (+15 lines) | ~392 |
+| 00:43 | omnivoice configurable dependency folder (paths config, datadir.move_data, CLI data-dir, UI box), commit 578fbb6 | tools/omnivoice/omnivoice/{paths,datadir,cli}.py, ui/* | 460 tests pass | ~60k |
+| 00:43 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/datadir-report.md | — | ~998 |
+| 00:45 | Session end: 60 writes across 50 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~77456 tok |
+| 00:49 | Session end: 60 writes across 50 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~77456 tok |
+| 00:52 | Session end: 60 writes across 50 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~77456 tok |
+| 00:57 | Session end: 60 writes across 50 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~77456 tok |
+| 01:01 | Session end: 60 writes across 50 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~77456 tok |
+| 01:05 | Created tools/omnivoice/omnivoice/transcriber.py | — | ~1592 |
+| 01:08 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/dump_words.py | — | ~154 |
+| 01:10 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/analyze.py | — | ~257 |
+| 12:00 | omnivoice: transcript-driven slicing (whisper words -> plan_from_words), UI progress fix, CUDA DLL check; live check on 46 s Arthas clip = 22 one-line phrases | tools/omnivoice/omnivoice/{segments,slicer,transcriber,cli}.py, ui/{app,strings}.py | 492 tests pass, commits 8c3c48e d6876aa | ~120k |
+| 01:21 | Session end: 63 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 23 reads | ~79459 tok |
+| 01:25 | Edited tools/omnivoice/omnivoice/transcriber.py | modified register_cuda_dlls() | ~227 |
+| 01:29 | Session end: 64 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 24 reads | ~81278 tok |
+| 01:36 | Session end: 64 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 24 reads | ~81278 tok |
+| 01:40 | Session end: 64 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 24 reads | ~81278 tok |
+| 01:42 | Session end: 64 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 24 reads | ~81278 tok |
+| 02:02 | Session end: 64 writes across 52 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 24 reads | ~81278 tok |
+| 02:12 | Created tools/omnivoice/tests/test_trainlog.py | — | ~1877 |
+| 02:13 | Created tools/omnivoice/omnivoice/trainlog.py | — | ~2502 |
+| 02:14 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/prev_tests_add.py | — | ~2046 |
+| 02:15 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/prev_add.py | — | ~3245 |
+| 02:17 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/helpers_tests_add.py | — | ~1439 |
+| 02:18 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/runner_block.py | — | ~2883 |
+| 02:19 | Edited tools/omnivoice/omnivoice/ui/app.py | modified Row() | ~639 |
+| 02:19 | Edited tools/omnivoice/omnivoice/ui/app.py | modified msg_html() | ~59 |
+| 02:19 | Edited tools/omnivoice/omnivoice/ui/app.py | inline fix | ~20 |
+| 02:19 | Edited tools/omnivoice/omnivoice/ui/app.py | modified refresh_all() | ~285 |
+| 02:20 | Edited tools/omnivoice/omnivoice/ui/app.py | removed 5 lines | ~8 |
+| 02:20 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/app_train_block.py | — | ~2107 |
+| 02:21 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/ui_test_add.py | — | ~808 |
+| 02:35 | omnivoice training section redesign: clean log, MOS/mel charts, ranked checkpoints, listen, prune | omnivoice/trainlog.py, previews.py, ui/* | 520 tests pass, commits fada4ef 90de779 | ~90k |
+| 02:23 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/train-ui-report.md | — | ~1403 |
+| 02:24 | Session end: 78 writes across 62 files (final-fix-brief.md, edit1.py, transcriber.py, strings.py, helpers.py) | 25 reads | ~107998 tok |
+
+## Session: 2026-10-04 12:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:09 | Edited tools/omnivoice/omnivoice/ui/theme.py | added 6 condition(s) | ~514 |
+| 13:09 | Edited tools/omnivoice/omnivoice/ui/theme.py | modified selector() | ~292 |
+| 13:10 | Session end: 2 writes across 1 files (theme.py) | 0 reads | ~806 tok |
+| 12:45 | omnivoice UI: log autoscroll + ↓ button + themed scrollbar; Silkscreen only for logo | ui/theme.py, ui/app.py | verified in browser | ~6k |
+| 13:13 | Session end: 2 writes across 1 files (theme.py) | 0 reads | ~806 tok |
+| 13:16 | Session end: 2 writes across 1 files (theme.py) | 0 reads | ~806 tok |
+| 13:19 | Session end: 2 writes across 1 files (theme.py) | 0 reads | ~806 tok |
+| 13:21 | Edited tools/omnivoice/omnivoice/ui/theme.py | added 1 condition(s) | ~157 |
+| 13:23 | Edited tools/omnivoice/omnivoice/ui/theme.py | added 1 condition(s) | ~197 |
+| 13:30 | omnivoice: checkpoint list warm-up/sort/dedup + dropdown narrowing fix; tests 522 pass | previews.py, ui/theme.py, ui/strings.py, tests/test_previews.py | verified in browser | ~12k |
+| 13:24 | Session end: 4 writes across 1 files (theme.py) | 0 reads | ~1160 tok |
+| 13:30 | Edited tools/omnivoice/omnivoice/ui/app.py | 2→1 lines | ~26 |
+| 13:45 | omnivoice: checkpoints moved to own «Чекпойнты» tab, sortable table (MOS/mel/epoch), row click → listen/export; 522 tests pass | ui/app.py, ui/helpers.py, ui/strings.py, ui/theme.py, tests/test_ui*.py | verified in browser | ~25k |
+| 13:34 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 13:36 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 13:39 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 13:55 | omnivoice: base model picker in «новый проект» (languages.bases_for/default_base/base_of), base shown on train tab; issue #60 synthetic dataset; 524 tests | languages.py, ui/app.py, ui/helpers.py, ui/strings.py, tests | verified in browser | ~10k |
+| 13:44 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 14:05 | omnivoice: delete project (sidebar «− удалить проект», confirm checkbox, refuses while training/fresh ckpts; project.delete_project only removes direct child with project.toml); 527 tests | project.py, ui/app.py, ui/strings.py, tests | verified in browser (no real deletion) | ~8k |
+| 13:48 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 14:25 | omnivoice: no-project nav restriction, «Новый проект» page with base cards, disabled steps bar; verified create/delete cycle on test instance :7861; 529 tests | ui/app.py, ui/helpers.py, ui/strings.py, ui/theme.py, tests | ok | ~20k |
+| 13:59 | Session end: 5 writes across 2 files (theme.py, app.py) | 0 reads | ~1186 tok |
+| 14:01 | Edited tools/omnivoice/omnivoice/ui/app.py | 2→1 lines | ~23 |
+| 14:01 | Edited tools/omnivoice/omnivoice/ui/app.py | inline fix | ~15 |
+| 14:45 | omnivoice: base voice sample player on «Новый проект» (checkpoints.sample, cached), English male bases ryan/joe/hfc_male + amy/hfc_female; 531 tests | languages.py, checkpoints.py, ui/app.py, ui/strings.py, ui/theme.py, tests | verified in browser | ~15k |
+| 14:04 | Session end: 7 writes across 2 files (theme.py, app.py) | 1 reads | ~13710 tok |
+| 14:55 | omnivoice: base cards sorted male→female, 3-column grid = one row per gender | ui/helpers.py, ui/theme.py, tests | verified in browser | ~4k |
+| 14:07 | Session end: 7 writes across 2 files (theme.py, app.py) | 1 reads | ~13710 tok |
+| 14:12 | Edited tools/omnivoice/omnivoice/ui/app.py | 3→4 lines | ~115 |
+| 15:20 | omnivoice: «Аудио» raw list as cards (play/delete), delete-project page (sizes breakdown + type-name confirm) via sidebar button; 533 tests; verified on test instance :7861 | ui/app.py, ui/helpers.py, ui/strings.py, ui/theme.py, tests | ok | ~30k |
+| 14:17 | Session end: 8 writes across 2 files (theme.py, app.py) | 1 reads | ~13825 tok |
+| 15:40 | omnivoice: HUD audio player (.rp) for recordings, delete ✕ fits card, wrapping layout for narrow widths, slice row aligned; zoom-checked | ui/helpers.py, ui/theme.py, ui/strings.py, ui/app.py | verified in browser | ~12k |
+| 14:22 | Session end: 8 writes across 2 files (theme.py, app.py) | 1 reads | ~13825 tok |
+| 15:55 | omnivoice: player icons grid-centred, pause fixed, focus fill, ✕ in player line (hidden gr.Button), narrow cards hide time; checked 1x/4x + states | ui/theme.py, ui/helpers.py, ui/app.py | verified | ~15k |
+| 14:27 | Session end: 8 writes across 2 files (theme.py, app.py) | 2 reads | ~18341 tok |
+| 14:32 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/phrases_edit.py | — | ~2837 |
+| 14:33 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/phrases_css.py | — | ~1264 |
+| 14:34 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/phrases_css2.py | — | ~662 |
+| 14:36 | Edited tools/omnivoice/omnivoice/ui/theme.py | 2→3 lines | ~91 |
+| 14:36 | Edited tools/omnivoice/omnivoice/ui/theme.py | modified text() | ~96 |
+| 14:37 | Edited tools/omnivoice/omnivoice/ui/theme.py | added 2 condition(s) | ~123 |
+| 14:37 | Edited tools/omnivoice/omnivoice/ui/theme.py | 1→2 lines | ~49 |
+| 16:20 | omnivoice: «Фразы» as cards (▶→bottom player, inline text autosave, ✕/↺ drop/restore, current highlight); verified on a copy of Arthas at 1x/3x + numeric alignment; 534 tests | ui/app.py, ui/helpers.py, ui/strings.py, ui/theme.py, tests | ok | ~40k |
+| 14:39 | Session end: 15 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~23463 tok |
+| 14:40 | Edited tools/omnivoice/omnivoice/ui/theme.py | 7→6 lines | ~139 |
+| 14:40 | Edited tools/omnivoice/omnivoice/ui/theme.py | 1→2 lines | ~55 |
+| 14:40 | Edited tools/omnivoice/omnivoice/ui/theme.py | 2→7 lines | ~124 |
+| 16:35 | omnivoice: ↺ restore icon as SVG mask (Lucide rotate-ccw), restore button stays bright on dimmed dropped cards; checked 1x/6x + restore click | ui/theme.py | ok | ~8k |
+| 14:42 | Session end: 18 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27703 tok |
+| 14:48 | Edited tools/omnivoice/omnivoice/ui/theme.py | modified has() | ~176 |
+| 16:55 | omnivoice: training empty state → single dashed card (charts hidden until data), HTML text flush with frames on all pages, 20px rhythm on training page (checked empty + with fake data) | ui/app.py, ui/theme.py, tests/test_ui.py | ok | ~25k |
+| 14:52 | Session end: 19 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27879 tok |
+| 17:05 | omnivoice: hid number spin arrows; fields in a row align on one line + 40px height (checked 1x/3x on train + new project) | ui/theme.py | ok | ~12k |
+| 14:58 | Session end: 19 writes across 5 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 2 reads | ~27879 tok |

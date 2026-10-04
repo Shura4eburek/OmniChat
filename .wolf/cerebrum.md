@@ -5,10 +5,25 @@
 > Last updated: 2026-05-09
 
 ## User Preferences
+- [2026-10-04] Phrases page: likes the bottom «Выбранная фраза» gr.Audio player as is; list must be cards (▶, track name, editable text, ✕), not a table.
+- [2026-10-04] User expects UI changes to be visually inspected before reporting ("ты смотришь вообще, как оно выглядит?"): zoom in on the changed component, test narrow widths, no native/browser-default widgets that break the HUD style.
+- [2026-10-04] Tables that the user should not edit must not look editable; for file lists prefer cards with play + delete. Destructive/creating flows (new project, delete project) are full pages opened from sidebar buttons, not sidebar accordions.
+- [2026-10-04] Dislikes long dropdowns for choosing among many items — prefers a separate tab with a sortable table.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- Gradio 6 field DOM: Number = label.container > input; Textbox = label.container > .input-container > input; Dropdown frame = .wrap around input[role=combobox] (40px). omnivoice forces single-line inputs to 40px and pins them to the bottom of their block so wrapped labels don't misalign rows; number spin arrows hidden.
+- omnivoice spacing: Gradio pads HTML blocks 12px left/right (now 0 in .hud-section) and 10px top/bottom; a gr.Row with all children hidden has only comment nodes (use :not(:has(*)), not :empty). Measure gaps with getBoundingClientRect; target 20px between stacked blocks. Fake training charts for UI checks: tests.test_previews.piper_events into <project>/train/lightning_logs/version_0.
+- Gradio 6: a .click() with js="(...a)=>{...; return a;}" runs front-end code before the handler while keeping one dependency (tests look up deps by button). Native <audio src="gradio_api/file=<abs>"> works for files in allowed_paths. gr.render(inputs=[...]) + a gr.State revision counter re-renders dynamic lists.
+- Piper voice samples: https://huggingface.co/rhasspy/piper-voices/resolve/main/<lang>/<loc>/<voice>/<quality>/samples/speaker_0.mp3; checkpoints in dataset rhasspy/piper-checkpoints (some named voice-NNNN.ckpt without epoch= — avoid, base_epoch needs it).
+- Piper base models in languages.BASE_CHECKPOINTS (ru: denis/dmitri/ruslan male, irina female — the ru default). Project Arthas was trained from irina (female) → quality ceiling; male voices should start from a male base.
+- omnivoice UI: every UPPERCASE name in ui/strings.py must be a plain str (test_strings_have_no_empty_values) — tuples/lists go in helpers.py. «Чекпойнты» is a NAV section (not a project step) mapped to step "train". Gradio 6 Dataframe cells are div gridcells (no tr/td) and virtualised.
+- Gradio 6 Dropdown filters options on keyup of ANY non-nav key (even Shift) by the input text; omnivoice swallows such keys in theme.HEAD. Default Project base checkpoint = epoch 4139 (tests must use epochs relative to it).
+- Checkpoint list: warm-up epochs (max(20, 5%) after base) are hidden and never ★ — early MOS is inflated because the voice is still the base one.
+- omnivoice UI logs use elem_classes="log-box" + JS in theme.HEAD for stick-to-bottom/↓ button (Gradio autoscroll fails on full value rewrites).
+- [2026-10-04] omnivoice piper events: audio clips (tag = phrase text) use global_step, val_* scalars + "epoch" use Lightning's own step — a clip belongs to the NEXT "epoch" scalar in file order. tensorboard's pure-python reader takes ~4 s/30 MB; previews._EventFile reads TFRecords itself incrementally (byte offset, ~0.16 s). Epoch scalar value == checkpoint epoch=N (absolute; new = N - base_epoch).
+- [2026-10-04] omnivoice training UI: TrainRunner keeps trainlog.LogCleaner (clean log) + raw train/train.log; Lightning prints nothing on checkpoint save, runner.poll_checkpoints diffs the dir. val_mos (UTMOS) is highest at the first epochs (base voice) — "best by MOS" can be near-base.
 - omnivoice: install-omnivoice.bat is UTF-8 without BOM + CRLF with `chcp 65001 >nul` on line 2; dry-run via `OMNIVOICE_DRYRUN=1 cmd /c` to verify parsing.
 - omnivoice: no host nvidia-smi => deps.check_all marks WSL/ENV optional; ui needs_setup is False when env.gpu_name is None.
 - omnivoice (tools/omnivoice): piper fine-tune `--ckpt_path` restores base loop state; irina base is epoch 4139 → `--epochs` is ADDITIONAL epochs; Lightning ckpt `epoch=N` is 0-based.
@@ -18,6 +33,17 @@
 - **Description:** Fabric мод для Minecraft, добавляющий голосовую озвучку чата (TTS) с пространственным звуком и визуальные облачка сообщений над головами игроков.
 
 ## Do-Not-Repeat
+- [2026-10-04] Don't draw composite icons (arrows on arcs) with CSS borders — use an SVG data-URI as mask-image (theme.UNDO_SVG); Gradio keeps url("data:…") intact. Inspect every icon at 6x zoom, not just layout.
+- [2026-10-04] Gradio's CSS rewrite DROPS a `border:` shorthand that is followed by a border longhand in the same rule — use border-width/style/color longhands. Icons on gr.Button: label text stays in the button (font-size:0) and is a grid/flex item → centre pseudo-icons with position:absolute; inset:0; margin:auto.
+- [2026-10-04] UI review checklist before reporting: 1x and 3-4x zoom; idle/hover/focus/active/playing states; neighbours aligned (compare getBoundingClientRect mids); nothing clipped by overflow:hidden; icons centred with grid not pixel offsets; global box-sizing:border-box affects pseudo-element icons.
+- [2026-10-04] Don't ship native <audio controls> / browser-default widgets in omnivoice UI — use the HUD .rp player (theme.HEAD + CSS). Always zoom-check new components (body.style.zoom=2) for overflow before reporting.
+- [2026-10-04] The Bash tool here mangles backslashes inside heredocs (\n -> real newline) — write Python strings with 
+ via the Edit tool, not heredoc scripts.
+- [2026-10-04] Gradio file outputs outside cwd/temp need allowed_paths in launch() (failure is only in server log, not toasted).
+- [2026-10-04] Gradio: two handlers on one event writing the same output with a stale input (e.g. section) race — give each output one owner. elem_classes on gr.Radio lands on the <fieldset> itself (use fieldset.cls, not .cls fieldset).
+- [2026-10-04] Silkscreen font has NO Cyrillic — use it only for Latin-only text (logo); Russian UI text in JetBrains Mono.
+- [2026-10-04] Don't restart the omnivoice UI while training runs: piper is a child Popen of the UI process and dies with it. Old UI python may linger on :7860 (base uv cpython PID) — kill it too.
+- [2026-10-04] Git Bash heredocs (even quoted 'EOF') can lose backslashes in Windows paths written into .py files - use the Edit/Write tools for any line containing a backslash.
 - 2026-10-03: don't bump wslenv.ENV_VERSION for cosmetic wsl_setup.sh edits (e.g. apt cleanup) — it re-provisions every user's distro.
 - 2026-10-03: a long python heredoc with nested ''' and quotes broke Git Bash parsing; write edit scripts to the scratchpad with Write and run them.
 - [2026-10-03] Haiku implementers ignored trailer/.wolf staging rules — use sonnet+ for implementer subagents.
@@ -26,6 +52,7 @@
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
 ## Decision Log
+- [2026-10-04] Synthetic-data training (XTTS v2 / F5-TTS teacher) deferred → GitHub issue #60.
 
 - [2026-10-03] omnivoice WSL: wsl.exe own output is UTF-16LE (in-distro command output is UTF-8) — use wslenv.decode. Rootfs pin = releases.ubuntu.com/24.04.5 .wsl (gzip tar) sha bb415d82…; in-distro commands via wslenv.wsl_cmd (-u root). Downloads go through omnivoice/download.fetch. core.autocrlf=true → tools/omnivoice/.gitattributes forces LF for *.sh.
 
@@ -62,3 +89,8 @@
 
 - [2026-10-03] Git Bash `sed -i` strips CRLF on Windows: edit CRLF files (.bat) with Python in binary mode.
 - [2026-10-03] Python heredoc strings: `` in Windows paths (fmpeg) becomes a form feed - use raw strings for paths.
+
+- [2026-10-04] omnivoice dependency folder: paths.cache_source() = OMNIVOICE_CACHE env > data_dir in %APPDATA%\omnivoice\config.json > %LOCALAPPDATA%\omnivoice. datadir.move_data moves it (wsl --manage --move first, then copy+size check, config switch, delete). UI reuses SetupRunner.start(job=, done_text=, error_title=).
+- [2026-10-04] omnivoice slicing is transcript-driven: slicer._plan_words -> faster-whisper words (vad_filter, word_timestamps) -> segments.plan_from_words (sentence split, merge only too-short pieces, energy snap of cuts) + re-recognition of uncovered loud spans. Whisper (esp. with VAD) skips lines and mistimes words near chunk edges by up to ~0.6 s — never trust raw word timestamps for cuts. Silero path = fallback only without faster_whisper.
+- [2026-10-04] Decision: merging "short sentences" (<2 s) put several unrelated game lines into one clip; merge only pieces whose clip would be < 1 s (span + 2*0.15 pad). Word-path `check` uses no_speech > 0.6 (0.5 flagged clean lines).
+- [2026-10-04] This PC: ctranslate2 sees the GPU but cublas64_12.dll is missing -> Whisper runs on CPU (medium); transcriber._cuda_libs_missing detects it. Gradio 6: restrict progress with `show_progress_on=[component]`.
