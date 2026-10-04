@@ -306,7 +306,7 @@ def xtts_ready(run: Run = subprocess.run) -> bool:
 
 
 def provision_xtts(on_line: Callable[[str], None], run: Run = subprocess.run, popen=subprocess.Popen) -> None:
-    """Copy xtts_setup.sh + its constraints into the distro and run it (≈ 3–4 GB the first time)."""
+    """Copy xtts_setup.sh + its constraints into the distro and run it (≈ 8 GB the first time)."""
     for name in XTTS_FILES:
         data = (COMPAT_DIR / name).read_bytes().replace(b"\r\n", b"\n")  # a CRLF checkout breaks bash
         rc, out = _run(run, wsl_cmd("sh", "-c", f"mkdir -p {SETUP_DIR} && cat > {SETUP_DIR}/{name}"), input=data)
