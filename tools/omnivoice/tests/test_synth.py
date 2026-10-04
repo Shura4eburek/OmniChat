@@ -82,3 +82,11 @@ def test_plan_keeps_done_and_manual(tmp_path):
 def test_no_synth_means_no_training_items(tmp_path):
     assert synth.training_items(project(tmp_path)) == []
     assert synth.load(project(tmp_path / "x")).items == []
+
+
+def test_summary_counts_manual_drops_as_rejected():
+    # the «брак» count matches the «Брак» filter: rejected by the check or dropped by the user
+    st = synth.SynthState([], [synth.SynthItem("a", "a", "corpus", status="done", verdict="rejected", dropped=True),
+                               synth.SynthItem("b", "b", "corpus", status="done", verdict="suspect", dropped=True,
+                                               manual="drop")])
+    assert synth.summary(st)["rejected"] == 2

@@ -168,7 +168,7 @@ def summary(state: SynthState) -> dict:
     taken = [i for i in done if not i.dropped]
     return {"accepted": len(taken), "accepted_min": round(sum(i.duration for i in taken) / 60, 1),
             "suspect": sum(i.verdict == "suspect" and i.manual is None for i in done),
-            "rejected": sum(i.dropped and i.verdict == "rejected" for i in done),
+            "rejected": sum(i.dropped and (i.verdict == "rejected" or i.manual == "drop") for i in done),
             "failed": sum(i.status == "failed" for i in state.items),
             "pending": sum(i.status == "pending" for i in state.items)}
 

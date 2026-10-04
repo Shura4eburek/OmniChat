@@ -25,7 +25,7 @@ def test_list_projects_only_dirs_with_project_toml(tmp_path):
 def test_steps_bar_html_states():
     steps = {"audio": True, "slice": True, "phrases": False, "check": False, "train": False, "pack": False}
     html = h.steps_bar_html(steps, "phrases")
-    assert html.count('data-section=') == 6
+    assert html.count('data-section=') == 7
     assert 'class="st done" data-section="Аудио"' in html
     assert "1 АУДИО ✓" in html
     assert 'class="st on" data-section="Фразы"' in html
@@ -39,7 +39,7 @@ def test_steps_bar_current_overrides_done():
 
 
 def test_section_mapping_covers_all_sections():
-    assert [h.SECTION_STEP[s] for s in h.SECTIONS] == ["audio", "slice", "phrases", "check", "train", "pack"]
+    assert [h.SECTION_STEP[s] for s in h.SECTIONS] == ["audio", "slice", "phrases", "check", "synth", "train", "pack"]
 
 
 @pytest.mark.parametrize("name,expected", [
@@ -721,7 +721,7 @@ def test_delete_raw_file_stays_inside_raw(tmp_path):
 
 def test_steps_bar_disabled_leads_nowhere():
     out = h.steps_bar_html({}, None, disabled=True)
-    assert out.count('class="st off"') == 6 and "data-section" not in out
+    assert out.count('class="st off"') == 7 and "data-section" not in out
 
 
 def test_base_choices_per_language():
@@ -879,3 +879,56 @@ def test_synth_runner_without_whisper_leaves_unchecked(tmp_path):
     done = [i for i in synth.load(p).items if i.status == "done"]
     assert done and all(i.verdict == "unchecked" and i.dropped for i in done)
     assert S.SYNTH_NO_WHISPER in r.log_text()
+
+
+def test_synth_section_in_nav_and_steps_bar():
+    assert h.SECTIONS.index(S.SEC_SYNTH) == h.SECTIONS.index(S.SEC_CHECK) + 1
+    assert h.SECTION_STEP[S.SEC_SYNTH] == "synth" and S.SEC_SYNTH in h.NAV_SECTIONS
+    bar = h.steps_bar_html({}, "synth")
+    assert "СИНТЕТИКА" in bar and 'class="st on"' in bar and S.STEP_OPTIONAL in bar
+    assert bar.count(S.STEP_OPTIONAL) == 1
+
+
+def test_synth_card_and_summary():
+    from omnivoice.synth import SynthItem
+    it = SynthItem("synth_0007", "Во славу Плети!", "corpus", status="done", duration=1.6, heard="во славу плоти",
+                   cer=0.07, verdict="suspect", reasons=["text"], dropped=True)
+    card = h.synth_card_html(it)
+    assert "Во славу Плети!" in card and "Whisper услышал: «во славу плоти»" in card and "Whisper услышал другое" in card
+    assert 'data-act="accept"' in card and 'data-act="drop"' in card and 'data-act="play"' in card
+    assert "syn-row dropped" not in card                                  # undecided: not dimmed
+    gone = h.synth_card_html(SynthItem("synth_0009", "Раз", "corpus", status="done", verdict="accepted",
+                                       dropped=True, manual="drop"))
+    assert "syn-row dropped" in gone and 'data-act="accept"' in gone and 'data-act="reset"' in gone
+    kept = h.synth_card_html(SynthItem("synth_0008", "Раз", "corpus", status="done", heard="раз",
+                                       verdict="accepted", dropped=False))
+    assert "Whisper услышал" not in kept and 'data-act="drop"' in kept and 'data-act="accept"' not in kept
+    s = h.synth_summary_html({"accepted": 212, "accepted_min": 13.6, "suspect": 19, "rejected": 9, "failed": 0,
+                              "pending": 0})
+    assert "212" in s and "13.6" in s and "19" in s
+
+
+def test_synth_filter_lists():
+    from omnivoice.synth import SynthItem
+    items = [SynthItem("a", "a", "corpus", status="done", verdict="suspect", dropped=True),
+             SynthItem("b", "b", "corpus", status="done", verdict="accepted", dropped=False),
+             SynthItem("c", "c", "corpus", status="done", verdict="rejected", dropped=True),
+             SynthItem("d", "d", "corpus", status="done", verdict="suspect", dropped=False, manual="accept"),
+             SynthItem("e", "e", "corpus", status="pending")]
+    ids = lambda f: [i.id for i in h.synth_filtered(items, f)]
+    assert ids(S.SYNTH_F_SUSPECT) == ["a"] and ids(S.SYNTH_F_ACCEPTED) == ["b", "d"] and ids(S.SYNTH_F_REJECTED) == ["c"]
+
+
+def test_synth_manual_drop_lands_in_rejected():
+    # a suspect / accepted phrase the user dropped must stay reachable (its ✓ / ↺ live in «Брак»)
+    from omnivoice.synth import SynthItem
+    items = [SynthItem("a", "a", "corpus", status="done", verdict="suspect", dropped=True, manual="drop"),
+             SynthItem("b", "b", "corpus", status="done", verdict="accepted", dropped=True, manual="drop")]
+    assert [i.id for i in h.synth_filtered(items, S.SYNTH_F_REJECTED)] == ["a", "b"]
+
+
+def test_synth_card_says_when_whisper_heard_nothing():
+    from omnivoice.synth import SynthItem
+    card = h.synth_card_html(SynthItem("a", "Ледяная корона.", "corpus", status="done", heard="", verdict="rejected",
+                                       reasons=["text"], dropped=True))
+    assert S.SYNTH_HEARD_NOTHING in card and "«»" not in card

@@ -28,10 +28,12 @@ from omnivoice.dataset import clean_text
 from omnivoice.project import FILE as PROJECT_FILE
 from omnivoice.ui import strings as S
 
-SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_TRAIN, S.SEC_PACK)
+SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_SYNTH, S.SEC_TRAIN, S.SEC_PACK)
 # sidebar order: setup first, then the project steps; «Чекпойнты» is a page of the training step
 NAV_SECTIONS = (S.SEC_SETUP, *SECTIONS[:-1], S.SEC_CKPT, SECTIONS[-1])
-SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "train", "pack")))
+SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "synth", "train", "pack")))
+OPTIONAL_STEPS = ("synth",)  # never block the next step; the chip says «необяз.»
+SYNTH_FILTERS = (S.SYNTH_F_SUSPECT, S.SYNTH_F_ACCEPTED, S.SYNTH_F_REJECTED)
 SECTION_STEP[S.SEC_CKPT] = "train"
 LANG_LABELS = {"ru": S.LANG_RU, "en": S.LANG_EN}
 
@@ -90,7 +92,8 @@ def list_projects(root: Path) -> list[str]:
 
 def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False, disabled: bool = False) -> str:
     """`current` is a step key (project.STEPS), e.g. "phrases".
-    Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey.
+    One chip per step: the selected section is `on` (teal), finished steps `done` (green ✓), others grey;
+    optional steps carry «необяз.».
     need_setup adds a yellow chip that leads to «Установка» (no training environment yet).
     disabled (no project yet): grey chips that lead nowhere."""
     chips = []
@@ -98,11 +101,12 @@ def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False, d
         step = SECTION_STEP[section]
         done = bool(steps.get(step))
         label = f"{i} {section.upper()}{' ✓' if done else ''}"
+        opt = f'<span class="st-opt">{html.escape(S.STEP_OPTIONAL)}</span>' if step in OPTIONAL_STEPS else ""
         if disabled:
-            chips.append(f'<span class="st off">{html.escape(label)}</span>')
+            chips.append(f'<span class="st off">{html.escape(label)}{opt}</span>')
             continue
         cls = "st on" if step == current else ("st done" if done else "st")
-        chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}</span>')
+        chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}{opt}</span>')
     if need_setup:
         chips.append(f'<span class="st warn" data-section="{html.escape(S.SEC_SETUP)}">'
                      f'{html.escape(S.SETUP_FIRST.upper())} →</span>')
@@ -696,6 +700,77 @@ def base_choices(language: str) -> tuple[list[tuple[str, str]], str | None]:
     names = sorted(languages.bases_for(language), key=lambda n: (order.get(languages.BASE_GENDER.get(n), 2), n))
     choices = [(f"{n} · {gender[languages.BASE_GENDER[n]]}" if n in languages.BASE_GENDER else n, n) for n in names]
     return choices, languages.default_base(language)
+
+
+def synth_filtered(items, flt: str) -> list:
+    """«Спорные»: suspect, not decided by the user; «Принятые»: used for training; «Брак»: rejected by the check or dropped by the user."""
+    done = [i for i in items if i.status == "done"]
+    if flt == S.SYNTH_F_ACCEPTED:
+        return [i for i in done if not i.dropped]
+    if flt == S.SYNTH_F_REJECTED:
+        return [i for i in done if i.dropped and (i.verdict == "rejected" or i.manual == "drop")]
+    return [i for i in done if i.verdict == "suspect" and i.manual is None]
+
+
+def _syn_btn(act: str, cls: str, title: str) -> str:
+    return (f'<button type="button" class="syn-btn {cls}" data-act="{act}" title="{html.escape(title)}" '
+            f'aria-label="{html.escape(title)}"></button>')
+
+
+def synth_card_html(it) -> str:
+    """A synthetic phrase like a phrase card: ▶ (the player below), text, what Whisper heard when it differs,
+    the reasons, ✓ / ✕ (↺ when dropped). Buttons report "<id>#<act>#<time>" to #synth-pick (theme.HEAD)."""
+    from omnivoice import synth_check
+    why = " · ".join(synth_check.REASONS.get(r, r) for r in it.reasons)
+    heard = ""
+    if it.heard is not None and synth_check.normalize(it.heard) != synth_check.normalize(it.text):
+        said = S.SYNTH_HEARD.format(text=it.heard) if it.heard.strip() else S.SYNTH_HEARD_NOTHING
+        heard = f'<div class="syn-heard muted">{html.escape(said)}</div>'
+    chips = f'<span class="phr-chip flag">{html.escape(why)}</span>' if why else ""
+    undecided = it.verdict == "suspect" and it.manual is None
+    if undecided:                        # waits for the user: ✓ or ✕
+        acts, dim = _syn_btn("accept", "syn-ok", S.SYNTH_ACCEPT) + _syn_btn("drop", "phr-rm", S.SYNTH_DROP), False
+    elif not it.dropped:                 # used for training: ✕
+        acts, dim = _syn_btn("drop", "phr-rm", S.SYNTH_DROP), False
+    else:                                # dropped by the user or by the check: ✓ (and ↺ to undo a manual drop)
+        acts = _syn_btn("accept", "syn-ok", S.SYNTH_ACCEPT)
+        acts += _syn_btn("reset", "phr-back", S.PHRASE_RESTORE_HINT) if it.manual else ""
+        dim = True
+    return (f'<div class="syn-row{" dropped" if dim else ""}" data-id="{html.escape(it.id)}">'
+            f'{_syn_btn("play", "phr-play", S.PLAY)}'
+            f'<div class="syn-body"><div class="phr-meta"><b>{html.escape(it.id)}</b>'
+            f'<span class="muted">{html.escape(S.PHRASE_SECONDS.format(v=it.duration))}</span>{chips}</div>'
+            f'<div class="syn-text">{html.escape(it.text)}</div>{heard}</div>'
+            f'<div class="syn-acts">{acts}</div></div>')
+
+
+def synth_list_html(items, flt: str) -> str:
+    rows = synth_filtered(items, flt)
+    if not rows:
+        return f'<div class="section-msg muted">{html.escape(S.SYNTH_LIST_EMPTY)}</div>'
+    return '<div class="syn-cards">' + "".join(synth_card_html(i) for i in rows) + "</div>"
+
+
+def synth_summary_html(s: dict) -> str:
+    text = S.SYNTH_DONE.format(accepted=s["accepted"], minutes=s["accepted_min"], suspect=s["suspect"],
+                               rejected=s["rejected"], failed=s["failed"])
+    return f'<div class="syn-summary">{html.escape(text.split(": ", 1)[-1])}</div>'
+
+
+def synth_refs_html(p, refs: list[str]) -> str:
+    """The reference phrases: name, text, a HUD player and ✕ (reports "<id>#unref#<time>")."""
+    from omnivoice import dataset
+    if not refs:
+        return f'<div class="section-msg flag">{html.escape(S.SYNTH_REFS_NONE)}</div>'
+    texts = {s.id: s for s in dataset.load(p)}
+    out = []
+    for r in refs:
+        seg = texts.get(r)
+        rm = _syn_btn("unref", "rp-rm", S.SYNTH_REF_REMOVE)
+        out.append(f'<div class="syn-ref" data-id="{html.escape(r)}"><div class="raw-name"><b>{html.escape(r)}</b>'
+                   f'<span class="muted">{html.escape(seg.text if seg else "")}</span></div>'
+                   f'{hud_player_html(p.segments_dir / f"{r}.wav", rm)}</div>')
+    return '<div class="syn-refs">' + "".join(out) + "</div>"
 
 
 def ckpt_key(epoch: int, kind: str) -> str:

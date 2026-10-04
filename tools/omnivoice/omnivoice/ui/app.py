@@ -13,12 +13,13 @@ from contextlib import contextmanager
 import functools
 import html
 import logging
+import time
 import traceback
 from pathlib import Path
 
 import gradio as gr
 
-from omnivoice import (checker, checkpoints, colab, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
+from omnivoice import (checker, checkpoints, colab, deps, synth, wslenv, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
                        transcriber, verify)
 from omnivoice.datadir import human_size, size_of
 from omnivoice.fsutil import TargetBusy
@@ -26,7 +27,8 @@ from omnivoice.pack import PackError
 from omnivoice.project import Project, ProjectError, delete_project
 from omnivoice.ui import strings as S
 from omnivoice.ui import theme
-from omnivoice.ui.helpers import (CKPT_SORTS, pick_folder, target_choices, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
+from omnivoice.ui.helpers import (CKPT_SORTS, SYNTH_FILTERS, SynthRunner, synth_list_html, synth_refs_html,
+                                  synth_summary_html, pick_folder, target_choices, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
                                   delete_parts_html, language_choices, nav_choices,
                                   NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
@@ -92,7 +94,7 @@ def guarded(n_out: int, msg_idx: int = 0):
 
 def first_open_section(steps: dict) -> str:
     for section in SECTIONS:
-        if section != S.SEC_SLICE and not steps.get(SECTION_STEP[section]):
+        if section not in (S.SEC_SLICE, S.SEC_SYNTH) and not steps.get(SECTION_STEP[section]):
             return section
     return S.SEC_PACK
 
@@ -103,6 +105,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
     probe = EnvProbe(detect or (lambda: train.detect_env()))
     setup = SetupRunner(install_fn=install_fn, check_fn=check_fn, on_finish=probe.restart)
     runners: dict[str, TrainRunner] = {}
+    synth_runners: dict[str, SynthRunner] = {}
     locks = ProjectLocks()
 
     @contextmanager
@@ -202,6 +205,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                                                       interactive=dd_source != "env")
                             data_dir_btn = gr.Button(S.DATA_DIR_MOVE, scale=1, min_width=220, interactive=dd_source != "env")
                         data_dir_hint = gr.HTML(data_dir_html(dd0, dd_source))
+                        setup_xtts = gr.Checkbox(label=S.SETUP_WITH_XTTS, value=False)
                         setup_btn = gr.Button(S.SETUP_INSTALL, variant="primary")
                         setup_progress = gr.HTML(setup.progress.html())
                         setup_status = gr.HTML(setup.status_html())
@@ -238,6 +242,35 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         check_btn = gr.Button(S.CHECK, variant="primary")
                         check_out = gr.HTML(msg_html(S.CHECK_EMPTY))
 
+                    with gr.Column(visible=sec0 == S.SEC_SYNTH, elem_classes="hud-section") as g_synth:
+                        gr.HTML(f'<div class="sub-head">{S.SEC_SYNTH}</div>' + msg_html(S.SYNTH_INTRO, muted=True))
+                        synth_need = gr.HTML()  # yellow card when XTTS is not installed
+                        gr.HTML(f'<div class="sub-head">{S.SYNTH_REFS}</div>' + msg_html(S.SYNTH_REFS_HINT, muted=True))
+                        synth_refs = gr.HTML()
+                        synth_refs_state = gr.State([])
+                        synth_refs_auto = gr.Button(S.SYNTH_REFS_AUTO)
+                        gr.HTML(f'<div class="sub-head">{S.SYNTH_SETTINGS}</div>')
+                        with gr.Row(equal_height=True):
+                            synth_minutes = gr.Number(15, label=S.SYNTH_MINUTES, precision=0, minimum=1, maximum=60)
+                        synth_lines = gr.Textbox(label=S.SYNTH_LINES, lines=4, max_lines=12)
+                        with gr.Row():
+                            synth_start = gr.Button(S.SYNTH_START, variant="primary", interactive=False)
+                            synth_stop = gr.Button(S.SYNTH_STOP, variant="stop", interactive=False)
+                            synth_more = gr.Button(S.SYNTH_MORE, interactive=False)
+                        synth_status = gr.HTML(f'<div class="train-status">{S.SYNTH_IDLE}</div>')
+                        synth_log = gr.Textbox(label=S.SYNTH_LOG, lines=8, max_lines=8, interactive=False,
+                                               autoscroll=False, elem_classes="log-box")
+                        gr.HTML(f'<div class="sub-head">{S.SYNTH_PHRASES}</div>')
+                        synth_summary = gr.HTML()
+                        synth_filter = gr.Radio(list(SYNTH_FILTERS), value=SYNTH_FILTERS[0], show_label=False,
+                                                container=False, elem_classes="syn-filter")
+                        synth_list = gr.HTML()
+                        # a card button puts "<id>#<act>#<time>" here (theme.HEAD); hidden, but must stay in the DOM
+                        synth_pick = gr.Textbox(elem_id="synth-pick", elem_classes="hidden-input", container=False,
+                                                show_label=False)
+                        synth_player = gr.Audio(label=S.PLAYER, type="filepath", interactive=False, autoplay=True)
+                        synth_msg = gr.HTML()
+
                     with gr.Column(visible=sec0 == S.SEC_TRAIN, elem_classes="hud-section") as g_train:
                         with gr.Column(visible=False, elem_classes="setup-needed") as setup_needed:
                             gr.HTML(msg_html(S.SETUP_FIRST_HINT, error=True))
@@ -264,6 +297,12 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         train_log = gr.Textbox(label=S.TRAIN_LOG, lines=10, max_lines=10, interactive=False,
                                                autoscroll=False, elem_classes="log-box")
                         log_note = gr.HTML()
+                        with gr.Column(visible=False, elem_classes="synth-train") as synth_train_box:
+                            synth_train = gr.HTML()
+                            with gr.Row(equal_height=True, elem_classes="slice-row"):
+                                synth_use = gr.Checkbox(label=S.SYNTH_USE, value=True, scale=2, elem_classes="syn-use")
+                                synth_weight = gr.Number(3, label=S.SYNTH_WEIGHT, precision=0, minimum=1, maximum=10,
+                                                         scale=1)
                         goto_ckpt = gr.Button(S.CKPT_GOTO)
                         train_msg = gr.HTML()
 
@@ -317,9 +356,9 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         install_btn = gr.Button(S.INSTALL, variant="primary")
                         install_msg = gr.HTML()
 
-        groups = [g_new, g_delete, g_setup, g_audio, g_phrases, g_check, g_train, g_ckpt, g_pack]
+        groups = [g_new, g_delete, g_setup, g_audio, g_phrases, g_check, g_synth, g_train, g_ckpt, g_pack]
         group_of = {S.SEC_NEW: g_new, S.SEC_DELETE: g_delete, S.SEC_SETUP: g_setup, S.SEC_AUDIO: g_audio, S.SEC_SLICE: g_phrases, S.SEC_PHRASES: g_phrases,
-                    S.SEC_CHECK: g_check, S.SEC_TRAIN: g_train, S.SEC_CKPT: g_ckpt, S.SEC_PACK: g_pack}
+                    S.SEC_CHECK: g_check, S.SEC_SYNTH: g_synth, S.SEC_TRAIN: g_train, S.SEC_CKPT: g_ckpt, S.SEC_PACK: g_pack}
         env_timer = gr.Timer(1.0)
         train_timer = gr.Timer(2.0)
         setup_timer = gr.Timer(1.0, active=False)  # woken by a setup run or check, sleeps when idle
@@ -352,11 +391,15 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         # ---------------- setup ----------------
         @guarded(3)
-        def on_setup():
-            setup.start()  # RuntimeError(S.SETUP_BUSY) on a double click → toast
+        def on_setup(with_xtts):
+            # RuntimeError(S.SETUP_BUSY) on a double click → toast
+            if with_xtts and install_fn is None:
+                setup.start(job=functools.partial(deps.install_all, with_xtts=True))
+            else:
+                setup.start()
             return setup.status_html(), setup.progress.html(), gr.Timer(active=True)
 
-        setup_btn.click(on_setup, None, [setup_status, setup_progress, setup_timer])
+        setup_btn.click(on_setup, setup_xtts, [setup_status, setup_progress, setup_timer])
 
         @guarded(3)
         def on_data_dir(target):
@@ -412,7 +455,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         steps.click(on_chip, None, section)
 
-        section_msgs = [audio_msg, phrases_msg, train_msg, ckpt_msg, pack_msg, install_msg]
+        section_msgs = [audio_msg, phrases_msg, synth_msg, train_msg, ckpt_msg, pack_msg, install_msg]
         refresh_outputs = [stats, selected, player, check_out, train_log,
                            packed, sample_audio, license_tb, *fields.values(),
                            portrait_in, portrait_out, colab_file, *section_msgs]
@@ -647,6 +690,180 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             return msg_html(S.PHRASES_MARKED), steps_html(p, sec)
 
         done_btn.click(on_done, [project_dd, section], [phrases_msg, steps])
+
+        # ---------------- synth ----------------
+        synth_timer = gr.Timer(2.0)
+        xtts_cache = {"ok": False, "at": -1e9}
+        synth_seen: dict[str, str] = {}  # project → runner status last shown (refresh the list once it ends)
+
+        def xtts_ok(fresh: bool = True) -> bool:
+            """wslenv.xtts_ready asks WSL: at most every 30 s for the 2-second tick, always when `fresh`."""
+            if fresh or time.monotonic() - xtts_cache["at"] > 30:
+                try:
+                    xtts_cache["ok"] = wslenv.xtts_ready()
+                except Exception:
+                    xtts_cache["ok"] = False
+                xtts_cache["at"] = time.monotonic()
+            return xtts_cache["ok"]
+
+        def synth_runner(name: str) -> SynthRunner:
+            return synth_runners.setdefault(name, SynthRunner())
+
+        def synth_buttons(name, refs, fresh: bool = True):
+            """Сгенерировать / Стоп / Догенерировать: one run at a time, start only with XTTS and references,
+            «Догенерировать» only when something is still pending or failed."""
+            r = synth_runners.get(name)
+            running = bool(r and r.running)
+            stopping = running and r.status == "stopped"
+            ready = bool(name) and xtts_ok(fresh)
+            p = try_load(name) if name else None
+            state = synth.load(p) if p else None
+            leftover = bool(state and any(i.status in ("pending", "failed") for i in state.items))
+            can = ready and bool(refs) and not running
+            return (gr.update(interactive=can),
+                    gr.update(interactive=running and not stopping, value=S.TRAIN_STOP_WAIT if stopping else S.SYNTH_STOP),
+                    gr.update(interactive=can and leftover))
+
+        synth_btns = [synth_start, synth_stop, synth_more]
+        synth_refs_state.change(synth_buttons, [project_dd, synth_refs_state], synth_btns, show_progress="hidden")
+
+        def synth_status_html(name):
+            r = synth_runners.get(name)
+            return f'<div class="train-status">{html.escape(r.status_text() if r else S.SYNTH_IDLE)}</div>'
+
+        def synth_need_html():
+            if xtts_ok():
+                return ""
+            return (f'<div class="pack-model none"><div class="pack-model-text"><div class="pack-model-head">'
+                    f'{html.escape(S.SYNTH_NEED_HEAD)}</div><div>{html.escape(S.SYNTH_NEED_XTTS)}</div></div>'
+                    f'<button type="button" class="pack-goto" data-section="{html.escape(S.SEC_SETUP)}">'
+                    f'{html.escape(S.SYNTH_GOTO_SETUP)}</button></div>')
+
+        def synth_view(name, flt):
+            """The whole page for a project: XTTS card, references, own lines, summary, list, buttons."""
+            p = try_load(name)
+            if p is None:
+                return ("", "", "", "", "", [], *synth_buttons(None, []))
+            state = synth.load(p)
+            refs = state.refs or synth.choose_refs(load_segments(p, tolerant=True))
+            return (synth_need_html(), synth_refs_html(p, refs), "\n".join(synth.lines(p)),
+                    synth_summary_html(synth.summary(state)) if state.items else "",
+                    synth_list_html(state.items, flt) if state.items else "", refs, *synth_buttons(name, refs, fresh=False))
+
+        synth_view_outputs = [synth_need, synth_refs, synth_lines, synth_summary, synth_list, synth_refs_state, *synth_btns]
+        section.change(lambda name, sec, flt: synth_view(name, flt) if sec == S.SEC_SYNTH else (gr.skip(),) * 9,
+                       [project_dd, section, synth_filter], synth_view_outputs, show_progress="hidden")
+        project_dd.change(synth_view, [project_dd, synth_filter], synth_view_outputs, show_progress="hidden")
+        demo.load(synth_view, [project_dd, synth_filter], synth_view_outputs, show_progress="hidden")
+
+        def on_synth_filter(name, flt):
+            p = try_load(name)
+            return synth_list_html(synth.load(p).items, flt) if p else ""
+
+        synth_filter.change(on_synth_filter, [project_dd, synth_filter], synth_list, show_progress="hidden")
+
+        def on_refs_auto(name):
+            p = load(name)
+            refs = synth.choose_refs(load_segments(p, tolerant=True))
+            return synth_refs_html(p, refs), refs, *synth_buttons(name, refs)
+
+        synth_refs_auto.click(guarded(5, msg_idx=0)(on_refs_auto), project_dd,
+                              [synth_refs, synth_refs_state, *synth_btns])
+
+        @guarded(5)
+        def on_synth_start(name, minutes, lines_text, refs):
+            if not name:
+                raise ProjectError(S.NO_PROJECT_SELECTED)
+            r = synth_runners.get(name)
+            if r is not None and r.running:  # a double click: already started
+                return ("", synth_status_html(name), *synth_buttons(name, refs))
+            p = load(name)
+            synth.save_lines(p, lines_text or "")
+            if not refs:
+                raise ValueError(S.SYNTH_NO_REFS)
+            if not xtts_ok():
+                raise ValueError(f"{S.SYNTH_NEED_HEAD}: {S.SYNTH_NEED_XTTS}")
+            synth_runner(name).start(p, float(minutes or 15), list(refs))
+            return ("", synth_status_html(name), *synth_buttons(name, refs))
+
+        synth_inputs = [project_dd, synth_minutes, synth_lines, synth_refs_state]
+        synth_start.click(on_synth_start, synth_inputs, [synth_msg, synth_status, *synth_btns])
+        synth_more.click(on_synth_start, synth_inputs, [synth_msg, synth_status, *synth_btns])
+
+        @guarded(5)
+        def on_synth_stop(name, refs):
+            r = synth_runners.get(name)
+            if r:
+                r.stop()
+            return ("", synth_status_html(name), *synth_buttons(name, refs))
+
+        synth_stop.click(on_synth_stop, [project_dd, synth_refs_state], [synth_msg, synth_status, *synth_btns])
+
+        def on_synth_tick(name, flt, refs):
+            r = synth_runners.get(name)
+            if r is None:
+                return (gr.skip(),) * 7
+            ended = not r.running and synth_seen.get(name) != r.status
+            synth_seen[name] = r.status if not r.running else "running"
+            if ended:
+                p = try_load(name)
+                state = synth.load(p) if p else None
+                summary = synth_summary_html(synth.summary(state)) if state and state.items else ""
+                lst = synth_list_html(state.items, flt) if state and state.items else ""
+            else:
+                summary = lst = gr.skip()
+            return (synth_status_html(name), r.log_text(), *synth_buttons(name, refs, fresh=False), summary, lst)
+
+        synth_timer.tick(on_synth_tick, [project_dd, synth_filter, synth_refs_state],
+                         [synth_status, synth_log, *synth_btns, synth_summary, synth_list], show_progress="hidden")
+
+        @guarded(6, msg_idx=5)
+        def on_synth_decide(name, picked, flt, refs):
+            """A card / reference button: "<id>#<play|accept|drop|reset|unref>#<time>"."""
+            parts = (picked or "").split("#")
+            if len(parts) < 2:
+                return (gr.skip(),) * 6
+            item_id, act = parts[0], parts[1]
+            p = load(name)
+            if act == "play":
+                return gr.skip(), gr.skip(), str(synth.wav(p, item_id)), gr.skip(), gr.skip(), ""
+            if act == "unref":
+                refs = [r for r in (refs or []) if r != item_id]
+                return gr.skip(), gr.skip(), gr.skip(), synth_refs_html(p, refs), refs, ""
+            state = synth.set_manual(p, item_id, None if act == "reset" else act)
+            return (synth_list_html(state.items, flt), synth_summary_html(synth.summary(state)), gr.skip(),
+                    gr.skip(), gr.skip(), "")
+
+        synth_pick.change(on_synth_decide, [project_dd, synth_pick, synth_filter, synth_refs_state],
+                          [synth_list, synth_summary, synth_player, synth_refs, synth_refs_state, synth_msg],
+                          show_progress="hidden")
+
+        # «Обучение»: how much synthetic data goes into training
+        def synth_train_view(name):
+            p = try_load(name)
+            state = synth.load(p) if p else None
+            done = [i for i in state.items if i.status == "done" and not i.dropped] if state else []
+            if not done:
+                return gr.update(visible=False), "", gr.skip(), gr.skip()
+            minutes = round(sum(i.duration for i in done) / 60, 1)
+            line = msg_html(S.SYNTH_TRAIN_LINE.format(n=len(done), minutes=minutes))
+            return gr.update(visible=True), line, state.use, state.weight
+
+        synth_train_outputs = [synth_train_box, synth_train, synth_use, synth_weight]
+        section.change(lambda name, sec: synth_train_view(name) if sec == S.SEC_TRAIN else (gr.skip(),) * 4,
+                       [project_dd, section], synth_train_outputs, show_progress="hidden")
+        project_dd.change(synth_train_view, project_dd, synth_train_outputs, show_progress="hidden")
+
+        def on_synth_train_settings(name, use, weight):
+            p = try_load(name)
+            if p is None:
+                return
+            state = synth.load(p)
+            state.use, state.weight = bool(use), max(1, min(10, int(weight or 1)))
+            synth.save(p, state)
+
+        synth_use.input(on_synth_train_settings, [project_dd, synth_use, synth_weight], None, show_progress="hidden")
+        synth_weight.blur(on_synth_train_settings, [project_dd, synth_use, synth_weight], None, show_progress="hidden")
 
         # ---------------- check ----------------
         @guarded(2)

@@ -26,8 +26,8 @@ FFMPEG_EXES = ("ffmpeg.exe", "ffprobe.exe")
 PREP_MODULES = ("faster_whisper", "silero_vad", "demucs", "pyloudnorm", "gradio", "tensorboard")
 HINT = "нажми «Установить зависимости» (omnivoice setup)"
 PREP, FFMPEG, WSL, ENV = "Пакеты (prep, ui)", "ffmpeg", "WSL", "Среда обучения"
-XTTS = "Синтетика (XTTS v2)"
-XTTS_DETAIL_MISSING = "не установлена (необязательно, ≈ 3–4 ГБ) — галочка «и XTTS v2» на этой странице"
+XTTS = "XTTS v2"
+XTTS_DETAIL_MISSING = "для синтетики; не установлена (≈ 3–4 ГБ) — галочка «и XTTS v2» ниже"
 NO_GPU_DETAIL = "Нет видеокарты NVIDIA — обучайте в Colab (omnivoice train --colab)"
 FFMPEG_LABEL = "Скачиваю ffmpeg (~115 МБ)…"
 
