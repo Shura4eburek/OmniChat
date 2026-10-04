@@ -602,3 +602,42 @@ def test_sparse_last_ckpt_epoch_comes_from_its_note(tmp_path):
     (d / "last.epoch").write_text("4195")
     from omnivoice import previews
     assert next(r for r in previews.rank_checkpoints(p) if r.last).epoch == 4195
+
+
+def _zip_ckpt(path, size=4000):
+    import zipfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("archive/data.pkl", b"x" * size)
+    return path
+
+
+def test_cut_short_checkpoint_is_skipped_dropped_and_not_resumed_from(tmp_path):
+    import os, time
+    from omnivoice import previews
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    d = p.train_dir / "lightning_logs/version_0/checkpoints"
+    good = _zip_ckpt(d / "epoch=4145-val_mel=0.4832.ckpt")
+    last = _zip_ckpt(d / "last.ckpt")
+    last.write_bytes(last.read_bytes()[:len(last.read_bytes()) // 2])   # a save killed half-way
+    old = time.time() - 100
+    os.utime(good, (old, old))                                          # last.ckpt is the newer file
+    assert previews.cut_short(last) and not previews.cut_short(good)
+    assert not previews.cut_short(d.parent / "events.out")             # missing / not a zip: not judged
+    assert [c.path for c in previews.list_checkpoints(p)] == [good]
+    assert train.last_checkpoint(p) == good                             # resume from the newest complete one
+    assert last in previews.prune_plan(p)[1]                            # cleaning removes it too
+    lines = []
+    assert train.drop_cut_short(p, lines.append) == [last] and not last.exists()
+    assert "last.ckpt" in lines[0] and "не до конца" in lines[0]
+
+
+def test_resume_prefers_a_best_checkpoint_newer_than_last(tmp_path):
+    import os, time
+    p = Project.create(tmp_path / "g", name="g", language="ru")
+    d = p.train_dir / "lightning_logs/version_0/checkpoints"
+    last = _zip_ckpt(d / "last.ckpt")
+    best = _zip_ckpt(d / "epoch=4155-val_mel=0.3000.ckpt")
+    old = time.time() - 100
+    os.utime(last, (old, old))                                          # fit.py: last every 10 epochs
+    assert train.last_checkpoint(p) == best

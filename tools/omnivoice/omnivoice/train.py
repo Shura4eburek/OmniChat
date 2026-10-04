@@ -94,8 +94,28 @@ def _container(p, host: Path) -> str:
     return "/work/" + host.resolve().relative_to(p.root.resolve()).as_posix()
 
 def last_checkpoint(p) -> Path | None:
-    found = sorted(p.train_dir.glob("lightning_logs/*/checkpoints/last.ckpt"), key=lambda f: f.stat().st_mtime)
-    return found[-1] if found else None
+    """The newest complete checkpoint to resume from: last.ckpt, or a best-by-metric one saved after it
+    (fit.py writes last.ckpt only every few epochs). Files cut short by a killed save are skipped."""
+    from omnivoice.previews import cut_short
+    found = [f for f in p.train_dir.glob("lightning_logs/*/checkpoints/*.ckpt") if not cut_short(f)]
+    return max(found, key=lambda f: f.stat().st_mtime) if found else None
+
+
+def drop_cut_short(p, on_line=None) -> list[Path]:
+    """Delete checkpoints a killed save left half-written: torch can't load them and «Продолжить» would
+    fail on them. The next resume takes the newest complete one instead."""
+    from omnivoice.previews import cut_short_checkpoints
+    gone = []
+    for f in cut_short_checkpoints(p):
+        try:
+            f.unlink()
+        except OSError:
+            continue
+        gone.append(f)
+        if on_line:
+            on_line(f"Чекпойнт {f.parent.parent.name}/{f.name} был записан не до конца (обучение когда-то "
+                    "прервали во время сохранения) — удалил его")
+    return gone
 
 def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str, script: str | None = None) -> list[str]:
     """`script`: omnivoice's fit.py (Docker / WSL); None runs piper's own CLI (Colab)."""
@@ -338,6 +358,7 @@ def train_project(p, epochs: int = 1000, resume: bool = True, run=subprocess.run
         raise TrainError("Нет ни одной фразы с текстом для обучения")
     target = target_epochs(p, epochs)
     if resume:
+        drop_cut_short(p, on_line)
         done = newest_epoch(p)  # Lightning's epoch=N in checkpoint names is 0-based
         if done is not None and done + 1 >= target:
             if on_line: on_line(f"Цель уже достигнута (эпоха {done + 1}) — увеличь --epochs")

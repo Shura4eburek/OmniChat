@@ -19,10 +19,28 @@ class Checkpoint:
     value: float | None
 
 
+def cut_short(f: Path) -> bool:
+    """A torch checkpoint is a zip archive. One whose save was killed half-way (e.g. a hard stop while the
+    file was being copied to the Windows disk) starts like a zip but has no central directory at its end,
+    and torch cannot load it. Anything that does not start like a zip is left to torch to judge."""
+    import zipfile
+    try:
+        with open(f, "rb") as fh:
+            if fh.read(4) != b"PK\x03\x04":
+                return False
+        return not zipfile.is_zipfile(f)
+    except OSError:
+        return False
+
+
+def cut_short_checkpoints(p) -> list[Path]:
+    return [f for f in p.train_dir.glob("lightning_logs/*/checkpoints/*.ckpt") if cut_short(f)]
+
+
 def list_checkpoints(p) -> list[Checkpoint]:
     """Checkpoints under train/lightning_logs/*/checkpoints/, newest epoch first.
 
-    Files matching no known pattern are skipped. ``last.ckpt`` has no epoch in
+    Files matching no known pattern, and files cut short by a killed save, are skipped. ``last.ckpt`` has no epoch in
     its name: it takes the highest epoch among its sibling checkpoints (-1 if
     there are none) and is sorted before every other checkpoint.
     """
@@ -31,6 +49,8 @@ def list_checkpoints(p) -> list[Checkpoint]:
         found: list[Checkpoint] = []
         last: Path | None = None
         for f in sorted(d.glob("*.ckpt")):
+            if cut_short(f):
+                continue
             if f.name == "last.ckpt":
                 last = f; continue
             m = _CKPT_RE.match(f.name)
@@ -374,7 +394,7 @@ def prune_plan(p) -> tuple[list[Path], list[Path]]:
         path = own[0] if own else r.path
         if path not in keep:
             keep.append(path)
-    return keep, [c.path for c in cps if c.path not in keep]
+    return keep, [c.path for c in cps if c.path not in keep] + cut_short_checkpoints(p)
 
 
 def recently_written(p, seconds: float = 180, now: float | None = None) -> bool:
