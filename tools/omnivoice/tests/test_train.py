@@ -13,6 +13,7 @@ class Fake:
         return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
 
 _REAL_CLEAN = train._clean_base
+_REAL_CSV = dataset.piper_csv
 
 @pytest.fixture(autouse=True)
 def _no_ckpt_clean(monkeypatch):
@@ -56,7 +57,7 @@ def test_fit_command_args(tmp_path):
     joined = " ".join(cmd)
     for part in ["--gpus all", "python3 -W ignore /omnivoice_compat/fit.py --omnivoice-base-epoch 4139 "
                  "--omnivoice-last-every 10 fit", ":/omnivoice_compat:ro", "--data.voice_name glados", "--data.espeak_voice ru",
-                 "--data.csv_path /work/train/train.csv", "--data.audio_dir /work/segments/",
+                 "--data.csv_path /work/train/train.csv", "--data.audio_dir /work/train/audio/",
                  "--model.sample_rate 22050", "--data.batch_size 24", "--trainer.max_epochs 3000",
                  "--ckpt_path /ckpt/base.ckpt"]:
         assert part in joined, part
@@ -93,7 +94,7 @@ def test_export_command_and_result(tmp_path):
 
 def test_train_success_marks_step(tmp_path, monkeypatch):
     p = Project.create(tmp_path / "p", name="p", language="ru")
-    monkeypatch.setattr(dataset, "piper_csv", lambda p, out: 5)
+    monkeypatch.setattr(dataset, "piper_csv", lambda p, out, *a, **k: 5)
     cache = tmp_path / "cache"
     ck = cache / "checkpoints" / "a" / "b.ckpt"; ck.parent.mkdir(parents=True); ck.write_bytes(b"x")
     monkeypatch.setattr(checkpoints, "ensure", lambda path, progress=None: ck)
@@ -125,7 +126,7 @@ def test_ensure_restarts_when_range_ignored(tmp_path, monkeypatch):
 
 def _setup_train(tmp_path, monkeypatch):
     p = Project.create(tmp_path / "p", name="p", language="ru")
-    monkeypatch.setattr(dataset, "piper_csv", lambda p, out: 5)
+    monkeypatch.setattr(dataset, "piper_csv", lambda p, out, *a, **k: 5)
     cache = tmp_path / "cache"
     ck = cache / "checkpoints" / "a" / "b.ckpt"; ck.parent.mkdir(parents=True); ck.write_bytes(b"x")
     monkeypatch.setattr(checkpoints, "ensure", lambda path, progress=None: ck)
@@ -400,7 +401,7 @@ def test_wsl_fit_command_exact(tmp_path):
     assert cmd == WSL_PY + ["-W", "ignore", wslenv.wsl_path(train.FIT_SCRIPT), "--omnivoice-base-epoch", "4139",
         "--omnivoice-last-every", "10", "fit",
         "--data.voice_name", "glados", "--data.csv_path", f"{r}/train/train.csv",
-        "--data.audio_dir", f"{r}/segments/", "--model.sample_rate", "22050", "--data.espeak_voice", "ru",
+        "--data.audio_dir", f"{r}/train/audio/", "--model.sample_rate", "22050", "--data.espeak_voice", "ru",
         "--data.cache_dir", f"{r}/train/cache/", "--data.config_path", f"{r}/train/config.json",
         "--data.batch_size", "24", "--trainer.max_epochs", "3000", "--trainer.default_root_dir", f"{r}/train/",
         "--ckpt_path", "/mnt/c/cache/checkpoints/a/b.ckpt"]
@@ -556,7 +557,7 @@ def test_target_epochs_counts_base_as_done(tmp_path):
 
 def test_train_logs_checkpoint_size_only_when_downloading(tmp_path, monkeypatch):
     p = Project.create(tmp_path / "p", name="p", language="ru")
-    monkeypatch.setattr(dataset, "piper_csv", lambda p, out: 5)
+    monkeypatch.setattr(dataset, "piper_csv", lambda p, out, *a, **k: 5)
     monkeypatch.setenv("OMNIVOICE_CACHE", str(tmp_path / "cache"))
     ck = tmp_path / "cache" / "checkpoints" / p.base_checkpoint
     def ensure(path, progress=None):
@@ -662,3 +663,66 @@ def test_export_notes_which_checkpoint_the_model_is(tmp_path):
     later = time.time() + 60
     os.utime(p.export_dir / "model.onnx", (later, later))
     assert train.model_info(p) == {}
+
+
+def test_piper_csv_weights_original_and_adds_synth(tmp_path):
+    from omnivoice import dataset, synth
+    from omnivoice.dataset import Segment
+    p = Project.create(tmp_path / "a", name="a", language="ru")
+    dataset.save(p, [Segment("s1", "раз", 1.0), Segment("s2", "", 1.0), Segment("s3", "три", 1.0, dropped=True)])
+    item = synth.SynthItem("synth_0001", "четыре", "corpus", status="done", verdict="accepted", dropped=False)
+    n = dataset.piper_csv(p, p.train_dir / "train.csv", [item], weight=3)
+    rows = (p.train_dir / "train.csv").read_text(encoding="utf-8").splitlines()
+    assert n == 4 and rows == ["s1.wav|раз"] * 3 + ["synth_0001.wav|четыре"]
+
+
+def test_build_audio_dir_links_both(tmp_path):
+    import numpy as np
+    from omnivoice import audio, synth
+    p = Project.create(tmp_path / "a", name="a", language="ru")
+    audio.write_wav(p.segments_dir / "s1.wav", np.zeros(100, np.float32))
+    synth.wav(p, "synth_0001").parent.mkdir(parents=True)
+    audio.write_wav(synth.wav(p, "synth_0001"), np.zeros(100, np.float32))
+    (p.train_dir / "audio").mkdir(parents=True); (p.train_dir / "audio" / "stale.wav").write_bytes(b"x")
+    item = synth.SynthItem("synth_0001", "x", "corpus", status="done", dropped=False)
+    d = train.build_audio_dir(p, [item])
+    assert sorted(f.name for f in d.iterdir()) == ["s1.wav", "synth_0001.wav"]
+    assert (d / "s1.wav").read_bytes() == (p.segments_dir / "s1.wav").read_bytes()
+
+
+def _real_dataset(p, monkeypatch):
+    """The real piper_csv over one original phrase (the _setup_train stub writes no csv)."""
+    import numpy as np
+    from omnivoice import audio
+    from omnivoice.dataset import Segment
+    monkeypatch.setattr(dataset, "piper_csv", _REAL_CSV)
+    audio.write_wav(p.segments_dir / "s1.wav", np.zeros(100, np.float32))
+    dataset.save(p, [Segment("s1", "раз два", 1.0)])
+
+
+def test_training_without_synth_is_unchanged(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    _real_dataset(p, monkeypatch)
+    fake = Fake({})
+    train.train_project(p, env=ENV12, run=fake, batch=16)
+    csv = (p.train_dir / "train.csv").read_text(encoding="utf-8").splitlines()
+    assert len(csv) == len(set(csv))                                  # weight 1: no repeats
+    fit = next(" ".join(c) for c in fake.calls if "fit.py" in " ".join(c))
+    assert "/train/audio/" in fit and "/segments/" not in fit
+    assert (p.train_dir / "audio").is_dir()
+
+
+def test_training_uses_accepted_synth_with_weight(tmp_path, monkeypatch):
+    import numpy as np
+    from omnivoice import audio, synth
+    p = _setup_train(tmp_path, monkeypatch)
+    _real_dataset(p, monkeypatch)
+    synth.wav(p, "synth_0001").parent.mkdir(parents=True)
+    audio.write_wav(synth.wav(p, "synth_0001"), np.zeros(100, np.float32))
+    synth.save(p, synth.SynthState(["x"], [synth.SynthItem("synth_0001", "четыре", "corpus", status="done",
+                                                           verdict="accepted", dropped=False)], weight=2))
+    train.train_project(p, env=ENV12, run=Fake({}), batch=16)
+    rows = (p.train_dir / "train.csv").read_text(encoding="utf-8").splitlines()
+    originals, half = rows[:-1], (len(rows) - 1) // 2
+    assert rows[-1] == "synth_0001.wav|четыре" and half > 0 and originals[:half] == originals[half:]  # weight 2
+    assert (p.train_dir / "audio" / "synth_0001.wav").is_file()
