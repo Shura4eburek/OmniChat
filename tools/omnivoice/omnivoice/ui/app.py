@@ -252,7 +252,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                             batch = gr.Number(16, label=S.BATCH, precision=0, minimum=1)
                         with gr.Row():
                             start_btn = gr.Button(S.TRAIN_START, variant="primary")
-                            stop_btn = gr.Button(S.TRAIN_STOP, variant="stop")
+                            stop_btn = gr.Button(S.TRAIN_STOP, variant="stop", interactive=False)
                             resume_btn = gr.Button(S.TRAIN_RESUME)
                         train_status = gr.HTML(f'<div class="train-status">{S.TRAIN_IDLE}</div>')
                         with gr.Row(equal_height=True, elem_classes="charts-row"):
@@ -660,9 +660,26 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         check_btn.click(on_check, [project_dd, section], [check_out, steps])
 
         # ---------------- train ----------------
+        def train_buttons(name):
+            """Start / Stop / Resume for the project's state: one run at a time, Stop only while it runs
+            (and not twice), Resume only when there is a last.ckpt to resume from."""
+            r = runners.get(name)
+            running = bool(r and r.running)
+            stopping = running and r.status == "stopped"
+            p = try_load(name) if not running else None
+            can_resume = p is not None and train.last_checkpoint(p) is not None
+            return (gr.update(interactive=bool(name) and not running),
+                    gr.update(interactive=running and not stopping, value=S.TRAIN_STOP_WAIT if stopping else S.TRAIN_STOP),
+                    gr.update(interactive=can_resume))
+
+        train_btns = [start_btn, stop_btn, resume_btn]
+
         def start_training(name, n_epochs, n_batch, resume):
             if not name:
                 raise ProjectError(S.NO_PROJECT_SELECTED)
+            if runners.get(name) is not None and runners[name].running:  # a double click: already started
+                return (msg_html(""), f'<div class="train-status">{html.escape(runners[name].status_text())}</div>',
+                        *train_buttons(name))
             key = root / name
             # Held until the dataset csv is written (first should_stop poll), then released for the docker run.
             locks.acquire(key, S.OP_TRAIN)
@@ -675,21 +692,25 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             except BaseException:
                 locks.release(key)
                 raise
-            return msg_html(""), f'<div class="train-status">{html.escape(runner(name).status_text())}</div>'
+            return (msg_html(""), f'<div class="train-status">{html.escape(runner(name).status_text())}</div>',
+                    *train_buttons(name))
 
-        start_btn.click(guarded(2)(lambda n, e, b: start_training(n, e, b, False)),
-                        [project_dd, epochs, batch], [train_msg, train_status])
-        resume_btn.click(guarded(2)(lambda n, e, b: start_training(n, e, b, True)),
-                         [project_dd, epochs, batch], [train_msg, train_status])
+        start_btn.click(guarded(5)(lambda n, e, b: start_training(n, e, b, False)),
+                        [project_dd, epochs, batch], [train_msg, train_status, *train_btns])
+        resume_btn.click(guarded(5)(lambda n, e, b: start_training(n, e, b, True)),
+                         [project_dd, epochs, batch], [train_msg, train_status, *train_btns])
 
-        @guarded(2)
+        @guarded(5)
         def on_stop(name):
             r = runners.get(name)
             if r:
                 r.stop()
-            return msg_html(""), f'<div class="train-status">{html.escape(r.status_text() if r else S.TRAIN_IDLE)}</div>'
+            return (msg_html(""), f'<div class="train-status">{html.escape(r.status_text() if r else S.TRAIN_IDLE)}</div>',
+                    *train_buttons(name))
 
-        stop_btn.click(on_stop, project_dd, [train_msg, train_status])
+        stop_btn.click(on_stop, project_dd, [train_msg, train_status, *train_btns])
+        for ev in (demo.load, project_dd.change):
+            ev(train_buttons, project_dd, train_btns, show_progress="hidden")
 
         def status_html(name, p=None, metrics=None):
             r = runners.get(name)
@@ -702,12 +723,13 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         def on_train_tick(name):
             r = runners.get(name)
             if r is None:
-                return gr.skip(), gr.skip()
+                return (gr.skip(),) * 5
             if r.running:
                 r.poll_checkpoints()
-            return f'<div class="train-status">{html.escape(r.status_text())}</div>', r.log_text()
+            return (f'<div class="train-status">{html.escape(r.status_text())}</div>', r.log_text(),
+                    *train_buttons(name))  # the run ending by itself frees Start / Resume
 
-        train_timer.tick(on_train_tick, project_dd, [train_status, train_log], show_progress="hidden")
+        train_timer.tick(on_train_tick, project_dd, [train_status, train_log, *train_btns], show_progress="hidden")
 
         def read_metrics(p) -> dict:
             try:

@@ -1,6 +1,7 @@
 """Pure UI helpers: no gradio needed, so these run in the plain test environment too."""
 import io
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -223,7 +224,7 @@ def test_train_runner_stop_calls_docker_stop():
         return R()
     r = h.TrainRunner(train_fn=slow, run=fake_run)
     r.start(_P(), 1, True, None, None)
-    r.stop()
+    r.stop(grace=0.1)  # a run that ignores the request (e.g. started by an older omnivoice) is killed
     r.join(5)
     assert calls == [["docker", "stop", "omnivoice-train-glados"]]
     assert r.status == "stopped"
@@ -279,7 +280,7 @@ def test_train_runner_stop_before_container_launch():
         raise OSError("no such container")
     r = h.TrainRunner(train_fn=train_fn, run=fake_run)
     r.start(_P(), 1, True, None, None)
-    r.stop()
+    r.stop(grace=0.1)
     r.join(5)
     assert launched == [] and r.code == STOPPED and r.status == "stopped"
 
@@ -347,6 +348,27 @@ def test_apply_edits_turns_line_breaks_into_spaces():
     assert segs[0].text == "раз два три"
 
 
+def test_train_runner_stop_asks_first_then_kills_a_stuck_run(monkeypatch, tmp_path):
+    from omnivoice import train
+    monkeypatch.setitem(train._ACTIVE, "omnivoice-train-glados", "wsl")
+    gate, calls = threading.Event(), []
+    p = _NS(name="glados", train_dir=tmp_path / "train")
+    def graceful(p, epochs, resume, on_line, batch, env, should_stop):
+        for _ in range(500):  # fit.py: stops after its batch once the request file appears
+            if (p.train_dir / train.STOP_FILE).exists():
+                time.sleep(0.5)  # finishing the batch and saving last.ckpt
+                return 0
+            time.sleep(0.01)
+        return 1
+    r = h.TrainRunner(train_fn=graceful, run=lambda cmd, **kw: calls.append(cmd))
+    r.start(p, 1, True, None, None)
+    r.stop(grace=5)
+    assert r.status_text() == S.TRAIN_STOPPING  # still saving: not «stopped» yet
+    r.join(5)
+    assert calls == [] and r.status == "stopped"  # stopped by itself: no kill
+    assert r.log_text().splitlines()[-1] == S.TRAIN_STOPPED
+
+
 def test_train_runner_stop_on_wsl_runs_pkill(monkeypatch):
     from omnivoice import train, wslenv
     monkeypatch.setitem(train._ACTIVE, "omnivoice-train-glados", "wsl")  # train_project chose WSL
@@ -359,9 +381,9 @@ def test_train_runner_stop_on_wsl_runs_pkill(monkeypatch):
         return R()
     r = h.TrainRunner(train_fn=slow, run=fake_run)
     r.start(_P(), 1, True, None, None)
-    r.stop()
+    r.stop(grace=0.1)  # the request is ignored (no fit.py): killed after the grace period
     r.join(5)
-    assert calls == [wslenv.wsl_cmd("pkill", "-f", "piper.train")] and r.status == "stopped"
+    assert calls == [wslenv.wsl_cmd("pkill", "-f", "piper_compat/fit.py|piper.train")] and r.status == "stopped"
 
 
 def test_env_badge_shows_wsl_backend():
@@ -665,7 +687,7 @@ def test_train_runner_stopped_does_not_count_the_broken_epoch():
         return 137
     r = h.TrainRunner(train_fn=slow, run=lambda *a, **k: gate.set())
     r.start(_P(), 10, True, None, None, target=9, offset=0)
-    r.stop(); r.join(5)
+    r.stop(grace=0.1); r.join(5)
     assert "Эпоха" not in r.log_text() and r.log_text().splitlines()[-1] == S.TRAIN_STOPPED
 
 

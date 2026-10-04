@@ -333,7 +333,8 @@ class EnvProbe:
 
 
 class TrainRunner:
-    """One background training run per project; Stop = train.stop_training (docker stop / pkill in WSL).
+    """One background training run per project. Stop asks the run to finish its batch and save last.ckpt
+    (train.request_stop); if it is still running after train.STOP_GRACE s, train.stop_training kills it.
 
     The raw stdout goes to <project>/train/train.log untouched; the UI shows trainlog.LogCleaner's
     short lines (one per epoch) rendered with self.metrics, which the UI refreshes from the events."""
@@ -499,17 +500,29 @@ class TrainRunner:
                     "failed": S.TRAIN_FAILED.format(code=code)}[self.status])
         self._close_raw()
 
-    def stop(self, timeout: int = 60) -> None:
+    def stop(self, timeout: int = 60, grace: float | None = None) -> None:
+        """grace: seconds the run has to stop by itself (train.STOP_GRACE) before it is killed."""
         if not self.running or self._p is None:
             return
+        from omnivoice import train
         self.status = "stopped"
         self._stop.set()  # covers the download / image-build phase, before any container exists
         self._note(S.TRAIN_STOPPING)
-        try:
-            from omnivoice import train
-            train.stop_training(self._p, run=self._run, timeout=timeout)
-        except (OSError, subprocess.SubprocessError) as e:
-            self._note(str(e))
+        train.request_stop(self._p)
+        p, thread = self._p, self._thread
+        grace = train.STOP_GRACE if grace is None else grace
+
+        def kill_if_stuck():
+            thread.join(grace)
+            if not thread.is_alive():
+                return
+            self._note(S.TRAIN_STOP_FORCED)
+            try:
+                train.stop_training(p, run=self._run, timeout=timeout)
+            except (OSError, subprocess.SubprocessError) as e:
+                self._note(str(e))
+
+        threading.Thread(target=kill_if_stuck, daemon=True, name=f"omnivoice-stop-{p.name}").start()
 
     def join(self, timeout=None) -> None:
         if self._thread:
@@ -525,6 +538,8 @@ class TrainRunner:
             if per is not None and eta is not None:
                 text += S.TRAIN_TIMING.format(per=trainlog.duration_text(per), eta=trainlog.duration_text(eta))
             return text
+        if self.status == "stopped" and self.running:  # still finishing its batch and saving last.ckpt
+            return S.TRAIN_STOPPING
         return {"idle": S.TRAIN_IDLE, "done": S.TRAIN_DONE, "stopped": S.TRAIN_STOPPED,
                 "failed": S.TRAIN_FAILED.format(code=self.code), "error": S.TRAIN_ERROR}[self.status]
 

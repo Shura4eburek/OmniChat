@@ -286,6 +286,16 @@ def _last_epochs(p) -> dict[Path, int]:
     return out
 
 
+def _last_ckpt_epoch(last: Path) -> int | None:
+    """The epoch fit.py wrote last.ckpt at (it saves every few epochs, so the events may run further);
+    None for a run without the note (piper's own fit rewrote last.ckpt every time)."""
+    from omnivoice.piper_compat.fit import LAST_EPOCH
+    try:
+        return int(last.with_name(LAST_EPOCH).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
 def _metrics_or_empty(p) -> dict:
     try:
         return epoch_metrics(p)
@@ -310,7 +320,8 @@ def rank_checkpoints(p, metrics: dict | None = None) -> list[Ranked]:
     last, old = None, []
     for c in cps:
         if c.metric is None:
-            e = last_epochs.get(c.path.parent.parent, c.epoch)
+            e = _last_ckpt_epoch(c.path)
+            e = last_epochs.get(c.path.parent.parent, c.epoch) if e is None else e
             m = metrics.get(e, {})
             r = Ranked(c.path, e, m.get("val_mos"), m.get("val_mel"), last=c.path == newest,
                        old_last=c.path != newest)

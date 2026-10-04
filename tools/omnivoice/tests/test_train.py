@@ -54,7 +54,8 @@ def test_fit_command_args(tmp_path):
     p = Project.create(tmp_path / "glados", name="glados", language="ru")
     cmd = train.fit_command(p, "/ckpt/base.ckpt", batch=24, max_epochs=3000, resume=False)
     joined = " ".join(cmd)
-    for part in ["--gpus all", "python3 -W ignore -m piper.train fit", "--data.voice_name glados", "--data.espeak_voice ru",
+    for part in ["--gpus all", "python3 -W ignore /omnivoice_compat/fit.py --omnivoice-base-epoch 4139 "
+                 "--omnivoice-last-every 10 fit", ":/omnivoice_compat:ro", "--data.voice_name glados", "--data.espeak_voice ru",
                  "--data.csv_path /work/train/train.csv", "--data.audio_dir /work/segments/",
                  "--model.sample_rate 22050", "--data.batch_size 24", "--trainer.max_epochs 3000",
                  "--ckpt_path /ckpt/base.ckpt"]:
@@ -140,7 +141,7 @@ def test_epochs_are_relative_to_base(tmp_path, monkeypatch):
 
 def test_fit_failure_leaves_step_unset(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
-    fake = Fake({"piper.train fit": (3, "")})
+    fake = Fake({"fit.py": (3, "")})
     code = train.train_project(p, env=train.Env(True, True, "RTX", 12000), run=fake)
     assert code == 3 and p.steps["train"] is False
 
@@ -192,7 +193,7 @@ def test_should_stop_aborts_before_container(tmp_path, monkeypatch, stop_at):
     fake = Fake({})
     code = train.train_project(p, env=train.Env(True, True, "RTX", 12000), run=fake, should_stop=should_stop)
     assert code == train.STOPPED == 130
-    assert not any("piper.train" in " ".join(c) for c in fake.calls)
+    assert not any("fit.py" in " ".join(c) for c in fake.calls)
     assert p.steps["train"] is False
     assert len(calls) == stop_at
 
@@ -200,17 +201,17 @@ def test_should_stop_false_still_trains(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
     fake = Fake({})
     code = train.train_project(p, env=train.Env(True, True, "RTX", 12000), run=fake, should_stop=lambda: False)
-    assert code == 0 and any("piper.train" in " ".join(c) for c in fake.calls)
+    assert code == 0 and any("fit.py" in " ".join(c) for c in fake.calls)
 
 ENV12 = train.Env(True, True, "RTX", 12000)
 
 class OomFake(Fake):
-    """`piper.train fit` fails with a CUDA OOM line until the batch drops to `ok_at`."""
+    """`fit.py` fails with a CUDA OOM line until the batch drops to `ok_at`."""
     def __init__(self, ok_at=None):
         super().__init__({}); self.ok_at = ok_at; self.batches = []
     def __call__(self, cmd, **kw):
         self.calls.append(cmd)
-        if "piper.train" in " ".join(cmd):
+        if "fit.py" in " ".join(cmd):
             bs = int(cmd[cmd.index("--data.batch_size") + 1]); self.batches.append(bs)
             if self.ok_at is None or bs > self.ok_at:
                 return subprocess.CompletedProcess(cmd, 1, stdout="torch.OutOfMemoryError: CUDA out of memory.\n", stderr="")
@@ -231,7 +232,7 @@ def test_oom_retry_resumes_from_last_checkpoint(tmp_path, monkeypatch):
     import os, time
     future = time.time() + 3600; os.utime(last, (future, future))  # written by this run
     train.train_project(p, env=ENV12, run=fake, batch=16, resume=False)
-    fits = [" ".join(c) for c in fake.calls if "piper.train" in " ".join(c)]
+    fits = [" ".join(c) for c in fake.calls if "fit.py" in " ".join(c)]
     assert "--ckpt_path /ckpt/a/b.ckpt" in fits[0] and "last.ckpt" in fits[1]
 
 def test_oom_retry_after_no_resume_ignores_old_run(tmp_path, monkeypatch):
@@ -240,7 +241,7 @@ def test_oom_retry_after_no_resume_ignores_old_run(tmp_path, monkeypatch):
     import os; os.utime(last, (1, 1))  # an older run
     fake = OomFake(ok_at=8)
     train.train_project(p, env=ENV12, run=fake, batch=16, resume=False)
-    fits = [" ".join(c) for c in fake.calls if "piper.train" in " ".join(c)]
+    fits = [" ".join(c) for c in fake.calls if "fit.py" in " ".join(c)]
     assert all("last.ckpt" not in f for f in fits)
 
 def test_oom_at_minimum_batch_is_russian_error(tmp_path, monkeypatch):
@@ -254,21 +255,21 @@ def test_oom_retry_respects_should_stop(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
     fake, polls = OomFake(), []
     def should_stop():
-        polls.append(1); return len(polls) > 4   # the 4 preparation polls pass, the retry poll stops
+        polls.append(1); return len(polls) > 5   # 4 preparation polls + the pre-launch one pass, the retry poll stops
     assert train.train_project(p, env=ENV12, run=fake, batch=16, should_stop=should_stop) == train.STOPPED
     assert fake.batches == [16]
 
 def test_non_oom_failure_is_not_retried(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
-    fake = Fake({"piper.train fit": (1, "Some other error\n")})
+    fake = Fake({"fit.py": (1, "Some other error\n")})
     assert train.train_project(p, env=ENV12, run=fake) == 1
-    assert sum("piper.train" in " ".join(c) for c in fake.calls) == 1
+    assert sum("fit.py" in " ".join(c) for c in fake.calls) == 1
 
 def test_display_edits_during_training_survive(tmp_path, monkeypatch):
     p = _setup_train(tmp_path, monkeypatch)
     class EditingFake(Fake):
         def __call__(self, cmd, **kw):
-            if "piper.train" in " ".join(cmd):   # the UI saves new display fields while training runs
+            if "fit.py" in " ".join(cmd):   # the UI saves new display fields while training runs
                 q = Project.load(p.root); q.display["description"] = "Новое описание"; q.save()
             return super().__call__(cmd, **kw)
     assert train.train_project(p, env=ENV12, run=EditingFake({})) == 0
@@ -284,7 +285,7 @@ def test_target_already_reached_skips_docker(tmp_path, monkeypatch):
     fake, lines = Fake({}), []
     assert train.train_project(p, epochs=1000, env=ENV12, run=fake, on_line=lines.append) == 0
     assert lines == ["Цель уже достигнута (эпоха 1101) — увеличь --epochs"]
-    assert not any("piper.train" in " ".join(c) or c[:2] == ["docker", "rm"] for c in fake.calls)
+    assert not any("fit.py" in " ".join(c) or c[:2] == ["docker", "rm"] for c in fake.calls)
     assert Project.load(p.root).steps["train"] is False
 
 def test_target_not_reached_or_unknown_trains(tmp_path, monkeypatch):
@@ -297,7 +298,7 @@ def test_target_not_reached_or_unknown_trains(tmp_path, monkeypatch):
     (d / "epoch=1099-val_mel=0.3000.ckpt").write_bytes(b"x")
     fake2 = Fake({})
     train.train_project(p, epochs=1000, env=ENV12, run=fake2)
-    assert any("piper.train" in " ".join(c) for c in fake.calls) and any("piper.train" in " ".join(c) for c in fake2.calls)
+    assert any("fit.py" in " ".join(c) for c in fake.calls) and any("fit.py" in " ".join(c) for c in fake2.calls)
 
 def test_detect_env_nvidia_smi_timeout_means_no_gpu():
     def run(cmd, **kw):
@@ -396,7 +397,8 @@ def test_wsl_fit_command_exact(tmp_path):
     p = Project.create(tmp_path / "glados", name="glados", language="ru")
     r = wslenv.wsl_path(p.root.resolve())
     cmd = train.WSL.fit(p, "/mnt/c/cache/checkpoints/a/b.ckpt", 24, 3000, resume=False)
-    assert cmd == WSL_PY + ["-W", "ignore", "-m", "piper.train", "fit",
+    assert cmd == WSL_PY + ["-W", "ignore", wslenv.wsl_path(train.FIT_SCRIPT), "--omnivoice-base-epoch", "4139",
+        "--omnivoice-last-every", "10", "fit",
         "--data.voice_name", "glados", "--data.csv_path", f"{r}/train/train.csv",
         "--data.audio_dir", f"{r}/segments/", "--model.sample_rate", "22050", "--data.espeak_voice", "ru",
         "--data.cache_dir", f"{r}/train/cache/", "--data.config_path", f"{r}/train/config.json",
@@ -472,7 +474,7 @@ def test_wsl_unmappable_project_path_is_russian(tmp_path, monkeypatch):
 
 def test_stop_commands():
     class P: name = "glados"
-    assert train.WSL.stop(P()) == ["wsl", "-d", "omnivoice", "-u", "root", "--exec", "pkill", "-f", "piper.train"]
+    assert train.WSL.stop(P()) == ["wsl", "-d", "omnivoice", "-u", "root", "--exec", "pkill", "-f", "piper_compat/fit.py|piper.train"]
     assert train.DOCKER.stop(P()) == ["docker", "stop", "omnivoice-train-glados"]
 
 
@@ -485,13 +487,13 @@ def test_stop_training_uses_active_backend(tmp_path, monkeypatch):
     seen = []
     class Stopper(Fake):
         def __call__(self, cmd, **kw):
-            if "piper.train" in " ".join(cmd):
+            if "fit.py" in " ".join(cmd):
                 train.stop_training(p, run=run)   # the UI Stop while the fit runs
                 seen.append(1)
             return super().__call__(cmd, **kw)
     train.train_project(p, env=ENV_WSL, run=Stopper({}))
     assert seen == [1]
-    assert stops == [train.DOCKER.stop(p), wslenv.wsl_cmd("pkill", "-f", "piper.train")]
+    assert stops == [train.DOCKER.stop(p), wslenv.wsl_cmd("pkill", "-f", "piper_compat/fit.py|piper.train")]
     train.stop_training(p, run=run)   # finished: forgotten again
     assert stops[-1] == train.DOCKER.stop(p)
 
@@ -506,7 +508,7 @@ def test_stream_ctrl_c_runs_backend_stop(monkeypatch):
     monkeypatch.setattr(train.subprocess, "Popen", Proc)
     ran, lines = [], []
     monkeypatch.setattr(train.subprocess, "run", lambda cmd, **kw: ran.append(cmd))
-    stop = wslenv.wsl_cmd("pkill", "-f", "piper.train")
+    stop = wslenv.wsl_cmd("pkill", "-f", "piper_compat/fit.py|piper.train")
     assert train._stream(["x"], lines.append, stop) == 130
     assert ran == [stop] and lines == ["epoch 1", "Обучение остановлено — продолжить: omnivoice train"]
 
@@ -536,7 +538,7 @@ def test_should_stop_after_clean_base(tmp_path, monkeypatch):
         polls.append(1); return len(polls) >= 4   # csv, download, prepare pass; the post-clean poll stops
     fake = Fake({})
     assert train.train_project(p, env=ENV_WSL, run=fake, should_stop=should_stop) == train.STOPPED
-    assert not any("piper.train" in " ".join(c) for c in fake.calls) and len(polls) == 4
+    assert not any("fit.py" in " ".join(c) for c in fake.calls) and len(polls) == 4
 
 
 @pytest.mark.parametrize("exc", [FileNotFoundError("docker"), OSError("nope")])
@@ -568,3 +570,35 @@ def test_train_logs_checkpoint_size_only_when_downloading(tmp_path, monkeypatch)
     lines.clear()
     train.train_project(p, env=env, run=Fake({}), on_line=lines.append, resume=False)
     assert checkpoints.LABEL not in lines  # already cached
+
+
+def test_fit_script_options_and_schedule():
+    from omnivoice.piper_compat import fit
+    argv = ["--omnivoice-base-epoch", "2436", "--omnivoice-last-every", "10", "fit", "--data.batch_size", "24"]
+    assert fit.pop_int(argv, "--omnivoice-base-epoch", 0) == 2436 and fit.pop_int(argv, "--omnivoice-last-every", 1) == 10
+    assert argv == ["fit", "--data.batch_size", "24"] and fit.pop_int(argv, "--missing", 7) == 7
+    # warm-up: max(20, 5 % of the planned epochs) after the base, as the checkpoints page hides
+    assert fit.warmup_end(2436, 2437 + 100) == 2437 + 20 and fit.warmup_end(2436, 2437 + 1000) == 2437 + 50
+    assert [e for e in range(2437, 2467) if fit.last_due(e, 2467, 10, False)] == [2439, 2449, 2459, 2466]
+    assert fit.last_due(2440, 2467, 10, stopping=True)
+
+
+def test_graceful_stop_returns_stopped_and_clears_the_request(tmp_path, monkeypatch):
+    p = _setup_train(tmp_path, monkeypatch)
+    (p.train_dir / train.STOP_FILE).write_text("")   # left by an earlier run: must not stop this one
+    def run(cmd, **kw):
+        if "fit.py" in " ".join(cmd):
+            assert not (p.train_dir / train.STOP_FILE).exists()
+            train.request_stop(p)                      # the Stop button while fit.py runs
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    assert train.train_project(p, env=ENV12, run=run, batch=16) == train.STOPPED
+    assert not (p.train_dir / train.STOP_FILE).exists() and not p.steps.get("train")
+
+
+def test_sparse_last_ckpt_epoch_comes_from_its_note(tmp_path):
+    from tests.test_previews import ckpts
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    d = ckpts(p, "version_0", ["epoch=4200-val_mel=0.3000.ckpt", "last.ckpt"])
+    (d / "last.epoch").write_text("4195")
+    from omnivoice import previews
+    assert next(r for r in previews.rank_checkpoints(p) if r.last).epoch == 4195

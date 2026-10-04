@@ -15,6 +15,13 @@ IMAGE = "omnivoice-train:0.1"
 DOCKER_DIR = Path(__file__).resolve().parent / "piper_compat"
 VENV_PY = f"{wslenv.ROOT}/venv/bin/python"
 CLEAN_SCRIPT = "/opt/omnivoice/clean_ckpt.py"  # same path in the Docker image and in the WSL distro
+# piper's fit with one best checkpoint per metric, a sparse atomic last.ckpt and a graceful stop (see the
+# script). Run from this folder: WSL reads it through /mnt/…, Docker gets the folder mounted read-only.
+FIT_SCRIPT = DOCKER_DIR / "fit.py"
+DOCKER_COMPAT = "/omnivoice_compat"
+LAST_EVERY = 10   # epochs between last.ckpt saves (each ~850 MB); a graceful stop saves too
+STOP_FILE = "STOP"  # <train>/STOP: fit.py stops after the current batch and saves last.ckpt
+STOP_GRACE = 120  # seconds a graceful stop may take (an epoch plus one checkpoint copy) before a hard kill
 NO_ENV = "Нет среды обучения — нажми «Установить зависимости» (omnivoice setup)"
 WSL_NO_GPU = ("Среда WSL готова, но не видит видеокарту NVIDIA — обнови драйвер NVIDIA "
               "и перезапусти компьютер (или используй Colab)")
@@ -90,9 +97,12 @@ def last_checkpoint(p) -> Path | None:
     found = sorted(p.train_dir.glob("lightning_logs/*/checkpoints/last.ckpt"), key=lambda f: f.stat().st_mtime)
     return found[-1] if found else None
 
-def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str) -> list[str]:
+def fit_args(p, ckpt: str, batch: int, max_epochs: int, root: str, script: str | None = None) -> list[str]:
+    """`script`: omnivoice's fit.py (Docker / WSL); None runs piper's own CLI (Colab)."""
     # -W ignore: torch/lightning/jsonargparse deprecation warnings would bury the progress in the log
-    return ["python3", "-W", "ignore", "-m", "piper.train", "fit",
+    entry = ([script, "--omnivoice-base-epoch", str(base_epoch(p)), "--omnivoice-last-every", str(LAST_EVERY)]
+             if script else ["-m", "piper.train"])
+    return ["python3", "-W", "ignore", *entry, "fit",
             "--data.voice_name", p.name,
             "--data.csv_path", f"{root}/train/train.csv",
             "--data.audio_dir", f"{root}/segments/",
@@ -123,7 +133,8 @@ def fit_command(p, ckpt_in_container: str, batch: int, max_epochs: int, resume: 
             "-v", f"{p.root.resolve()}:/work", "-v", f"{(cache_dir() / 'checkpoints').resolve()}:/ckpt",
             # torch.hub cache: the UTMOS quality model (~400 MB) is downloaded once, not every run
             "-v", f"{(cache_dir() / 'torch-hub').resolve()}:/root/.cache/torch",
-            IMAGE, *fit_args(p, ckpt, batch, max_epochs, "/work")]
+            "-v", f"{DOCKER_DIR}:{DOCKER_COMPAT}:ro",
+            IMAGE, *fit_args(p, ckpt, batch, max_epochs, "/work", f"{DOCKER_COMPAT}/fit.py")]
 
 def export_command(p, ckpt_container_path: str, extra_mount: Path | None = None) -> list[str]:
     extra = ["-v", f"{extra_mount.resolve()}:/ckptin"] if extra_mount else []
@@ -194,7 +205,7 @@ class WslBackend:
 
     def fit(self, p, ckpt: str, batch: int, max_epochs: int, resume: bool) -> list[str]:
         last = last_checkpoint(p) if resume else None
-        args = fit_args(p, _wp(last) if last else ckpt, batch, max_epochs, _wp(p.root))
+        args = fit_args(p, _wp(last) if last else ckpt, batch, max_epochs, _wp(p.root), _wp(FIT_SCRIPT))
         return wslenv.wsl_cmd(VENV_PY, *args[1:])  # fit_args starts with the Docker image's python3
 
     def clean(self, src: Path, dst: Path) -> list[str]:
@@ -208,12 +219,37 @@ class WslBackend:
         return None
 
     def stop(self, p) -> list[str]:
-        return wslenv.wsl_cmd("pkill", "-f", "piper.train")
+        # fit.py runs (or piper.train, for a run started by an older omnivoice)
+        return wslenv.wsl_cmd("pkill", "-f", "piper_compat/fit.py|piper.train")
 
 
 DOCKER, WSL = DockerBackend(), WslBackend()
 BACKENDS = {b.name: b for b in (DOCKER, WSL)}
 _ACTIVE: dict[str, str] = {}  # container_name(p) → backend of the run in progress (for stop_training)
+
+
+def request_stop(p) -> None:
+    """Ask the running fit to stop after its current batch and save last.ckpt (fit.py watches the file)."""
+    train_dir = getattr(p, "train_dir", None)
+    if train_dir is None:
+        return
+    try:
+        train_dir.mkdir(parents=True, exist_ok=True)
+        (train_dir / STOP_FILE).touch()
+    except OSError:
+        pass
+
+
+def _take_stop_request(p) -> bool:
+    """True (and the request is cleared) when the run that just ended was asked to stop."""
+    f = p.train_dir / STOP_FILE
+    try:
+        f.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return f.exists()
 
 
 def stop_training(p, run=subprocess.run, timeout: int = 60):
@@ -348,7 +384,12 @@ def _fit_loop(p, be, run, on_line, stop, base_ckpt: str, bs: int, target: int, r
                 run(pre, capture_output=True)
             except Exception:
                 pass
+        if stop():  # Stop pressed while preparing: the request file is about to be cleared below
+            return STOPPED
+        _take_stop_request(p)  # a request left by an earlier run must not stop this one at once
         code = _run_fit(cmd, run, handle, be.stop(p))
+        if _take_stop_request(p):  # stopped gracefully: progress saved, but the target is not reached
+            return STOPPED
         if code in (0, STOPPED) or not oom:
             break
         if stop():

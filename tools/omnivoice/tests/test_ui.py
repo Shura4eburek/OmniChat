@@ -123,6 +123,19 @@ def test_delete_project_needs_confirmation_and_switches_project(tmp_path):
     assert sec["value"] == S.SEC_NEW and sec["choices"] == [S.SEC_SETUP, S.SEC_NEW]
 
 
+def test_train_buttons_follow_the_run(tmp_path):
+    from omnivoice.ui import strings as S
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    buttons = _handler(build(tmp_path), "train_buttons")
+    start, stop, resume = buttons("Arthas")
+    assert start["interactive"] and not stop["interactive"] and not resume["interactive"]  # nothing to resume
+    last = p.train_dir / "lightning_logs/version_0/checkpoints/last.ckpt"
+    last.parent.mkdir(parents=True); last.write_bytes(b"x")
+    start, stop, resume = buttons("Arthas")
+    assert start["interactive"] and resume["interactive"] and stop["value"] == S.TRAIN_STOP
+    assert not buttons(None)[0]["interactive"]
+
+
 def _handler(demo, name):
     return next(f.fn for f in demo.fns.values() if getattr(f.fn, "__name__", "") == name)
 
