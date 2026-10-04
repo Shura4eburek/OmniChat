@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T12:26:54.455Z
-> Files: 70 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-10-04T12:31:58.826Z
+> Files: 74 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/4cc00002-1812-45db-8003-6287882e197a/scratchpad/
 
@@ -41,7 +41,11 @@
 ## ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/
 
 - `buttons_edit.py` — edit, start_training, train_buttons, start_training (~1443 tok)
+- `ckpt_app_edit.py` — edit, players, players, on_pick (~1772 tok)
+- `ckpt_cards_edit.py` — edit, raw_card_html, hud_player_html, raw_card_html (~1409 tok)
 - `ckpt_cfg.sh` (~140 tok)
+- `ckpt_css_edit.py` — edit (~958 tok)
+- `ckpt_test_edit.py` (~700 tok)
 - `cutshort_edit.py` — edit, list_checkpoints, cut_short, cut_short_checkpoints (~911 tok)
 - `phrases_css.py` (~1264 tok)
 - `phrases_css2.py` (~662 tok)

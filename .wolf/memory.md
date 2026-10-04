@@ -608,3 +608,10 @@
 | 15:26 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/cutshort_edit.py | — | ~911 |
 | 17:55 | omnivoice: resume skips/deletes cut-short checkpoints, resumes from newest complete ckpt; checked on real Arthas files read-only | previews.py, train.py, tests | ok | ~10k |
 | 15:28 | Session end: 32 writes across 15 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~37906 tok |
+| 15:29 | Session end: 32 writes across 15 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~37906 tok |
+| 15:30 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_cards_edit.py | — | ~1409 |
+| 15:30 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_app_edit.py | — | ~1772 |
+| 15:31 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_css_edit.py | — | ~958 |
+| 15:31 | Created ../../AppData/Local/Temp/claude/C--Users-Mamoru-IdeaProjects-OmniChat/a09ee1ba-5f8c-43da-abfd-9d9f8baef368/scratchpad/ckpt_test_edit.py | — | ~700 |
+| 18:10 | omnivoice: checkpoints page as cards (click → hidden pick box → on_pick), «Послушать» as rows with HUD players, prune row aligned, hint updated; verified clicks/sort/play at 1x and 3x | ui/app.py, ui/helpers.py, ui/strings.py, ui/theme.py, tests/test_ui.py | ok | ~30k |
+| 15:36 | Session end: 36 writes across 19 files (theme.py, app.py, phrases_edit.py, phrases_css.py, phrases_css2.py) | 3 reads | ~42745 tok |

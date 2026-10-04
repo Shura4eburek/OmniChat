@@ -13,6 +13,7 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 ## Key Learnings
+- Gradio 6: setting a hidden Textbox's textarea value + dispatching a DOM 'input' event fires the component's .change (not .input) — used for clickable HTML cards (#ckpt-pick). Lists refreshed by a timer are better as one gr.HTML than gr.render (no component re-creation / flicker). helpers.hud_player_html is the shared HUD audio player.
 - omnivoice training runs omnivoice/piper_compat/fit.py (WSL: via /mnt/c path, no re-setup; Docker: compat dir mounted at /omnivoice_compat) instead of `-m piper.train`; Colab still uses piper's CLI (fit_args script=None). Stop is graceful via <train>/STOP; pkill pattern 'piper_compat/fit.py|piper.train'. Lightning 2.6.6 saves last.ckpt only when a top-k save happens; resume creates a new lightning_logs/version_N.
 - To test the WSL env from Git Bash, write a .sh into the scratchpad and run `wsl.exe -d omnivoice -- bash /mnt/c/...` via PowerShell (inline quoting breaks).
 - Gradio 6 field DOM: Number = label.container > input; Textbox = label.container > .input-container > input; Dropdown frame = .wrap around input[role=combobox] (40px). omnivoice forces single-line inputs to 40px and pins them to the bottom of their block so wrapped labels don't misalign rows; number spin arrows hidden.
