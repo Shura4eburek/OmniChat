@@ -37,7 +37,13 @@
 - **Project:** OmniChat
 - **Description:** Fabric мод для Minecraft, добавляющий голосовую озвучку чата (TTS) с пространственным звуком и визуальные облачка сообщений над головами игроков.
 
+- omnivoice synthetic data (issue #60): synth.py (synth/synth.json, lines.txt, wavs/), corpus.py (bundled CC0 corpus_ru.txt), synth_check.py (Whisper verdicts), teacher.py (XttsTeacher → piper_compat/xtts_gen.py in WSL venv /opt/omnivoice/xtts, STOP file + 60 s grace), ui SynthRunner. Training: dataset.piper_csv repeats originals ×weight, train.build_audio_dir hardlinks segments + accepted synth wavs into train/audio. «Синтетика» is OPTIONAL_STEPS — never blocks steps / first_open_section.
+- Gradio test helper _handler(demo, name) finds handlers among REGISTERED event fns only — a plain helper must be wired to some event (e.g. State.change) to be testable that way.
+- wslenv.xtts_ready() asks WSL (seconds): cache it for timer ticks (app.xtts_ok), call fresh once per page view.
 ## Do-Not-Repeat
+- [2026-10-04] Visual check of filtered card lists: walk every item state through every action and confirm it stays reachable in SOME filter (a manually dropped «спорная» vanished from all filters until «Брак» included manual drops).
+- [2026-10-04] Killing a background `omnivoice ui` by its port owner can leave the launcher holding the port — kill every process whose CommandLine contains `--port 7861` (not bash.exe).
+- [2026-10-04] Never run bare `python -` from the Bash tool on this machine: it hangs (Store alias). Use tools/omnivoice/.venv/Scripts/python with a script file.
 - [2026-10-04] Don't draw composite icons (arrows on arcs) with CSS borders — use an SVG data-URI as mask-image (theme.UNDO_SVG); Gradio keeps url("data:…") intact. Inspect every icon at 6x zoom, not just layout.
 - [2026-10-04] Gradio's CSS rewrite DROPS a `border:` shorthand that is followed by a border longhand in the same rule — use border-width/style/color longhands. Icons on gr.Button: label text stays in the button (font-size:0) and is a grid/flex item → centre pseudo-icons with position:absolute; inset:0; margin:auto.
 - [2026-10-04] UI review checklist before reporting: 1x and 3-4x zoom; idle/hover/focus/active/playing states; neighbours aligned (compare getBoundingClientRect mids); nothing clipped by overflow:hidden; icons centred with grid not pixel offsets; global box-sizing:border-box affects pseudo-element icons.
