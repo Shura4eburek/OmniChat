@@ -634,7 +634,7 @@ class SynthRunner:
             if rec is None:
                 self._note(S.SYNTH_NO_WHISPER)
             state = synth.apply_check(p, state, rec)
-            synth.save(p, state)
+            synth.save(p, synth.merge_user_changes(p, state))  # ✓ / ✕ / weight changed during the run stay
             if self.status != "stopped":
                 self.status = "done" if code == 0 else "failed"
             s = synth.summary(state)

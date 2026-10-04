@@ -526,6 +526,9 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             r = runners.get(name)
             if r is not None and r.running:
                 raise ValueError(S.DELETE_BUSY)
+            sr = synth_runners.get(name)
+            if sr is not None and sr.running:
+                raise ValueError(S.DELETE_BUSY_SYNTH)
             with locked(name, S.OP_DELETE) as p:
                 title = p.display.get("name") or p.name
                 if not delete_confirmed(p, typed):
@@ -745,7 +748,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             if p is None:
                 return ("", "", "", "", "", [], *synth_buttons(None, []))
             state = synth.load(p)
-            refs = state.refs or synth.choose_refs(load_segments(p, tolerant=True))
+            refs = synth.valid_refs(p, state.refs) or synth.choose_refs(load_segments(p, tolerant=True))
             return (synth_need_html(), synth_refs_html(p, refs), "\n".join(synth.lines(p)),
                     synth_summary_html(synth.summary(state)) if state.items else "",
                     synth_list_html(state.items, flt) if state.items else "", refs, *synth_buttons(name, refs, fresh=False))
@@ -753,8 +756,10 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         synth_view_outputs = [synth_need, synth_refs, synth_lines, synth_summary, synth_list, synth_refs_state, *synth_btns]
         section.change(lambda name, sec, flt: synth_view(name, flt) if sec == S.SEC_SYNTH else (gr.skip(),) * 9,
                        [project_dd, section, synth_filter], synth_view_outputs, show_progress="hidden")
-        project_dd.change(synth_view, [project_dd, synth_filter], synth_view_outputs, show_progress="hidden")
-        demo.load(synth_view, [project_dd, synth_filter], synth_view_outputs, show_progress="hidden")
+        # only on the open page: synth_view asks WSL whether XTTS is installed (seconds, may boot the VM)
+        for ev in (project_dd.change, demo.load):
+            ev(lambda name, sec, flt: synth_view(name, flt) if sec == S.SEC_SYNTH else (gr.skip(),) * 9,
+               [project_dd, section, synth_filter], synth_view_outputs, show_progress="hidden")
 
         def on_synth_filter(name, flt):
             p = try_load(name)
@@ -781,6 +786,8 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             synth.save_lines(p, lines_text or "")
             if not refs:
                 raise ValueError(S.SYNTH_NO_REFS)
+            if any(r.running for r in runners.values()):
+                raise ValueError(S.GPU_BUSY_TRAIN)
             if not xtts_ok():
                 raise ValueError(f"{S.SYNTH_NEED_HEAD}: {S.SYNTH_NEED_XTTS}")
             synth_runner(name).start(p, float(minutes or 15), list(refs))
@@ -895,6 +902,8 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             if runners.get(name) is not None and runners[name].running:  # a double click: already started
                 return (msg_html(""), f'<div class="train-status">{html.escape(runners[name].status_text())}</div>',
                         *train_buttons(name))
+            if any(r.running for r in synth_runners.values()):   # XTTS + Whisper + piper on one GPU → OOM
+                raise ValueError(S.GPU_BUSY_SYNTH)
             key = root / name
             # Held until the dataset csv is written (first should_stop poll), then released for the docker run.
             locks.acquire(key, S.OP_TRAIN)
@@ -910,9 +919,15 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             return (msg_html(""), f'<div class="train-status">{html.escape(runner(name).status_text())}</div>',
                     *train_buttons(name))
 
-        start_btn.click(guarded(5)(lambda n, e, b: start_training(n, e, b, False)),
+        def on_train_start(n, e, b):
+            return start_training(n, e, b, False)
+
+        def on_train_resume(n, e, b):
+            return start_training(n, e, b, True)
+
+        start_btn.click(guarded(5)(on_train_start),
                         [project_dd, epochs, batch], [train_msg, train_status, *train_btns])
-        resume_btn.click(guarded(5)(lambda n, e, b: start_training(n, e, b, True)),
+        resume_btn.click(guarded(5)(on_train_resume),
                          [project_dd, epochs, batch], [train_msg, train_status, *train_btns])
 
         @guarded(5)

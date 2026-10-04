@@ -90,3 +90,56 @@ def test_summary_counts_manual_drops_as_rejected():
                                synth.SynthItem("b", "b", "corpus", status="done", verdict="suspect", dropped=True,
                                                manual="drop")])
     assert synth.summary(st)["rejected"] == 2
+
+
+def _generate_all(p, st):
+    for it in st.items:
+        synth.wav(p, it.id).parent.mkdir(parents=True, exist_ok=True)
+        if it.status == "pending":
+            audio.write_wav(synth.wav(p, it.id), np.zeros(audio.SR, np.float32))
+    return synth.sync_generated(p, st)
+
+
+def test_replan_after_lines_change_never_reuses_audio_or_ids(tmp_path):
+    # review: ids were positional — a changed plan reused old wavs for new text and produced duplicate ids
+    p = project(tmp_path)
+    synth.save_lines(p, "Первая моя фраза.\nВторая моя фраза.")
+    st = _generate_all(p, synth.make_plan(p, minutes=0.3, refs=["s1"]))
+    synth.save(p, st)
+    for edit in ("Новая фраза в начале.\nПервая моя фраза.\nВторая моя фраза.", "Вторая моя фраза."):
+        synth.save_lines(p, edit)
+        st = synth.make_plan(p, minutes=0.3, refs=["s1"])
+        ids = [i.id for i in st.items]
+        assert len(ids) == len(set(ids))
+        assert all(not synth.wav(p, i.id).exists() for i in st.items if i.status == "pending")
+        st = _generate_all(p, st)
+        synth.save(p, st)
+
+
+def test_regenerated_audio_drops_a_manual_accept(tmp_path):
+    # an «accept» was for the old take; the new audio is unheard — only «drop» survives regeneration
+    p = project(tmp_path)
+    st = _generate_all(p, synth.make_plan(p, minutes=3, refs=["s1"]))
+    st.items[0].manual, st.items[1].manual = "accept", "drop"
+    synth.save(p, st)
+    st2 = synth.make_plan(p, minutes=3, refs=["s0"])
+    by_text = {i.text: i for i in st2.items}
+    assert by_text[st.items[0].text].manual is None and by_text[st.items[1].text].manual == "drop"
+
+
+def test_merge_user_changes_keeps_decisions_made_during_a_run(tmp_path):
+    p = project(tmp_path)
+    st = _generate_all(p, synth.make_plan(p, minutes=0.1, refs=["s1"]))
+    synth.save(p, st)
+    synth.set_manual(p, st.items[0].id, "drop")         # the user clicks ✕ while the runner works
+    on_disk = synth.load(p); on_disk.use, on_disk.weight = False, 5; synth.save(p, on_disk)
+    merged = synth.merge_user_changes(p, st)            # the runner's in-memory state before its final save
+    assert merged.items[0].manual == "drop" and merged.items[0].dropped is True
+    assert merged.use is False and merged.weight == 5
+
+
+def test_valid_refs_skips_missing_and_dropped(tmp_path):
+    p = project(tmp_path)
+    segs = dataset.load(p); segs[1].dropped = True; dataset.save(p, segs)
+    (p.segments_dir / "s0.wav").unlink()
+    assert synth.valid_refs(p, ["s0", "s1", "s3", "gone"]) == ["s3"]

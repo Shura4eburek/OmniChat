@@ -231,3 +231,24 @@ def test_synth_page_buttons_decision_and_no_refs(tmp_path, monkeypatch):
     assert synth.load(p).items[0].dropped is False and "synth_0001" not in out[0]   # gone from «Спорные»
     monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: False)
     assert not _handler(demo, "synth_buttons")("Arthas", ["s1"])[0]["interactive"]   # no XTTS: no start
+
+
+def test_synthesis_and_training_never_share_the_gpu_and_delete_waits(tmp_path, monkeypatch):
+    # review: XTTS + Whisper + piper on one GPU → CUDA OOM; deleting a project rmtree'd under the generator
+    from omnivoice import wslenv
+    from omnivoice.ui import app as app_mod, strings as S
+    monkeypatch.setattr(wslenv, "xtts_ready", lambda run=None: True)
+
+    class BusySynth:
+        running, status = True, "running"
+        def start(self, *a, **k): pass
+        def status_text(self): return "…"
+        def log_text(self): return ""
+    monkeypatch.setattr(app_mod, "SynthRunner", BusySynth)
+    Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    demo = build(tmp_path)
+    _handler(demo, "on_synth_start")("Arthas", 2, "", ["s1"])
+    refused = _handler(demo, "on_train_start")("Arthas", 3, 8)
+    assert S.GPU_BUSY_SYNTH in refused[0]
+    refused = _handler(demo, "on_delete")("Arthas", "Arthas")
+    assert S.DELETE_BUSY_SYNTH in refused[0] and (tmp_path / "Arthas").is_dir()

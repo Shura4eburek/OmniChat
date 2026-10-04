@@ -97,29 +97,60 @@ def speech_rate(segments) -> float:
     return statistics.median(rates) if rates else DEFAULT_RATE
 
 
+def _id_number(item_id: str) -> int:
+    tail = item_id.rsplit("_", 1)[-1]
+    return int(tail) if tail.isdigit() else 0
+
+
 def make_plan(p, minutes: float, refs: list[str]) -> SynthState:
-    """A fresh plan; phrases already generated with the same references keep their audio and verdict,
-    every user decision is kept, the rest is (re)generated."""
+    """A fresh plan; phrases already generated with the same references keep their id, audio and verdict.
+    Everything else gets a NEW id (never one an old phrase had: its wav would pass for the new text) and is
+    (re)generated; of the user's decisions only «drop» carries over to new audio — an «accept» was for a take
+    that no longer exists."""
     old = load(p)
     same_refs = old.refs == refs
     by_text = {it.text: it for it in old.items}
     segs = dataset.load(p)
     picked = corpus.pick(corpus.load(p.language), lines(p), minutes, speech_rate(segs))
+    next_n = max((_id_number(it.id) for it in old.items), default=0) + 1
     items = []
-    for n, (text, source) in enumerate(picked, 1):
+    for text, source in picked:
         prev = by_text.get(text)
         if prev is not None and same_refs and prev.status == "done":
             items.append(prev)
             continue
-        item = SynthItem(f"synth_{n:04d}", text, source, manual=prev.manual if prev else None)
-        if (prev is not None and prev.id != item.id) or not same_refs:
-            wav(p, item.id).unlink(missing_ok=True)
+        item = SynthItem(f"synth_{next_n:04d}", text, source,
+                         manual="drop" if prev is not None and prev.manual == "drop" else None)
+        next_n += 1
+        for f in (wav(p, item.id), wav(p, item.id).with_suffix(".wav.part")):
+            f.unlink(missing_ok=True)
         items.append(item)
     used = {it.id for it in items}
-    for it in old.items:                       # files of phrases that left the plan
+    for it in old.items:                       # files of phrases that left the plan or got a new id
         if it.id not in used:
             wav(p, it.id).unlink(missing_ok=True)
     return SynthState(refs, items, old.use, old.weight)
+
+
+def merge_user_changes(p, state: SynthState) -> SynthState:
+    """Before a runner saves its in-memory state: take the decisions and training settings the user changed
+    on disk meanwhile (same id and text), so a ✓ / ✕ or a weight set during a run is not reverted."""
+    cur = load(p)
+    state.use, state.weight = cur.use, cur.weight
+    on_disk = {(it.id, it.text): it for it in cur.items}
+    for it in state.items:
+        mine = on_disk.get((it.id, it.text))
+        if mine is not None and mine.manual != it.manual:
+            it.manual = mine.manual
+            if it.status == "done" and it.verdict is not None:
+                _apply_decision(it)
+    return state
+
+
+def valid_refs(p, refs: list[str]) -> list[str]:
+    """References that still are usable: the phrase exists, is not dropped and has its wav."""
+    ok = {s.id for s in dataset.load(p) if not s.dropped and (p.segments_dir / f"{s.id}.wav").is_file()}
+    return [r for r in refs if r in ok]
 
 
 def sync_generated(p, state: SynthState) -> SynthState:
