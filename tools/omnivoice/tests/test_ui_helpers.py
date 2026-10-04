@@ -411,7 +411,8 @@ def test_steps_bar_need_setup_chip():
 
 
 def test_nav_sections_start_with_setup():
-    assert h.NAV_SECTIONS[0] == S.SEC_SETUP and h.NAV_SECTIONS[1:] == h.SECTIONS
+    assert h.NAV_SECTIONS == (S.SEC_SETUP, *h.SECTIONS[:-1], S.SEC_CKPT, S.SEC_PACK)
+    assert h.SECTION_STEP[S.SEC_CKPT] == "train"
 
 
 def test_setup_progress_parses_steps_and_downloads():
@@ -668,24 +669,101 @@ def test_train_runner_stopped_does_not_count_the_broken_epoch():
     assert "Эпоха" not in r.log_text() and r.log_text().splitlines()[-1] == S.TRAIN_STOPPED
 
 
-def test_ckpt_choices_labels_and_best_first(tmp_path):
+def test_nav_without_project_keeps_only_setup_and_new():
+    assert h.nav_choices(False) == [S.SEC_SETUP, S.SEC_NEW]
+    assert h.nav_choices(True) == [*h.NAV_SECTIONS, S.SEC_NEW, S.SEC_DELETE]
+
+
+def test_delete_page_parts_and_confirmation(tmp_path):
+    from omnivoice.project import Project
+    p = Project.create(tmp_path / "Arthas_2", name="Arthas 2", language="ru")
+    (p.train_dir / "a.ckpt").write_bytes(b"x" * 2048)
+    out = h.delete_parts_html(p)
+    assert "Arthas 2" in out and S.DELETE_PART_TRAIN in out and "2,0 КБ" in out
+    assert h.delete_confirmed(p, " arthas 2 ") and h.delete_confirmed(p, "Arthas_2")
+    assert not h.delete_confirmed(p, "") and not h.delete_confirmed(p, None) and not h.delete_confirmed(p, "Arthas")
+
+
+def test_delete_raw_file_stays_inside_raw(tmp_path):
+    (tmp_path / "raw").mkdir()
+    (tmp_path / "raw" / "a.wav").write_bytes(b"x")
+    (tmp_path / "keep.wav").write_bytes(b"x")
+    with pytest.raises(ValueError):
+        h.delete_raw_file(tmp_path / "raw", "../keep.wav")
+    with pytest.raises(ValueError):
+        h.delete_raw_file(tmp_path / "raw", "missing.wav")
+    h.delete_raw_file(tmp_path / "raw", "a.wav")
+    assert h.raw_files(tmp_path / "raw") == [] and (tmp_path / "keep.wav").exists()
+    assert h.language_choices() == [(S.LANG_RU, "ru"), (S.LANG_EN, "en")]
+
+
+def test_steps_bar_disabled_leads_nowhere():
+    out = h.steps_bar_html({}, None, disabled=True)
+    assert out.count('class="st off"') == 6 and "data-section" not in out
+
+
+def test_base_choices_per_language():
+    choices, value = h.base_choices("ru")
+    assert [n for _l, n in choices] == ["denis", "dmitri", "ruslan", "irina"] and value == "irina"
+    assert ("ruslan · " + S.BASE_MALE, "ruslan") in choices and ("irina · " + S.BASE_FEMALE, "irina") in choices
+    en, en_default = h.base_choices("en")
+    assert en_default == "lessac" and [n for _l, n in en] == ["hfc_male", "joe", "ryan", "amy", "hfc_female", "lessac"]
+    assert sum(label.endswith(S.BASE_MALE) for label, _n in en) == 3
+
+
+def test_every_base_has_gender_and_epoch():
+    import re
+    from omnivoice import languages
+    for name, ck in languages.BASE_CHECKPOINTS.items():
+        assert name in languages.BASE_GENDER and re.search(r"epoch=\d+", ck), name
+
+
+def test_base_sample_url_and_cache(tmp_path, monkeypatch):
+    from omnivoice import checkpoints, languages
+    ck = languages.BASE_CHECKPOINTS["ruslan"]
+    assert checkpoints.sample_url(ck) == ("https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+                                          "ru/ru_RU/ruslan/medium/samples/speaker_0.mp3")
+    got = {}
+    monkeypatch.setattr(checkpoints, "cache_dir", lambda: tmp_path)
+    monkeypatch.setattr(checkpoints.download, "fetch", lambda url, target, **kw: got.update(url=url, target=target) or target)
+    assert checkpoints.sample(ck) == tmp_path / "samples" / "ru/ru_RU/ruslan/medium.mp3"
+    assert got["url"] == checkpoints.sample_url(ck)
+
+
+def test_ckpt_table_sorts_marks_and_keys(tmp_path):
     rows = [_NS(path=tmp_path / "a.ckpt", epoch=4140, mos=3.98, mel=0.68, best_mos=True, best_mel=False,
                 last=False, old_last=False),
             _NS(path=tmp_path / "last.ckpt", epoch=4211, mos=2.24, mel=None, best_mos=False, best_mel=False,
                 last=True, old_last=False),
             _NS(path=tmp_path / "b.ckpt", epoch=4204, mos=None, mel=0.3482, best_mos=False, best_mel=True,
+                last=False, old_last=False),
+            _NS(path=tmp_path / "c.ckpt", epoch=4211, mos=2.5, mel=0.5, best_mos=False, best_mel=False,
                 last=False, old_last=False)]
-    choices, value = h.ckpt_choices(rows, offset=4139)
-    assert choices == [
-        ("эпоха 1 · MOS 3.98 · mel 0.680 · " + S.CKPT_BEST_MOS, str(tmp_path / "a.ckpt")),
-        ("эпоха 72 · MOS 2.24 · " + S.CKPT_LAST, str(tmp_path / "last.ckpt")),
-        ("эпоха 65 · mel 0.348 · " + S.CKPT_BEST_MEL, str(tmp_path / "b.ckpt")),
-    ]
-    assert value == str(tmp_path / "a.ckpt")
-    assert h.ckpt_choices([], 0) == ([], None)
+    table, keys, best = h.ckpt_table(rows, offset=4139)
+    assert best == str(tmp_path / "a.ckpt")
+    assert table == [[1, "3.98", "0.680", S.CKPT_BEST_MOS], [72, "2.50", "0.500", ""], [72, "2.24", "", S.CKPT_LAST],
+                     [65, "", "0.348", S.CKPT_BEST_MEL]]
+    assert [r[0] for r in h.ckpt_table(rows, 4139, S.CKPT_SORT_MEL)[0]] == [65, 72, 1, 72]
+    assert [r[0] for r in h.ckpt_table(rows, 4139, S.CKPT_SORT_EPOCH)[0]] == [72, 72, 65, 1]
+    # a last.ckpt sharing its epoch with a named file stays a separate, clickable row
+    assert keys[h.ckpt_key_of_row(table[2])] == str(tmp_path / "last.ckpt")
+    assert keys[h.ckpt_key_of_row(table[1])] == str(tmp_path / "c.ckpt")
+    marked = h.ckpt_table(rows, 4139, None, str(tmp_path / "last.ckpt"))[0]
+    assert marked[2][3] == S.CKPT_SELECTED + " · " + S.CKPT_LAST
+    assert keys[h.ckpt_key_of_row(marked[2])] == str(tmp_path / "last.ckpt")
+    assert h.ckpt_key_of_row(["x"]) is None and h.ckpt_table([], 0) == ([], {}, None)
 
 
 def test_disk_html():
     out = h.disk_html(train_bytes=19 << 30, n_ckpt=24, extra_bytes=15 << 30, n_extra=21)
     assert "19,0 ГБ" in out and "24" in out and "15,0 ГБ" in out
     assert S.DISK_NOTHING_EXTRA in h.disk_html(1 << 30, 3, 0, 0)
+
+
+def test_phrase_cards_meta_and_filter():
+    a = _NS(id="arthas_0001", text="Во славу плети!", duration=2.25, flags=["check"], dropped=False)
+    b = _NS(id="arthas_0002", text="Полегче!", duration=1.3, flags=[], dropped=True)
+    meta = h.phrase_meta_html(a)
+    assert "arthas_0001" in meta and S.PHRASE_SECONDS.format(v=2.25) in meta and h.code_label("check") in meta
+    assert S.PHRASE_DROPPED_CHIP in h.phrase_meta_html(b) and S.PHRASE_DROPPED_CHIP not in meta
+    assert h.shown_phrases([a, b]) == [a, b] and h.shown_phrases([a, b], only_flagged=True) == [a]

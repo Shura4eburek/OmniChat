@@ -256,6 +256,10 @@ def listen(p, epoch: int) -> tuple[int | None, list[tuple[str, Path]]]:
 
 # ---------- checkpoints: ranking, pruning, disk ----------
 
+WARMUP_MIN = 20       # epochs after the base checkpoint that are never «best» nor listed
+WARMUP_SHARE = 0.05   # ... or this share of the epochs trained so far, if larger
+
+
 @dataclass
 class Ranked:
     path: Path
@@ -291,8 +295,10 @@ def _metrics_or_empty(p) -> dict:
 
 def rank_checkpoints(p, metrics: dict | None = None) -> list[Ranked]:
     """One row per epoch (the val_mel and val_mos files of an epoch hold the same weights), with MOS / mel
-    from the events (or the file name). Order: best MOS, the newest last.ckpt, the rest by MOS, older
-    runs' last.ckpt at the bottom."""
+    from the events (or the file name). The first warm-up epochs (WARMUP_*) still sound like the base
+    voice and score a high MOS, so they are hidden and never «best», unless nothing else exists yet.
+    Order: best MOS, the newest last.ckpt, best mel, the rest by epoch (newest first), older runs'
+    last.ckpt at the bottom (minus those repeating a listed epoch)."""
     metrics = _metrics_or_empty(p) if metrics is None else metrics
     cps = list_checkpoints(p)
     if not cps:
@@ -325,14 +331,21 @@ def rank_checkpoints(p, metrics: dict | None = None) -> list[Ranked]:
             prev.mos = prev.mos if prev.mos is not None else mos
             prev.mel = prev.mel if prev.mel is not None else mel
     rows = list(named.values())
+    from omnivoice.train import base_epoch
+    base = base_epoch(p)
+    top = max([r.epoch for r in rows + old] + ([last.epoch] if last else []))
+    warmup = max(WARMUP_MIN, round((top - base) * WARMUP_SHARE))
+    trained = [r for r in rows if r.epoch - base > warmup]
+    rows = trained or rows
     if any(r.mos is not None for r in rows):
         max((r for r in rows if r.mos is not None), key=lambda r: (r.mos, r.epoch)).best_mos = True
     if any(r.mel is not None for r in rows):
         min((r for r in rows if r.mel is not None), key=lambda r: (r.mel, -r.epoch)).best_mel = True
-    ordered = sorted(rows, key=lambda r: (not r.best_mos, r.mos is None, -(r.mos or 0), -r.epoch))
-    if last is not None:
-        ordered.insert(1 if ordered and ordered[0].best_mos else 0, last)
-    return ordered + sorted(old, key=lambda r: -r.epoch)
+    pinned = [r for r in rows if r.best_mos] + ([last] if last else []) + [r for r in rows if r.best_mel and not r.best_mos]
+    rest = sorted((r for r in rows if not (r.best_mos or r.best_mel)), key=lambda r: -r.epoch)
+    shown = {r.epoch for r in pinned + rest}
+    old = [r for r in old if r.epoch not in shown and (not trained or r.epoch - base > warmup)]
+    return pinned + rest + sorted(old, key=lambda r: -r.epoch)
 
 
 def prune_plan(p) -> tuple[list[Path], list[Path]]:

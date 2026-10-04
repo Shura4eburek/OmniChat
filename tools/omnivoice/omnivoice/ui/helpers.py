@@ -29,8 +29,49 @@ from omnivoice.project import FILE as PROJECT_FILE
 from omnivoice.ui import strings as S
 
 SECTIONS = (S.SEC_AUDIO, S.SEC_SLICE, S.SEC_PHRASES, S.SEC_CHECK, S.SEC_TRAIN, S.SEC_PACK)
-NAV_SECTIONS = (S.SEC_SETUP, *SECTIONS)  # sidebar order: setup first, then the project steps
+# sidebar order: setup first, then the project steps; «Чекпойнты» is a page of the training step
+NAV_SECTIONS = (S.SEC_SETUP, *SECTIONS[:-1], S.SEC_CKPT, SECTIONS[-1])
 SECTION_STEP = dict(zip(SECTIONS, ("audio", "slice", "phrases", "check", "train", "pack")))
+SECTION_STEP[S.SEC_CKPT] = "train"
+LANG_LABELS = {"ru": S.LANG_RU, "en": S.LANG_EN}
+
+
+HIDDEN_SECTIONS = (S.SEC_NEW, S.SEC_DELETE)  # pages opened by the sidebar buttons, not by a radio item
+
+
+def nav_choices(has_project: bool) -> list[str]:
+    """Sidebar sections: without a project only «Установка» makes sense. «Новый проект» / «Удаление проекта»
+    are hidden radio items (CSS) — opened by their own buttons, but they must be valid values of the radio."""
+    if has_project:
+        return [*NAV_SECTIONS, *HIDDEN_SECTIONS]
+    return [S.SEC_SETUP, S.SEC_NEW]
+
+
+def delete_parts_html(p) -> str:
+    """«Удаление проекта»: what the folder holds and how much each part takes."""
+    from omnivoice.datadir import human_size, size_of
+    parts = [(S.DELETE_PART_RAW, size_of(p.raw_dir)), (S.DELETE_PART_SEGMENTS, size_of(p.segments_dir)),
+             (S.DELETE_PART_TRAIN, size_of(p.train_dir)), (S.DELETE_PART_EXPORT, size_of(p.export_dir))]
+    rows = "".join(f'<div class="del-row"><span>{html.escape(t)}</span><b>{html.escape(human_size(n))}</b></div>'
+                   for t, n in parts)
+    total = (f'<div class="del-row del-total"><span>{html.escape(S.DELETE_PART_TOTAL)}</span>'
+             f'<b>{html.escape(human_size(size_of(p.root)))}</b></div>')
+    title = html.escape(p.display.get("name") or p.name)
+    return (f'<div class="del-card"><div class="del-name">{title}</div>'
+            f'<div class="del-head">{html.escape(S.DELETE_PARTS)}</div>{rows}{total}</div>')
+
+
+def delete_confirmed(p, typed: str | None) -> bool:
+    """The typed confirmation names the project (its display name or folder name; case and spaces aside)."""
+    t = (typed or "").strip().casefold()
+    return bool(t) and t in {(p.display.get("name") or p.name).strip().casefold(), p.root.name.casefold()}
+
+
+def language_choices() -> list[tuple[str, str]]:
+    from omnivoice import languages
+    return [(LANG_LABELS.get(code, code), code) for code in languages.PRESETS]
+CKPT_SORTS = (S.CKPT_SORT_MOS, S.CKPT_SORT_MEL, S.CKPT_SORT_EPOCH)
+CKPT_COLUMNS = [S.CKPT_COL_EPOCH, S.CKPT_COL_MOS, S.CKPT_COL_MEL, S.CKPT_COL_MARKS]
 COLUMNS = [S.COL_ID, S.COL_TEXT, S.COL_DURATION, S.COL_FLAGS, S.COL_DROPPED]
 FLAG = "⚑"
 log = logging.getLogger("omnivoice.ui")
@@ -47,16 +88,20 @@ def list_projects(root: Path) -> list[str]:
 
 # ---------- steps bar ----------
 
-def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False) -> str:
+def steps_bar_html(steps: dict, current: str | None, need_setup: bool = False, disabled: bool = False) -> str:
     """`current` is a step key (project.STEPS), e.g. "phrases".
     Six chips: the selected section is `on` (teal), finished steps `done` (green ✓), others grey.
-    need_setup adds a yellow chip that leads to «Установка» (no training environment yet)."""
+    need_setup adds a yellow chip that leads to «Установка» (no training environment yet).
+    disabled (no project yet): grey chips that lead nowhere."""
     chips = []
     for i, section in enumerate(SECTIONS, 1):
         step = SECTION_STEP[section]
         done = bool(steps.get(step))
-        cls = "st on" if step == current else ("st done" if done else "st")
         label = f"{i} {section.upper()}{' ✓' if done else ''}"
+        if disabled:
+            chips.append(f'<span class="st off">{html.escape(label)}</span>')
+            continue
+        cls = "st on" if step == current else ("st done" if done else "st")
         chips.append(f'<span class="{cls}" data-section="{html.escape(section)}">{html.escape(label)}</span>')
     if need_setup:
         chips.append(f'<span class="st warn" data-section="{html.escape(S.SEC_SETUP)}">'
@@ -97,12 +142,48 @@ def copy_uploads(paths, raw_dir: Path, names=None) -> list[Path]:
     return out
 
 
-def list_raw_files(raw_dir: Path) -> list[list]:
+def raw_files(raw_dir: Path) -> list[Path]:
+    """The uploaded recordings (no hidden marker files), by name."""
     raw_dir = Path(raw_dir)
     if not raw_dir.is_dir():
         return []
-    return [[f.name, f"{f.stat().st_size / 1024:.1f} {S.KB}"]
-            for f in sorted(raw_dir.iterdir()) if f.is_file() and not f.name.startswith(".")]
+    return [f for f in sorted(raw_dir.iterdir()) if f.is_file() and not f.name.startswith(".")]
+
+
+def list_raw_files(raw_dir: Path) -> list[list]:
+    return [[f.name, f"{f.stat().st_size / 1024:.1f} {S.KB}"] for f in raw_files(raw_dir)]
+
+
+def raw_total_html(files: list[Path]) -> str:
+    from omnivoice.datadir import human_size
+    size = human_size(sum(f.stat().st_size for f in files))
+    return f'<div class="raw-total muted">{html.escape(S.RAW_TOTAL.format(n=len(files), size=size))}</div>'
+
+
+def raw_card_html(f: Path) -> str:
+    """Name, size and a compact HUD player (theme.HEAD drives .rp; Gradio's waveform player is tall and grows
+    a scrollbar on long recordings). The file is served by Gradio: the projects folder is in allowed_paths."""
+    from urllib.parse import quote
+    from omnivoice.datadir import human_size
+    src = "gradio_api/file=" + quote(str(Path(f).resolve()))
+    return (f'<div class="raw-card"><div class="raw-name"><b title="{html.escape(f.name)}">{html.escape(f.name)}</b>'
+            f'<span class="muted">{html.escape(human_size(f.stat().st_size))}</span></div>'
+            f'<div class="rp"><button type="button" class="rp-play" aria-label="{html.escape(S.PLAY)}"></button>'
+            f'<div class="rp-bar"><i></i></div><span class="rp-time">0:00</span>'
+            f'<button type="button" class="rp-rm" title="{html.escape(S.RAW_DELETE_HINT)}" '
+            f'aria-label="{html.escape(S.RAW_DELETE_HINT)}"></button>'
+            f'<audio preload="metadata" src="{html.escape(src)}"></audio></div></div>')
+
+
+def delete_raw_file(raw_dir: Path, name: str) -> None:
+    """Remove one uploaded recording; `name` must be a file directly inside raw_dir."""
+    raw_dir = Path(raw_dir)
+    target = raw_dir / name
+    if target.resolve().parent != raw_dir.resolve() or name != target.name:
+        raise ValueError(S.BAD_FILE_NAME.format(name=name))
+    if not target.is_file():
+        raise ValueError(S.RAW_GONE.format(name=name))
+    target.unlink()
 
 
 # ---------- phrases ----------
@@ -125,6 +206,19 @@ def code_label(code: str) -> str:
 
 def flags_text(flags) -> str:
     return " ".join(f"{FLAG} {code_label(f)}" for f in flags)
+
+
+def phrase_meta_html(s) -> str:
+    """A phrase card's header: track name, duration, flag chips (⚑ check, …), «выкинута»."""
+    chips = "".join(f'<span class="phr-chip flag">{FLAG} {html.escape(code_label(f))}</span>' for f in s.flags)
+    if s.dropped:
+        chips += f'<span class="phr-chip">{html.escape(S.PHRASE_DROPPED_CHIP)}</span>'
+    return (f'<div class="phr-meta"><b>{html.escape(s.id)}</b>'
+            f'<span class="muted">{html.escape(S.PHRASE_SECONDS.format(v=float(s.duration)))}</span>{chips}</div>')
+
+
+def shown_phrases(segments, only_flagged: bool = False) -> list:
+    return [s for s in segments if not only_flagged or (s.flags and not s.dropped)]
 
 
 def segments_rows(segments, only_flagged: bool = False) -> list[list]:
@@ -444,18 +538,70 @@ def _ckpt_text(epoch: int, mos: float | None, mel: float | None) -> str:
     return " · ".join(parts)
 
 
-def ckpt_choices(rows, offset: int) -> tuple[list[tuple[str, str]], str | None]:
-    """previews.rank_checkpoints rows → dropdown (label, path) pairs and the one to preselect
-    (the best by MOS, else the first)."""
-    choices = []
-    for r in rows:
-        tags = [S.CKPT_BEST_MOS] if r.best_mos else []
+def _ckpt_kind(last: bool, old_last: bool) -> str:
+    return "old" if old_last else ("last" if last else "")
+
+
+def base_choices(language: str) -> tuple[list[tuple[str, str]], str | None]:
+    """«Новый проект» cards: ("ruslan · мужской", "ruslan") pairs of the language — male voices first, then
+    female, alphabetically within each — and its default."""
+    from omnivoice import languages
+    gender = {"m": S.BASE_MALE, "f": S.BASE_FEMALE}
+    order = {"m": 0, "f": 1}
+    names = sorted(languages.bases_for(language), key=lambda n: (order.get(languages.BASE_GENDER.get(n), 2), n))
+    choices = [(f"{n} · {gender[languages.BASE_GENDER[n]]}" if n in languages.BASE_GENDER else n, n) for n in names]
+    return choices, languages.default_base(language)
+
+
+def ckpt_key(epoch: int, kind: str) -> str:
+    """A table row's identity: the shown epoch and whether it is a last.ckpt (it may share an epoch
+    with a val_mos / val_mel file)."""
+    return f"{epoch}|{kind}"
+
+
+def ckpt_key_of_row(row) -> str | None:
+    """The key of a clicked table row ([epoch, MOS, mel, marks]), None for a malformed one."""
+    try:
+        epoch = int(float(row[0]))
+    except (TypeError, ValueError, IndexError):
+        return None
+    marks = set(str(row[3] if len(row) > 3 else "").split(" · "))
+    return ckpt_key(epoch, _ckpt_kind(S.CKPT_LAST in marks, S.CKPT_OLD_LAST in marks))
+
+
+_CKPT_ORDER = {  # ties: a named epoch file above a last.ckpt of the same epoch
+    S.CKPT_SORT_MOS: lambda r: (r.mos is None, -(r.mos or 0), -r.epoch, r.last or r.old_last),
+    S.CKPT_SORT_MEL: lambda r: (r.mel is None, r.mel or 0, -r.epoch, r.last or r.old_last),
+    S.CKPT_SORT_EPOCH: lambda r: (-r.epoch, r.last or r.old_last),
+}
+
+
+def ckpt_table(rows, offset: int, sort: str | None = None,
+               selected: str | None = None) -> tuple[list[list], dict[str, str], str | None]:
+    """previews.rank_checkpoints rows → (table rows [epoch, "MOS", "mel", marks] in the `sort` order
+    (CKPT_SORTS, MOS by default), row key → checkpoint path, the path to preselect: the best by MOS,
+    else the first row). The `selected` path gets a ▶ mark."""
+    best = next((str(r.path) for r in rows if r.best_mos), str(rows[0].path) if rows else None)
+    table, keys = [], {}
+    for r in sorted(rows, key=_CKPT_ORDER.get(sort, _CKPT_ORDER[S.CKPT_SORT_MOS])):
+        tags = [S.CKPT_SELECTED] if selected is not None and str(r.path) == selected else []
+        tags += [S.CKPT_BEST_MOS] if r.best_mos else []
         tags += [S.CKPT_BEST_MEL] if r.best_mel else []
         tags += [S.CKPT_LAST] if r.last else []
         tags += [S.CKPT_OLD_LAST] if r.old_last else []
-        choices.append((" · ".join([_ckpt_text(r.epoch - offset, r.mos, r.mel), *tags]), str(r.path)))
-    best = next((str(r.path) for r in rows if r.best_mos), choices[0][1] if choices else None)
-    return choices, best
+        epoch = r.epoch - offset
+        # fixed-width text: a number column would show 3 / 2.9 / 0.33; equal widths still sort right
+        table.append([epoch, "" if r.mos is None else f"{r.mos:.2f}",
+                      "" if r.mel is None else f"{r.mel:.3f}", " · ".join(tags)])
+        keys[ckpt_key(epoch, _ckpt_kind(r.last, r.old_last))] = str(r.path)
+    return table, keys, best
+
+
+def ckpt_chosen_html(rows, offset: int, selected: str | None) -> str:
+    r = next((x for x in rows if str(x.path) == selected), None)
+    if r is None:
+        return ""
+    return f'<div class="listen-head">{html.escape(S.CKPT_CHOSEN.format(text=_ckpt_text(r.epoch - offset, r.mos, r.mel)))}</div>'
 
 
 def disk_html(train_bytes: int, n_ckpt: int, extra_bytes: int, n_extra: int) -> str:

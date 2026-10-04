@@ -14,32 +14,30 @@ import functools
 import html
 import logging
 import traceback
-import warnings
 from pathlib import Path
 
 import gradio as gr
 
-from omnivoice import (checker, colab, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
+from omnivoice import (checker, checkpoints, colab, dataset, datadir, install, languages, pack, paths, previews, slicer, train,
                        transcriber, verify)
 from omnivoice.datadir import human_size, size_of
 from omnivoice.fsutil import TargetBusy
 from omnivoice.pack import PackError
-from omnivoice.project import Project, ProjectError
+from omnivoice.project import Project, ProjectError, delete_project
 from omnivoice.ui import strings as S
 from omnivoice.ui import theme
-from omnivoice.ui.helpers import (COLUMNS, NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
+from omnivoice.ui.helpers import (CKPT_COLUMNS, CKPT_SORTS, HIDDEN_SECTIONS, phrase_meta_html, shown_phrases, base_choices, delete_confirmed,
+                                  delete_parts_html, language_choices, nav_choices,
+                                  NAV_SECTIONS, SECTION_STEP, SECTIONS, EnvProbe, ProjectLocks,
                                   SetupRunner, TrainRunner, apply_edits, check_install_target, checklist_html,
-                                  ckpt_choices, copy_uploads, counter_label, data_dir_html, disk_html, env_badge,
+                                  ckpt_chosen_html, ckpt_key_of_row, ckpt_table as ckpt_table_rows, copy_uploads, counter_label, data_dir_html, disk_html, env_badge,
                                   error_text,
                                   last_epoch_target,
-                                  list_projects, needs_setup, list_raw_files, portrait_preview, report_html,
-                                  segments_rows, stats_line, steps_bar_html, toggle_dropped)
+                                  list_projects, needs_setup, delete_raw_file, raw_files, raw_card_html, raw_total_html,
+                                  portrait_preview, report_html,
+                                  stats_line, steps_bar_html, toggle_dropped)
 
 log = logging.getLogger("omnivoice.ui")
-# Gradio warns on every update that a Styler can't be shown in an interactive table, yet the row
-# colours do render (checked in the browser); keep the console readable.
-warnings.filterwarnings("ignore", message="Cannot display Styler object in interactive mode")
-
 USER_ERRORS = (ProjectError, train.TrainError, PackError, TargetBusy, RuntimeError, ValueError, OSError)
 PACK_FIELDS = (("name", S.F_NAME), ("description", S.F_DESCRIPTION), ("gender", S.F_GENDER),
                ("sample", S.F_SAMPLE))
@@ -49,7 +47,7 @@ PREVIEW_SLOTS = 5  # piper synthesises 5 validation phrases per epoch
 STEPS_JS = """
 element.addEventListener('click', (e) => {
   const chip = e.target.closest('.st');
-  if (chip) trigger('click', {section: chip.dataset.section});
+  if (chip && chip.dataset.section) trigger('click', {section: chip.dataset.section});
 });
 """
 
@@ -93,24 +91,6 @@ def guarded(n_out: int, msg_idx: int = 0):
     return deco
 
 
-def table_value(rows):
-    """Phrase rows as a styled frame: flagged rows yellow, dropped rows struck through (mockup look)."""
-    import pandas as pd
-    df = pd.DataFrame(rows, columns=COLUMNS)
-    if df.empty:
-        return df
-
-    def style(row):
-        if row[S.COL_DROPPED]:
-            css = f"color:{theme.BAD};text-decoration:line-through"
-        elif row[S.COL_FLAGS]:
-            css = f"color:{theme.FLAG}"
-        else:
-            css = ""
-        return [css] * len(row)
-    return df.style.apply(style, axis=1).format({S.COL_DURATION: "{:.1f}"})
-
-
 def first_open_section(steps: dict) -> str:
     for section in SECTIONS:
         if section != S.SEC_SLICE and not steps.get(SECTION_STEP[section]):
@@ -148,25 +128,28 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         except ProjectError:
             return None
 
-    def table_update(p, only_flagged, tolerant=False):
-        """tolerant: a corrupt metadata.csv / review.json shows an empty table instead of raising
-        (used where no error slot exists: startup, project switch, filter); actions still report it."""
+    def load_segments(p, tolerant=False):
+        """tolerant: a corrupt metadata.csv / review.json shows no phrases instead of raising (used where no
+        error slot exists: startup, project switch, the list render); actions still report it."""
         try:
-            segs = dataset.load(p) if p else []
+            return dataset.load(p) if p else []
         except ProjectError:
             if not tolerant:
                 raise
-            segs = []
-        return stats_line(segs), table_value(segments_rows(segs, only_flagged))
+            return []
+
+    def phrases_stats(p, tolerant=False):
+        return stats_line(load_segments(p, tolerant))
 
     def steps_html(p, section):
-        return steps_bar_html(p.steps if p else {}, SECTION_STEP.get(section), need_setup=needs_setup(probe.env))
+        return steps_bar_html(p.steps if p else {}, SECTION_STEP.get(section), need_setup=needs_setup(probe.env),
+                              disabled=p is None)
 
     projects = list_projects(root)
     first = projects[0] if projects else None
     p0 = try_load(first)
     sec0 = first_open_section(p0.steps) if p0 else S.SEC_SETUP  # a fresh install starts at «Установка»
-    stats0, rows0 = table_update(p0, False, tolerant=True)
+    stats0 = phrases_stats(p0, tolerant=True)
     display0 = p0.display if p0 else {}
     targets = [str(t) for t in install.default_targets()]
     dd0, dd_source = paths.cache_source()
@@ -178,17 +161,39 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 # ---------------- sidebar ----------------
                 with gr.Column(scale=1, min_width=210, elem_classes="hud-nav"):
                     project_dd = gr.Dropdown(projects, value=first, label=S.PROJECT, filterable=False,
-                                             info=None if projects else S.NO_PROJECTS)
-                    section = gr.Radio(list(NAV_SECTIONS), value=sec0, show_label=False, container=False)
-                    with gr.Accordion(S.NEW_PROJECT, open=not projects, elem_classes="hud-new"):
-                        new_name = gr.Textbox(label=S.NEW_NAME, max_lines=1)
-                        new_lang = gr.Dropdown(list(languages.PRESETS), value="ru", label=S.NEW_LANGUAGE, filterable=False)
-                        create_btn = gr.Button(S.CREATE, variant="primary", size="sm")
-                        create_msg = gr.HTML()
+                                             visible=bool(projects))  # nothing to pick yet: the button below
+                    section = gr.Radio(nav_choices(bool(projects)), value=sec0, show_label=False, container=False,
+                                       elem_classes="hud-sections")
+                    new_open = gr.Button(S.NEW_OPEN, size="sm", elem_classes="hud-new-btn")
+                    delete_open = gr.Button(S.DELETE_PROJECT, size="sm", visible=bool(projects),
+                                            elem_classes="hud-new-btn hud-del-btn")
 
                 # ---------------- main ----------------
                 with gr.Column(scale=4, elem_classes="hud-main"):
                     steps = gr.HTML(steps_html(p0, sec0), js_on_load=STEPS_JS)
+
+                    with gr.Column(visible=sec0 == S.SEC_NEW, elem_classes="hud-section new-project") as g_new:
+                        gr.HTML(f'<div class="sub-head">{S.SEC_NEW}</div>' + msg_html(S.NEW_INTRO, muted=True))
+                        with gr.Row(equal_height=True):
+                            new_name = gr.Textbox(label=S.NEW_NAME, max_lines=1, placeholder=S.NEW_NAME_PLACEHOLDER,
+                                                  scale=3)
+                            new_lang = gr.Dropdown(language_choices(), value="ru", label=S.NEW_LANGUAGE,
+                                                   filterable=False, scale=1, min_width=160)
+                        base0, base0_value = base_choices("ru")
+                        new_base = gr.Radio(base0, value=base0_value, label=S.NEW_BASE, info=S.NEW_BASE_INFO,
+                                            elem_classes="base-cards")
+                        base_sample = gr.Audio(label=S.BASE_SAMPLE.format(base=base0_value), type="filepath",
+                                               interactive=False, buttons=[])
+                        create_btn = gr.Button(S.CREATE, variant="primary")
+                        create_msg = gr.HTML()
+
+                    with gr.Column(visible=False, elem_classes="hud-section delete-project") as g_delete:
+                        gr.HTML(f'<div class="sub-head del-sub">{S.SEC_DELETE}</div>'
+                                + msg_html(S.DELETE_INTRO, muted=True))
+                        delete_info = gr.HTML()
+                        delete_typed = gr.Textbox(label=S.DELETE_CONFIRM.format(name=""), max_lines=1)
+                        delete_btn = gr.Button(S.DELETE_BTN, variant="stop")
+                        delete_msg = gr.HTML()
 
                     with gr.Column(visible=sec0 == S.SEC_SETUP, elem_classes="hud-section") as g_setup:
                         gr.HTML(msg_html(S.SETUP_INTRO))
@@ -202,35 +207,32 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         setup_progress = gr.HTML(setup.progress.html())
                         setup_status = gr.HTML(setup.status_html())
                         setup_log = gr.Textbox(label=S.SETUP_LOG, lines=12, max_lines=12, interactive=False,
-                                               autoscroll=True)
+                                               autoscroll=False, elem_classes="log-box")
                         setup_seen = gr.State(-1)
 
                     with gr.Column(visible=sec0 == S.SEC_AUDIO, elem_classes="hud-section") as g_audio:
-                        upload = gr.File(label=S.UPLOAD, file_count="multiple", type="filepath")
-                        raw_df = gr.Dataframe(list_raw_files(p0.raw_dir) if p0 else [],
-                                              headers=[S.RAW_NAME, S.RAW_SIZE], label=S.RAW_FILES,
-                                              interactive=False, type="array", max_height=260)
-                        with gr.Row():
-                            isolate = gr.Checkbox(label=S.ISOLATE, value=False)
-                            slice_btn = gr.Button(S.SLICE, variant="primary")
-                        audio_msg = gr.HTML()
+                        upload = gr.File(label=S.UPLOAD, file_count="multiple", type="filepath", height=120,
+                                         elem_classes="raw-upload")
+                        gr.HTML(f'<div class="sub-head">{S.RAW_FILES}</div>')
+                        raw_rev = gr.State(0)  # bumped by upload / delete: re-renders the list below
+                        raw_box = gr.Column(elem_classes="raw-list")
+                        with gr.Row(equal_height=True, elem_classes="slice-row"):
+                            isolate = gr.Checkbox(label=S.ISOLATE, value=False, scale=1, min_width=280)
+                            slice_btn = gr.Button(S.SLICE, variant="primary", scale=2)
+                        audio_msg = gr.HTML(elem_classes="audio-msg")
 
                     with gr.Column(visible=sec0 in (S.SEC_SLICE, S.SEC_PHRASES),
                                    elem_classes="hud-section") as g_phrases:
                         with gr.Row(equal_height=True):
                             stats = gr.HTML(stats0)
                             only_flagged = gr.Checkbox(label=S.ONLY_FLAGGED, value=False, scale=0, min_width=130)
-                        table = gr.Dataframe(rows0, headers=COLUMNS, type="array",
-                                             datatype=["str", "str", "number", "str", "bool"],
-                                             interactive=True, static_columns=[0, 2, 3, 4], wrap=True,
-                                             column_widths=["14%", "50%", "10%", "14%", "12%"], max_height=420)
+                        phr_rev = gr.State(0)  # bumped by slicing / transcribing / drop: re-renders the cards
+                        phrases_box = gr.Column(elem_classes="phr-list")
                         selected = gr.State(None)
-                        player = gr.Audio(label=S.PLAYER, type="filepath", interactive=False)
+                        player = gr.Audio(label=S.PLAYER, type="filepath", interactive=False, autoplay=True)
                         with gr.Row():
                             transcribe_btn = gr.Button(S.TRANSCRIBE)
-                            save_btn = gr.Button(S.SAVE_EDITS, variant="primary")
-                            drop_btn = gr.Button(S.TOGGLE_DROP)
-                            done_btn = gr.Button(S.PHRASES_DONE)
+                            done_btn = gr.Button(S.PHRASES_DONE, variant="primary")
                         phrases_msg = gr.HTML()
 
                     with gr.Column(visible=sec0 == S.SEC_CHECK, elem_classes="hud-section") as g_check:
@@ -253,21 +255,32 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                             stop_btn = gr.Button(S.TRAIN_STOP, variant="stop")
                             resume_btn = gr.Button(S.TRAIN_RESUME)
                         train_status = gr.HTML(f'<div class="train-status">{S.TRAIN_IDLE}</div>')
-                        with gr.Row(equal_height=True):
+                        with gr.Row(equal_height=True, elem_classes="charts-row"):
+                            # hidden until there is data: empty axes look broken, chart_note says why instead
                             mos_plot = gr.LinePlot(x="epoch", y="mos", label=S.CHART_MOS, height=200,
-                                                   x_title=S.CHART_EPOCH, y_title="MOS")
+                                                   x_title=S.CHART_EPOCH, y_title="MOS", visible=False)
                             mel_plot = gr.LinePlot(x="epoch", y="mel", label=S.CHART_MEL, height=200,
-                                                   x_title=S.CHART_EPOCH, y_title="mel")
-                        chart_note = gr.HTML()
+                                                   x_title=S.CHART_EPOCH, y_title="mel", visible=False)
+                        chart_note = gr.HTML(elem_classes="chart-note")
                         train_log = gr.Textbox(label=S.TRAIN_LOG, lines=10, max_lines=10, interactive=False,
-                                               autoscroll=True)
+                                               autoscroll=False, elem_classes="log-box")
                         log_note = gr.HTML()
-                        gr.HTML(f'<div class="sub-head">{S.CHECKPOINTS}</div>')
+                        goto_ckpt = gr.Button(S.CKPT_GOTO)
+                        train_msg = gr.HTML()
+
+                    with gr.Column(visible=sec0 == S.SEC_CKPT, elem_classes="hud-section") as g_ckpt:
+                        gr.HTML(f'<div class="sub-head">{S.CHECKPOINTS}</div>' + msg_html(S.CKPT_HINT, muted=True))
                         with gr.Row(equal_height=True):
-                            ckpt_dd = gr.Dropdown([], label=S.CHECKPOINTS, show_label=False, scale=3,
-                                                  filterable=False)
+                            ckpt_sort = gr.Radio(list(CKPT_SORTS), value=S.CKPT_SORT_MOS, label=S.CKPT_SORT,
+                                                 scale=3)
                             refresh_btn = gr.Button(S.REFRESH, scale=1)
-                        gr.HTML(msg_html(S.CKPT_HINT, muted=True))
+                        ckpt_table = gr.Dataframe([], headers=CKPT_COLUMNS, type="array",
+                                                  datatype=["number", "str", "str", "str"],
+                                                  interactive=False, max_height=380, elem_classes="ckpt-table",
+                                                  column_widths=["12%", "12%", "12%", "64%"])
+                        ckpt_sel = gr.State(None)   # the chosen checkpoint's path
+                        ckpt_map = gr.State({})     # helpers.ckpt_key → path of the rows shown
+                        ckpt_head = gr.HTML()
                         export_btn = gr.Button(S.EXPORT, variant="primary")
                         gr.HTML(f'<div class="sub-head">{S.LISTEN}</div>' + msg_html(S.LISTEN_HINT, muted=True))
                         listen_head = gr.HTML()
@@ -280,7 +293,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         with gr.Row(equal_height=True):
                             prune_ok = gr.Checkbox(label=S.PRUNE_CONFIRM, value=False, scale=1)
                             prune_btn = gr.Button(S.PRUNE, variant="stop", scale=2)
-                        train_msg = gr.HTML()
+                        ckpt_msg = gr.HTML()
 
                     with gr.Column(visible=sec0 == S.SEC_PACK, elem_classes="hud-section") as g_pack:
                         with gr.Row():
@@ -306,9 +319,9 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                         install_btn = gr.Button(S.INSTALL, variant="primary")
                         install_msg = gr.HTML()
 
-        groups = [g_setup, g_audio, g_phrases, g_check, g_train, g_pack]
-        group_of = {S.SEC_SETUP: g_setup, S.SEC_AUDIO: g_audio, S.SEC_SLICE: g_phrases, S.SEC_PHRASES: g_phrases,
-                    S.SEC_CHECK: g_check, S.SEC_TRAIN: g_train, S.SEC_PACK: g_pack}
+        groups = [g_new, g_delete, g_setup, g_audio, g_phrases, g_check, g_train, g_ckpt, g_pack]
+        group_of = {S.SEC_NEW: g_new, S.SEC_DELETE: g_delete, S.SEC_SETUP: g_setup, S.SEC_AUDIO: g_audio, S.SEC_SLICE: g_phrases, S.SEC_PHRASES: g_phrases,
+                    S.SEC_CHECK: g_check, S.SEC_TRAIN: g_train, S.SEC_CKPT: g_ckpt, S.SEC_PACK: g_pack}
         env_timer = gr.Timer(1.0)
         train_timer = gr.Timer(2.0)
         setup_timer = gr.Timer(1.0, active=False)  # woken by a setup run or check, sleeps when idle
@@ -333,7 +346,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
         def reload_projects(current):
             names = list_projects(root)
             value = current if current in names else (names[0] if names else None)
-            return gr.update(choices=names, value=value, info=None if names else S.NO_PROJECTS)
+            return gr.update(choices=names, value=value, visible=bool(names))
 
         demo.load(reload_projects, project_dd, project_dd)
         env_timer.tick(poll_env, [project_dd, section], [header, batch, colab_group, setup_needed, steps, env_timer],
@@ -382,6 +395,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                           data_dir_box, setup_timer],
                          show_progress="hidden")  # 1 s polling must not flash a loader
         goto_setup.click(lambda: S.SEC_SETUP, None, section)
+        goto_ckpt.click(lambda: S.SEC_CKPT, None, section)
 
         # ---------------- navigation ----------------
         def on_section(name, sec):
@@ -400,26 +414,27 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
 
         steps.click(on_chip, None, section)
 
-        section_msgs = [audio_msg, phrases_msg, train_msg, pack_msg, install_msg]
-        refresh_outputs = [steps, raw_df, stats, table, selected, player, check_out, train_log,
+        section_msgs = [audio_msg, phrases_msg, train_msg, ckpt_msg, pack_msg, install_msg]
+        refresh_outputs = [stats, selected, player, check_out, train_log,
                            packed, sample_audio, license_tb, *fields.values(),
                            portrait_in, portrait_out, colab_file, *section_msgs]
 
-        def refresh_all(name, sec, flagged):
-            """The training panel (status, charts, checkpoints, players) is refreshed by train_open."""
+        def refresh_all(name):
+            """The training panel (status, charts, checkpoints, players) is refreshed by train_open;
+            the phrase cards re-render by themselves (they take project_dd as input)."""
             p = try_load(name)
-            st, rows = table_update(p, flagged, tolerant=True)
+            st = phrases_stats(p, tolerant=True)
             d = p.display if p else {}
             r = runners.get(name)
-            return [steps_html(p, sec), list_raw_files(p.raw_dir) if p else [], st, rows, None, None,
+            return [st, None, None,
                     msg_html(S.CHECK_EMPTY), r.log_text() if r else "", None, None, d.get("license", "")] + [
                 gr.update(value=d.get(k, ""), label=counter_label(lbl, d.get(k, ""), k)) for k, lbl in PACK_FIELDS] + [
                 None, None, gr.update(value=None, visible=False)] + [""] * len(section_msgs)
 
-        project_dd.change(refresh_all, [project_dd, section, only_flagged], refresh_outputs)
+        project_dd.change(refresh_all, project_dd, refresh_outputs)
 
-        @guarded(2)
-        def create(name, lang):
+        @guarded(4)
+        def create(name, lang, base):
             name = (name or "").strip()
             if not name:
                 raise ValueError(S.NAME_REQUIRED)
@@ -427,86 +442,205 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             if (root / folder).exists():
                 raise ValueError(S.PROJECT_EXISTS.format(name=folder))
             root.mkdir(parents=True, exist_ok=True)
-            Project.create(root / folder, name=name, language=lang)
-            return msg_html(S.CREATED.format(name=name)), gr.update(choices=list_projects(root), value=folder)
+            p = Project.create(root / folder, name=name, language=lang, base=base or None)
+            # straight to the first step of the new project; the radio needs the full list first
+            return (msg_html(S.CREATED.format(name=name)), gr.update(choices=list_projects(root), value=folder, visible=True),
+                    gr.update(choices=nav_choices(True), value=first_open_section(p.steps)), "")
 
-        create_btn.click(create, [new_name, new_lang], [create_msg, project_dd])
+        create_btn.click(create, [new_name, new_lang, new_base], [create_msg, project_dd, section, new_name])
+        new_open.click(lambda: S.SEC_NEW, None, section)
+
+        def on_nav_for_project(name, sec):
+            """Sidebar + steps bar for the selected project. Without a project only «Установка» / «Новый проект»
+            stay; picking a project while on «Новый проект» / «Удаление проекта» opens its first unfinished step
+            (as «Создать» / «Удалить» do, so all agree on the section)."""
+            p = try_load(name)
+            choices = nav_choices(p is not None)
+            if p is not None and sec in HIDDEN_SECTIONS:  # a project picked / just deleted: back to its steps
+                sec = first_open_section(p.steps)
+            elif sec not in choices:
+                sec = S.SEC_NEW
+            return gr.update(choices=choices, value=sec), steps_html(p, sec)
+
+        project_dd.change(on_nav_for_project, [project_dd, section], [section, steps], show_progress="hidden")
+
+        # ---------------- delete project ----------------
+        delete_open.click(lambda: S.SEC_DELETE, None, section)
+        project_dd.change(lambda name: gr.update(visible=bool(name)), project_dd, delete_open, show_progress="hidden")
+
+        def on_delete_page(name, sec):
+            """Opening «Удаление проекта»: what will go, an empty confirmation that names the project."""
+            p = try_load(name) if sec == S.SEC_DELETE else None
+            if p is None:
+                return gr.skip(), gr.skip(), gr.skip()
+            title = p.display.get("name") or p.name
+            return (delete_parts_html(p), gr.update(value="", label=S.DELETE_CONFIRM.format(name=title),
+                                                     placeholder=title), "")
+
+        section.change(on_delete_page, [project_dd, section], [delete_info, delete_typed, delete_msg],
+                       show_progress="hidden")
+
+        @guarded(4)
+        def on_delete(name, typed):
+            r = runners.get(name)
+            if r is not None and r.running:
+                raise ValueError(S.DELETE_BUSY)
+            with locked(name, S.OP_DELETE) as p:
+                title = p.display.get("name") or p.name
+                if not delete_confirmed(p, typed):
+                    raise ValueError(S.DELETE_NEED_CONFIRM.format(name=title))
+                if previews.recently_written(p):
+                    raise ValueError(S.DELETE_RECENT)
+                freed = delete_project(p, root)
+            runners.pop(name, None)
+            names = list_projects(root)
+            nxt = try_load(names[0]) if names else None
+            gr.Info(S.DELETED.format(name=title, size=human_size(freed)))  # the page closes: say it in a toast
+            dd = gr.update(choices=names, value=names[0] if names else None, visible=bool(names))
+            sec = gr.update(choices=nav_choices(nxt is not None),
+                            value=first_open_section(nxt.steps) if nxt else S.SEC_NEW)
+            return "", "", dd, sec
+
+        delete_btn.click(on_delete, [project_dd, delete_typed], [delete_msg, delete_typed, project_dd, section])
+
+        def on_new_lang(lang):
+            choices, value = base_choices(lang)
+            return gr.update(choices=choices, value=value)
+
+        new_lang.change(on_new_lang, new_lang, new_base)
+
+        def on_base_sample(base):
+            """The chosen base model's published sample (downloaded once): hear the timbre before training."""
+            ck = languages.BASE_CHECKPOINTS.get(base)
+            if ck is None:
+                return gr.update(value=None), ""
+            label = S.BASE_SAMPLE.format(base=base)
+            try:
+                return gr.update(value=str(checkpoints.sample(ck)), label=label), ""
+            except Exception:
+                log.warning("base sample failed:\n%s", traceback.format_exc())
+                return gr.update(value=None, label=label), msg_html(S.BASE_SAMPLE_FAILED.format(base=base), error=True)
+
+        new_base.change(on_base_sample, new_base, [base_sample, create_msg], show_progress="hidden")
+        # the preselected base: its sample appears as soon as the page opens
+        section.change(lambda sec, base: on_base_sample(base) if sec == S.SEC_NEW else (gr.skip(), gr.skip()),
+                       [section, new_base], [base_sample, create_msg], show_progress="hidden")
+        demo.load(lambda sec, base: on_base_sample(base) if sec == S.SEC_NEW else (gr.skip(), gr.skip()),
+                  [section, new_base], [base_sample, create_msg], show_progress="hidden")
 
         # ---------------- audio ----------------
         @guarded(3)
-        def on_upload(name, files):
+        def on_upload(name, files, rev):
             with locked(name, S.OP_UPLOAD) as p:
                 out = copy_uploads(files or [], p.raw_dir)
-            return msg_html(S.UPLOADED.format(n=len(out))), list_raw_files(p.raw_dir), None
+            return msg_html(S.UPLOADED.format(n=len(out))), rev + 1, None
 
-        upload.upload(on_upload, [project_dd, upload], [audio_msg, raw_df, upload])
+        upload.upload(on_upload, [project_dd, upload, raw_rev], [audio_msg, raw_rev, upload])
+
+        def raw_deleter(fname):
+            @guarded(2)
+            def on_delete_raw(name, rev):
+                with locked(name, S.OP_DELETE_RAW) as p:
+                    delete_raw_file(p.raw_dir, fname)
+                return msg_html(S.RAW_DELETED.format(name=fname)), rev + 1
+            return on_delete_raw
+
+        with raw_box:
+            @gr.render(inputs=[project_dd, raw_rev])
+            def raw_list(name, _rev):
+                """One card per uploaded recording: name and size, a player to check it, a delete button."""
+                p = try_load(name)
+                files = raw_files(p.raw_dir) if p else []
+                if not files:
+                    gr.HTML(msg_html(S.RAW_EMPTY, muted=True))
+                    return
+                gr.HTML(raw_total_html(files))
+                for f in files:
+                    with gr.Row(equal_height=True, elem_classes="raw-row"):
+                        gr.HTML(raw_card_html(f), elem_classes="raw-card-wrap")
+                        rm = gr.Button(S.RAW_DELETE, elem_classes="raw-rm-hidden")  # clicked by the ✕ in the card
+                        rm.click(raw_deleter(f.name), [project_dd, raw_rev], [audio_msg, raw_rev])
 
         @guarded(4)
-        def on_slice(name, iso, sec, flagged, progress=gr.Progress()):
+        def on_slice(name, iso, sec, rev, progress=gr.Progress()):
             with locked(name, S.OP_SLICE) as p:
                 n = slicer.slice_project(p, isolate=iso,
                                          progress=lambda f, frac: progress(frac, desc=S.SLICING.format(name=f)))
-                st, rows = table_update(p, flagged)
-            return msg_html(slice_message(n, transcriber.has_whisper())), steps_html(p, sec), st, rows
+                st = phrases_stats(p)
+            return msg_html(slice_message(n, transcriber.has_whisper())), steps_html(p, sec), st, rev + 1
 
-        slice_btn.click(on_slice, [project_dd, isolate, section, only_flagged],
-                        [audio_msg, steps, stats, table], show_progress_on=[audio_msg])
+        # the previous message is cleared at once, so the progress bar does not sit over stale text
+        slice_btn.click(on_slice, [project_dd, isolate, section, phr_rev],
+                        [audio_msg, steps, stats, phr_rev], show_progress_on=[audio_msg],
+                        js="(...a) => { document.querySelectorAll('.audio-msg .section-msg').forEach(e => e.remove()); return a; }")
 
         # ---------------- phrases ----------------
-        def on_filter(name, flagged):
-            st, rows = table_update(try_load(name), flagged, tolerant=True)
-            return st, rows
-
-        only_flagged.change(on_filter, [project_dd, only_flagged], [stats, table])
-
-        def on_select(name, rows, evt: gr.SelectData):
+        def on_play(sid, name):
+            """▶ on a card: that phrase goes to the player below, which starts it (autoplay)."""
             p = try_load(name)
-            row = getattr(evt, "row_value", None)
-            if not row:
-                idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
-                row = rows[idx] if rows is not None and 0 <= idx < len(rows) else None
-            if not p or not row:
-                return None, None
-            wav = p.segments_dir / f"{row[0]}.wav"
-            return row[0], (str(wav) if wav.is_file() else None)
+            wav = p.segments_dir / f"{sid}.wav" if p else None
+            return sid, (str(wav) if wav is not None and wav.is_file() else None)
 
-        table.select(on_select, [project_dd, table], [selected, player])
+        def text_saver(sid):
+            @guarded(2)
+            def on_text(name, text):
+                """Leaving a card's text field saves it; an unchanged text writes nothing."""
+                with locked(name, S.OP_SAVE) as p:
+                    segs = dataset.load(p)
+                    if not apply_edits(segs, [[sid, text]]):
+                        return gr.skip(), gr.skip()
+                    dataset.save(p, segs)
+                return msg_html(S.TEXT_SAVED.format(id=sid), muted=True), stats_line(segs)
+            return on_text
+
+        def dropper(sid):
+            @guarded(3)
+            def on_drop(name, rev):
+                with locked(name, S.OP_DROP) as p:
+                    segs = dataset.load(p)
+                    now = toggle_dropped(segs, sid)
+                    dataset.save(p, segs)
+                return msg_html((S.DROPPED if now else S.RESTORED).format(id=sid)), stats_line(segs), rev + 1
+            return on_drop
+
+        with phrases_box:
+            @gr.render(inputs=[project_dd, only_flagged, phr_rev])
+            def phrase_list(name, flagged, _rev):
+                """One card per phrase: ▶ (plays below), track name / duration / flags, the editable text,
+                ✕ to drop it from training (↺ brings a dropped one back)."""
+                segs = shown_phrases(load_segments(try_load(name), tolerant=True), flagged)
+                if not segs:
+                    gr.HTML(msg_html(S.PHRASES_FILTER_EMPTY if flagged else S.PHRASES_EMPTY, muted=True))
+                    return
+                for s in segs:
+                    cls = "phr-row" + (" dropped" if s.dropped else "") + (" flagged" if s.flags else "")
+                    with gr.Row(equal_height=True, elem_classes=cls):
+                        play = gr.Button(S.PLAY, scale=0, min_width=32, elem_classes="phr-btn phr-play")
+                        with gr.Column(scale=1, min_width=0, elem_classes="phr-body"):
+                            gr.HTML(phrase_meta_html(s))
+                            text = gr.Textbox(s.text, show_label=False, container=False, lines=1, max_lines=4,
+                                              placeholder=S.PHRASE_PLACEHOLDER, interactive=not s.dropped,
+                                              elem_classes="phr-text")
+                        rm = gr.Button(S.PHRASE_RESTORE_HINT if s.dropped else S.PHRASE_DROP_HINT, scale=0,
+                                       min_width=32, elem_classes="phr-btn " + ("phr-back" if s.dropped else "phr-rm"))
+                        play.click(functools.partial(on_play, s.id), project_dd, [selected, player],
+                                   show_progress="hidden")
+                        text.blur(text_saver(s.id), [project_dd, text], [phrases_msg, stats], show_progress="hidden")
+                        text.submit(text_saver(s.id), [project_dd, text], [phrases_msg, stats],
+                                    show_progress="hidden")
+                        rm.click(dropper(s.id), [project_dd, phr_rev], [phrases_msg, stats, phr_rev],
+                                 show_progress="hidden")
 
         @guarded(3)
-        def on_transcribe(name, flagged, progress=gr.Progress()):
+        def on_transcribe(name, rev, progress=gr.Progress()):
             with locked(name, S.OP_TRANSCRIBE) as p:
                 n = transcriber.transcribe_project(
                     p, progress=lambda sid, frac: progress(frac, desc=S.TRANSCRIBING.format(name=sid)))
-                st, rows = table_update(p, flagged)
-            return msg_html(S.TRANSCRIBED.format(n=n)), st, rows
+                st = phrases_stats(p)
+            return msg_html(S.TRANSCRIBED.format(n=n)), st, rev + 1
 
-        transcribe_btn.click(on_transcribe, [project_dd, only_flagged], [phrases_msg, stats, table],
+        transcribe_btn.click(on_transcribe, [project_dd, phr_rev], [phrases_msg, stats, phr_rev],
                              show_progress_on=[phrases_msg])
-
-        @guarded(3)
-        def on_save(name, rows, flagged):
-            with locked(name, S.OP_SAVE) as p:
-                segs = dataset.load(p)
-                n = apply_edits(segs, rows)
-                if n:
-                    dataset.save(p, segs)
-                st, new_rows = table_update(p, flagged)
-            return msg_html(S.SAVED_EDITS.format(n=n)), st, new_rows
-
-        save_btn.click(on_save, [project_dd, table, only_flagged], [phrases_msg, stats, table])
-
-        @guarded(3)
-        def on_drop(name, sid, flagged):
-            if not sid:
-                raise ValueError(S.SELECT_ROW)
-            with locked(name, S.OP_DROP) as p:
-                segs = dataset.load(p)
-                now = toggle_dropped(segs, sid)
-                dataset.save(p, segs)
-                st, rows = table_update(p, flagged)
-            return msg_html((S.DROPPED if now else S.RESTORED).format(id=sid)), st, rows
-
-        drop_btn.click(on_drop, [project_dd, selected, only_flagged], [phrases_msg, stats, table])
 
         @guarded(2)
         def on_done(name, sec):
@@ -601,16 +735,18 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                    if i < len(items) else gr.update(value=None, visible=False) for i in range(PREVIEW_SLOTS)]
             return [head] + ups
 
-        train_panel_outputs = [train_status, mos_plot, mel_plot, chart_note, log_note, ckpt_dd, disk_info,
-                               listen_head, *preview_players]
+        train_panel_outputs = [train_status, mos_plot, mel_plot, chart_note, log_note, ckpt_table, ckpt_sel, ckpt_map,
+                               ckpt_head, disk_info, listen_head, *preview_players]
+        panel_inputs = [project_dd, section, ckpt_sel, ckpt_sort]
+        panel_sections = (S.SEC_TRAIN, S.SEC_CKPT)
 
-        def train_panel(name, sec, current, force=False):
-            """Status, charts, checkpoints, disk and players of the training section. Skipped while the
-            section is hidden and nothing trains; the players are only redrawn when the selection moves."""
+        def train_panel(name, sec, current, sort, force=False):
+            """Status, charts, checkpoint table, disk and players of «Обучение» / «Чекпойнты». Skipped while
+            both are hidden and nothing trains; the players are only redrawn when the selection moves."""
             import pandas as pd
             n = len(train_panel_outputs)
             r = runners.get(name)
-            if not force and sec != S.SEC_TRAIN and not (r and r.running):
+            if not force and sec not in panel_sections and not (r and r.running):
                 return [gr.skip()] * n
             p = try_load(name)
             if p is None:
@@ -624,19 +760,23 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
             mel = pd.DataFrame([(e, v) for e, v in previews.loss_series(p, "val_mel", off, metrics)],
                                columns=["epoch", "mel"])
             rows = previews.rank_checkpoints(p, metrics)
-            choices, best = ckpt_choices(rows, off)
-            paths = [c[1] for c in choices]
-            value = current if current in paths else best
+            _t, _k, best = ckpt_table_rows(rows, off, sort)
+            value = current if current in {str(x.path) for x in rows} else best
+            table, keys, _b = ckpt_table_rows(rows, off, sort, value)
             keep, drop = previews.prune_plan(p) if rows else ([], [])
             disk = disk_html(size_of(p.train_dir), len(keep) + len(drop),
                              sum(f.stat().st_size for f in drop if f.exists()), len(drop))
             raw_log = p.train_dir / "train.log"
             note = msg_html(S.TRAIN_LOG_FILE.format(path=raw_log), muted=True) if raw_log.exists() else ""
+            base = languages.base_of(p.base_checkpoint) or p.base_checkpoint
+            note = msg_html(S.TRAIN_BASE.format(base=base), muted=True) + note
             listen = players(p, value, rows) if (value != current or force) else [gr.skip()] * (PREVIEW_SLOTS + 1)
-            return [status_html(name, p, metrics), mos, mel,
-                    "" if len(mos) or len(mel) else msg_html(S.CHART_EMPTY, muted=True), note,
-                    gr.update(choices=choices, value=value) if choices else gr.update(choices=[], value=None),
-                    disk if choices or len(mos) else "", *listen]
+            charts = bool(len(mos) or len(mel))
+            return [status_html(name, p, metrics), gr.update(value=mos, visible=charts),
+                    gr.update(value=mel, visible=charts),
+                    "" if charts else f'<div class="chart-empty">{html.escape(S.CHART_EMPTY)}</div>', note,
+                    table, value, keys, ckpt_chosen_html(rows, off, value),
+                    disk if rows or len(mos) else "", *listen]
 
         def quiet(fn):
             """Timers / section switches: an unexpected error is logged, never toasted every few seconds."""
@@ -649,34 +789,52 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                     return [gr.skip()] * len(train_panel_outputs)
             return wrapper
 
-        on_train_open = quiet(lambda name, sec, cur: train_panel(name, sec, cur, force=sec == S.SEC_TRAIN))
-        loss_timer.tick(quiet(train_panel), [project_dd, section, ckpt_dd], train_panel_outputs,
-                        show_progress="hidden")
-        demo.load(on_train_open, [project_dd, section, ckpt_dd], train_panel_outputs)
-        section.change(on_train_open, [project_dd, section, ckpt_dd], train_panel_outputs)
+        on_train_open = quiet(lambda name, sec, cur, sort: train_panel(name, sec, cur, sort,
+                                                                       force=sec in panel_sections))
+        loss_timer.tick(quiet(train_panel), panel_inputs, train_panel_outputs, show_progress="hidden")
+        demo.load(on_train_open, panel_inputs, train_panel_outputs)
+        section.change(on_train_open, panel_inputs, train_panel_outputs)
         # a new project: drop the old selection so the new project's best checkpoint is preselected
-        project_dd.change(quiet(lambda name, sec: train_panel(name, sec, None, force=True)), [project_dd, section],
-                          train_panel_outputs)
+        project_dd.change(quiet(lambda name, sec, sort: train_panel(name, sec, None, sort, force=True)),
+                          [project_dd, section, ckpt_sort], train_panel_outputs)
 
         @guarded(len(train_panel_outputs) + 1)
-        def on_refresh(name, sec, current, progress=gr.Progress()):
+        def on_refresh(name, sec, current, sort, progress=gr.Progress()):
             p = load(name)
             progress(0, desc=S.REFRESHING)
-            out = train_panel(name, sec, current, force=True)
+            out = train_panel(name, sec, current, sort, force=True)
             return [msg_html("" if previews.list_checkpoints(p) else S.NO_CHECKPOINTS, muted=True)] + out
 
-        refresh_btn.click(on_refresh, [project_dd, section, ckpt_dd], [train_msg] + train_panel_outputs)
+        refresh_btn.click(on_refresh, panel_inputs, [ckpt_msg] + train_panel_outputs)
 
-        @guarded(PREVIEW_SLOTS + 2)
-        def on_listen(name, ckpt, progress=gr.Progress()):
+        def ckpt_view(name, path, sort):
+            """Table / selection / chosen line for `path` in the `sort` order (no players)."""
             p = load(name)
-            progress(0, desc=S.LISTENING)
-            return [""] + players(p, ckpt, previews.rank_checkpoints(p, read_metrics(p)))
+            rows = previews.rank_checkpoints(p, read_metrics(p))
+            off = train.base_epoch(p)
+            table, keys, _best = ckpt_table_rows(rows, off, sort, path)
+            return p, rows, [table, keys, ckpt_chosen_html(rows, off, path)]
 
-        ckpt_dd.input(on_listen, [project_dd, ckpt_dd], [train_msg, listen_head, *preview_players])
+        @guarded(PREVIEW_SLOTS + 6)
+        def on_pick(name, keys, sort, evt: gr.SelectData, progress=gr.Progress()):
+            path = (keys or {}).get(ckpt_key_of_row(getattr(evt, "row_value", None) or []))
+            if path is None:
+                return [""] + [gr.skip()] * (PREVIEW_SLOTS + 5)
+            progress(0, desc=S.LISTENING)
+            p, rows, view = ckpt_view(name, path, sort)
+            return ["", path, *view, *players(p, path, rows)]
+
+        ckpt_table.select(on_pick, [project_dd, ckpt_map, ckpt_sort],
+                          [ckpt_msg, ckpt_sel, ckpt_table, ckpt_map, ckpt_head, listen_head, *preview_players])
+
+        @guarded(4)
+        def on_sort(name, sort, path):
+            return [""] + ckpt_view(name, path, sort)[2]
+
+        ckpt_sort.change(on_sort, [project_dd, ckpt_sort, ckpt_sel], [ckpt_msg, ckpt_table, ckpt_map, ckpt_head])
 
         @guarded(len(train_panel_outputs) + 2)
-        def on_prune(name, sec, current, confirmed):
+        def on_prune(name, sec, current, sort, confirmed):
             r = runners.get(name)
             if r is not None and r.running:
                 raise ValueError(S.PRUNE_BUSY)
@@ -687,11 +845,10 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                     raise ValueError(S.PRUNE_RECENT)
                 _keep, drop = previews.prune_plan(p)
                 n, freed = previews.delete_checkpoints(drop)
-            out = train_panel(name, sec, current, force=True)
+            out = train_panel(name, sec, current, sort, force=True)
             return [msg_html(S.PRUNED.format(n=n, size=human_size(freed))), False] + out
 
-        prune_btn.click(on_prune, [project_dd, section, ckpt_dd, prune_ok],
-                        [train_msg, prune_ok] + train_panel_outputs)
+        prune_btn.click(on_prune, panel_inputs + [prune_ok], [ckpt_msg, prune_ok] + train_panel_outputs)
 
         @guarded(1)
         def on_export(name, ckpt, progress=gr.Progress()):
@@ -702,7 +859,7 @@ def build(projects_root: Path, detect=None, check_fn=None, install_fn=None) -> g
                 out = train.export_project(p, Path(ckpt))
             return msg_html(S.EXPORTED.format(path=out))
 
-        export_btn.click(on_export, [project_dd, ckpt_dd], train_msg)
+        export_btn.click(on_export, [project_dd, ckpt_sel], ckpt_msg)
 
         @guarded(2)
         def on_colab(name, progress=gr.Progress()):
@@ -773,4 +930,5 @@ def launch(projects_root: Path, port: int = 7860, inbrowser: bool = True) -> Non
     demo = build(projects_root)
     demo.queue(default_concurrency_limit=1).launch(
         server_name="127.0.0.1", server_port=port, inbrowser=inbrowser, theme=theme.THEME, css=theme.CSS, head=theme.HEAD,
-        allowed_paths=[str(projects_root)], footer_links=[])
+        # base voice samples live in the dependency folder (checkpoints.sample)
+        allowed_paths=[str(projects_root), str(paths.cache_source()[0] / "samples")], footer_links=[])

@@ -96,6 +96,33 @@ def test_slice_message_says_whether_text_was_recognised(monkeypatch, tmp_path):
     assert ui_app.slice_message(0, True) == S.SLICED_NONE
 
 
+def test_create_project_with_chosen_base(tmp_path):
+    from omnivoice import languages
+    from omnivoice.project import Project as P
+    from omnivoice.ui import strings as S
+    msg, dd, sec, name = _handler(build(tmp_path), "create")("Arthas 2", "ru", "ruslan")
+    assert dd["value"] == "Arthas_2" and "Arthas 2" in msg and name == ""
+    assert sec["value"] == S.SEC_AUDIO and S.SEC_TRAIN in sec["choices"]
+    assert P.load(tmp_path / "Arthas_2").base_checkpoint == languages.BASE_CHECKPOINTS["ruslan"]
+
+
+def test_delete_project_needs_confirmation_and_switches_project(tmp_path):
+    from omnivoice.ui import strings as S
+    Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    Project.create(tmp_path / "Jaina", name="Jaina", language="ru")
+    demo = build(tmp_path)
+    for typed in ("", "Jaina", "Arth"):
+        refused = _handler(demo, "on_delete")("Arthas", typed)
+        assert S.DELETE_NEED_CONFIRM.format(name="Arthas") in refused[0] and (tmp_path / "Arthas").is_dir()
+    msg, typed, dd, sec = _handler(demo, "on_delete")("Arthas", "  arthas ")
+    assert msg == "" and typed == "" and not (tmp_path / "Arthas").exists()
+    assert dd["choices"] == ["Jaina"] and dd["value"] == "Jaina"
+    assert sec["value"] == S.SEC_AUDIO and S.SEC_DELETE in sec["choices"]
+    _msg, _t, dd, sec = _handler(demo, "on_delete")("Jaina", "Jaina")
+    assert dd["choices"] == [] and dd["value"] is None and dd["visible"] is False
+    assert sec["value"] == S.SEC_NEW and sec["choices"] == [S.SEC_SETUP, S.SEC_NEW]
+
+
 def _handler(demo, name):
     return next(f.fn for f in demo.fns.values() if getattr(f.fn, "__name__", "") == name)
 
@@ -116,20 +143,30 @@ def test_training_panel_fills_charts_checkpoints_players_and_prunes(tmp_path):
     for f in list(d.iterdir()) + list(logs.rglob("events*")):
         os.utime(f, (old, old))
     demo = build(tmp_path)
-    out = _handler(demo, "on_refresh")("Arthas", S.SEC_TRAIN, None)
-    msg, status, mos, mel, chart_note, log_note, dd, disk, head, *players = out
-    assert list(mos["epoch"]) == [1, 2, 3] and list(mel["epoch"]) == [1, 2, 3]
-    assert dd["value"] == str(d / "epoch=4140-val_mos=3.9800.ckpt")
-    assert S.CKPT_BEST_MOS in dd["choices"][0][0] and dd["choices"][0][0].startswith("эпоха 1 · MOS 3.98")
+    out = _handler(demo, "on_refresh")("Arthas", S.SEC_CKPT, None, S.CKPT_SORT_MOS)
+    msg, status, mos, mel, chart_note, log_note, table, sel, keys, chosen, disk, head, *players = out
+    assert list(mos["value"]["epoch"]) == [1, 2, 3] and list(mel["value"]["epoch"]) == [1, 2, 3]
+    assert mos["visible"] and mel["visible"] and chart_note == ""
+    # only warm-up epochs exist: nothing is hidden, the best by MOS is preselected and on top
+    assert sel == str(d / "epoch=4140-val_mos=3.9800.ckpt") and "эпоха 1 · MOS 3.98" in chosen
+    assert table[0][:3] == [1, "3.98", "0.680"] and S.CKPT_SELECTED in table[0][3] and S.CKPT_BEST_MOS in table[0][3]
     assert "Эпоха 1" in head and players[0]["visible"] and players[0]["label"].startswith("1. Твоя душа")
     assert S.TRAIN_IDLE_DONE.format(n=3) in status and "Лишних: 1" in disk
-    # listening to another checkpoint
-    _m, head2, *pl2 = _handler(demo, "on_listen")("Arthas", str(d / "epoch=4142-val_mel=0.5500.ckpt"))
+    # sorting by mel puts the best-by-mel epoch first
+    _m, by_mel, _k, _c = _handler(demo, "on_sort")("Arthas", S.CKPT_SORT_MEL, sel)
+    assert by_mel[0][0] == 3 and S.CKPT_BEST_MEL in by_mel[0][3]
+    # clicking a row picks that checkpoint and plays its phrases
+    from types import SimpleNamespace
+    row = next(r for r in table if r[0] == 3 and S.CKPT_LAST not in r[3].split(" · "))
+    _m, sel2, table2, _k2, chosen2, head2, *pl2 = _handler(demo, "on_pick")(
+        "Arthas", keys, S.CKPT_SORT_MOS, SimpleNamespace(row_value=row))
+    assert sel2 == str(d / "epoch=4142-val_mel=0.5500.ckpt") and "эпоха 3" in chosen2
     assert "Эпоха 3" in head2 and pl2[4]["visible"]
+    assert S.CKPT_SELECTED in next(r for r in table2 if r[0] == 3 and S.CKPT_LAST not in r[3].split(" · "))[3]
     # pruning: needs the checkbox, then keeps best MOS + best mel + last.ckpt
-    refused = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, False)
+    refused = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, S.CKPT_SORT_MOS, False)
     assert S.PRUNE_NEED_CONFIRM in refused[0] and (d / "epoch=4141-val_mos=3.5000.ckpt").exists()
-    done = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, True)
+    done = _handler(demo, "on_prune")("Arthas", S.SEC_TRAIN, None, S.CKPT_SORT_MOS, True)
     assert "Удалено чекпойнтов: 1" in done[0] and done[1] is False
     assert sorted(f.name for f in d.iterdir()) == ["epoch=4140-val_mos=3.9800.ckpt", "epoch=4142-val_mel=0.5500.ckpt",
                                                    "last.ckpt"]
@@ -141,5 +178,5 @@ def test_prune_refused_while_files_are_fresh(tmp_path):
     from tests.test_previews import ckpts
     p = Project.create(tmp_path / "g", name="g", language="ru")
     d = ckpts(p, "version_0", ["epoch=1-val_mos=2.0000.ckpt", "epoch=2-val_mos=1.0000.ckpt", "last.ckpt"])
-    out = _handler(build(tmp_path), "on_prune")("g", S.SEC_TRAIN, None, True)
+    out = _handler(build(tmp_path), "on_prune")("g", S.SEC_TRAIN, None, S.CKPT_SORT_MOS, True)
     assert S.PRUNE_RECENT in out[0] and len(list(d.iterdir())) == 3

@@ -77,3 +77,24 @@ def test_load_corrupt_toml_names_file(tmp_path: Path):
     (root / "project.toml").write_text('name = "x"\nlanguage = ', encoding="utf-8")
     with pytest.raises(ProjectError, match="Файл project.toml повреждён"):
         Project.load(root)
+
+
+def test_delete_project_removes_folder_and_reports_size(tmp_path):
+    from omnivoice.project import delete_project
+    p = Project.create(tmp_path / "Arthas", name="Arthas", language="ru")
+    (p.train_dir / "big.ckpt").write_bytes(b"x" * 1000)
+    other = Project.create(tmp_path / "Jaina", name="Jaina", language="ru")
+    assert delete_project(p, tmp_path) >= 1000
+    assert not (tmp_path / "Arthas").exists() and (other.root / "project.toml").is_file()
+
+
+def test_delete_project_refuses_anything_but_a_project_folder(tmp_path):
+    from omnivoice.project import delete_project
+    nested = Project.create(tmp_path / "a" / "b", name="b", language="ru")
+    with pytest.raises(ProjectError):
+        delete_project(nested, tmp_path)  # not a direct child of the projects folder
+    assert nested.root.is_dir()
+    (nested.root / "project.toml").unlink()
+    with pytest.raises(ProjectError):
+        delete_project(nested, tmp_path / "a")  # no project.toml: not a project
+    assert nested.root.is_dir()

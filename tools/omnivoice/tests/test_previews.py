@@ -189,7 +189,26 @@ def test_rank_checkpoints_best_first(tmp_path):
     last1 = next(r for r in rows if r.last)
     assert last1.mos == pytest.approx(2.3) and last1.mel == pytest.approx(0.4)
     assert [r.epoch for r in rows].count(4144) == 1  # val_mel + val_mos files of one epoch: same weights
-    assert rows[-1].path == d0 / "last.ckpt"  # an older run's last.ckpt: kept, but at the bottom
+    assert not any(r.old_last for r in rows)  # the older run's last.ckpt repeats epoch 4142: not listed twice
+
+
+def test_rank_checkpoints_hides_warmup_and_sorts_by_epoch(tmp_path):
+    p = Project.create(tmp_path / "p", name="p", language="ru")  # base checkpoint: epoch=4139
+    b = 4139
+    ckpts(p, "version_0", [f"epoch={b + 3}-val_mos=3.9800.ckpt", f"epoch={b + 12}-val_mel=0.2000.ckpt",
+                           f"epoch={b + 50}-val_mos=2.9000.ckpt", f"epoch={b + 60}-val_mos=2.5000.ckpt",
+                           f"epoch={b + 80}-val_mel=0.3000.ckpt", f"epoch={b + 99}-val_mos=2.7000.ckpt"])
+    rows = previews.rank_checkpoints(p)
+    # warm-up = max(20, 5% of 99): +3 and +12 still sound like the base voice -> neither listed nor «best»
+    assert [(r.epoch - b, r.best_mos, r.best_mel) for r in rows] == [
+        (50, True, False), (80, False, True), (99, False, False), (60, False, False)]
+
+
+def test_rank_checkpoints_only_warmup_keeps_everything(tmp_path):
+    p = Project.create(tmp_path / "p", name="p", language="ru")
+    ckpts(p, "version_0", ["epoch=4142-val_mos=3.9800.ckpt", "epoch=4151-val_mos=2.0000.ckpt"])
+    rows = previews.rank_checkpoints(p)
+    assert [(r.epoch, r.best_mos) for r in rows] == [(4142, True), (4151, False)]
 
 
 def test_rank_checkpoints_without_events_uses_names(tmp_path):

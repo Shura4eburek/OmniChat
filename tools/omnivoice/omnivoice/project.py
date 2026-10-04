@@ -98,3 +98,29 @@ class Project:
     def mark_fresh(self, step, value: bool = True) -> None:
         """mark_saved() on disk, then mirror the saved steps into this (possibly stale) instance."""
         self.steps = dict(Project.mark_saved(self.root, step, value).steps)
+
+
+def delete_project(p: Project, projects_root: Path) -> int:
+    """Remove the project folder with everything in it (audio, phrases, checkpoints, export) and return
+    the bytes freed. Only a direct child of projects_root that holds a project.toml is ever removed.
+    A file another program holds open raises ProjectError naming it; the rest is already gone then."""
+    import shutil, stat
+    from omnivoice.datadir import size_of
+    folder = Path(p.root).resolve()
+    if folder.parent != Path(projects_root).resolve() or not (folder / FILE).is_file():
+        raise ProjectError(f"{folder} — не папка проекта, удалять её нельзя")
+    size = size_of(folder)
+    failed: list[str] = []
+
+    def retry_writable(fn, path, _exc):  # a read-only file (e.g. copied from a CD rip): clear the flag once
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            fn(path)
+        except OSError:
+            failed.append(path)
+
+    shutil.rmtree(folder, onexc=retry_writable)
+    if failed:
+        raise ProjectError(f"Не удалось удалить {failed[0]} (и ещё {len(failed) - 1}) — файл занят другой программой. "
+                           f"Закрой её и удали папку {folder} вручную")
+    return size
