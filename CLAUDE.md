@@ -38,6 +38,7 @@ Mixin-конфигурации:
 
 ## Key Conventions
 
+- Процесс — spec-kit (с 2026-10-08): новые спеки, планы и задачи — в `specs/` через `/speckit-*`. `docs/superpowers/` — архив, не пополнять
 - Группа Maven: `org.mamoru`, artifact: `omnichat`
 - Серверный код не должен попадать в `src/client/`, клиентский — не в `src/main/` (разделение environment source sets)
 - Миксины: предпочитать `@Inject`; `requireAnnotations: true` лишь требует, чтобы перезаписанные методы были помечены `@Overwrite`
